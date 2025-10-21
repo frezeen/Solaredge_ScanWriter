@@ -1,0 +1,21 @@
+{
+  "enabled": true,
+  "name": "Python Source Documentation Sync",
+  "description": "Monitors all Python source files and configuration files in the repository. When changes are detected, triggers documentation updates in README or docs folder to keep documentation synchronized with code changes.",
+  "version": "1",
+  "when": {
+    "type": "userTriggered",
+    "patterns": [
+      "*.py",
+      "config/*.yaml",
+      "config/*.yml",
+      "*.md",
+      "requirements.txt",
+      ".env.example"
+    ]
+  },
+  "then": {
+    "type": "askAgent",
+    "prompt": "Source files have been modified in this Python solar data collector project. Please review the changes and update the documentation accordingly. Focus on:\n\n1. Update README.md if core functionality, architecture, or usage has changed\n2. Update files in the /docs folder if technical implementation details have changed\n3. Ensure configuration examples in documentation match any config file changes\n4. Update any API documentation if collector, parser, or storage interfaces have changed\n5. Verify that installation/setup instructions are still accurate\n\nPay special attention to the pipeline architecture (Collector → Parser → Filter → Writer), async patterns, and the three data collection modes (API, web scraping, Modbus TCP). Make sure documentation reflects the current state of the codebase.\n\nle risposte le voglio in italiano"
+  }
+}

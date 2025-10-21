@@ -1,0 +1,357 @@
+web_scraping:
+  enabled: true
+  endpoints:
+    inverter_7403D7C5-13:
+      device_id: 7403D7C5-13
+      device_name: Inverter 1
+      device_type: INVERTER
+      enabled: true
+      measurements:
+        AC_CONSUMPTION_ENERGY:
+          enabled: true
+        AC_CONSUMPTION_POWER:
+          enabled: true
+        AC_CURRENT:
+          enabled: true
+        AC_FREQUENCY:
+          enabled: true
+        AC_PRODUCTION_ENERGY:
+          enabled: true
+        AC_PRODUCTION_POWER:
+          enabled: true
+        AC_VOLTAGE:
+          enabled: true
+        DC_VOLTAGE:
+          enabled: true
+        KWH_KWP_RATIO:
+          enabled: true
+    meter_606483640:
+      device_id: '606483640'
+      device_name: Import/Export Meter
+      device_type: METER
+      enabled: true
+      measurements:
+        EXPORT_ENERGY:
+          enabled: true
+        EXPORT_POWER:
+          enabled: true
+        IMPORT_ENERGY:
+          enabled: true
+        IMPORT_POWER:
+          enabled: true
+    optimizer_21830A42-F0:
+      device_id: 21830A42-F0
+      device_name: Optimizer 1.0.11
+      device_type: OPTIMIZER
+      enabled: true
+      inverter: 7403D7C5-13
+      measurements:
+        MODULE_CURRENT:
+          enabled: true
+        MODULE_OUTPUT_VOLTAGE:
+          enabled: true
+        OPTIMIZER_OUTPUT_VOLTAGE:
+          enabled: true
+        PRODUCTION_ENERGY:
+          enabled: true
+        PRODUCTION_POWER:
+          enabled: true
+    optimizer_2183101D-D1:
+      device_id: 2183101D-D1
+      device_name: Optimizer 1.0.16
+      device_type: OPTIMIZER
+      enabled: true
+      inverter: 7403D7C5-13
+      measurements:
+        MODULE_CURRENT:
+          enabled: true
+        MODULE_OUTPUT_VOLTAGE:
+          enabled: true
+        OPTIMIZER_OUTPUT_VOLTAGE:
+          enabled: true
+        PRODUCTION_ENERGY:
+          enabled: true
+        PRODUCTION_POWER:
+          enabled: true
+    optimizer_218315ED-A6:
+      device_id: 218315ED-A6
+      device_name: Optimizer 1.0.1
+      device_type: OPTIMIZER
+      enabled: true
+      inverter: 7403D7C5-13
+      measurements:
+        MODULE_CURRENT:
+          enabled: true
+        MODULE_OUTPUT_VOLTAGE:
+          enabled: true
+        OPTIMIZER_OUTPUT_VOLTAGE:
+          enabled: true
+        PRODUCTION_ENERGY:
+          enabled: true
+        PRODUCTION_POWER:
+          enabled: true
+    optimizer_2183174C-07:
+      device_id: 2183174C-07
+      device_name: Optimizer 1.0.14
+      device_type: OPTIMIZER
+      enabled: true
+      inverter: 7403D7C5-13
+      measurements:
+        MODULE_CURRENT:
+          enabled: true
+        MODULE_OUTPUT_VOLTAGE:
+          enabled: true
+        OPTIMIZER_OUTPUT_VOLTAGE:
+          enabled: true
+        PRODUCTION_ENERGY:
+          enabled: true
+        PRODUCTION_POWER:
+          enabled: true
+    optimizer_2183174E-09:
+      device_id: 2183174E-09
+      device_name: Optimizer 1.0.10
+      device_type: OPTIMIZER
+      enabled: true
+      inverter: 7403D7C5-13
+      measurements:
+        MODULE_CURRENT:
+          enabled: true
+        MODULE_OUTPUT_VOLTAGE:
+          enabled: true
+        OPTIMIZER_OUTPUT_VOLTAGE:
+          enabled: true
+        PRODUCTION_ENERGY:
+          enabled: true
+        PRODUCTION_POWER:
+          enabled: true
+    optimizer_21831750-0B:
+      device_id: 21831750-0B
+      device_name: Optimizer 1.0.8
+      device_type: OPTIMIZER
+      enabled: true
+      inverter: 7403D7C5-13
+      measurements:
+        MODULE_CURRENT:
+          enabled: true
+        MODULE_OUTPUT_VOLTAGE:
+          enabled: true
+        OPTIMIZER_OUTPUT_VOLTAGE:
+          enabled: true
+        PRODUCTION_ENERGY:
+          enabled: true
+        PRODUCTION_POWER:
+          enabled: true
+    optimizer_218317DB-96:
+      device_id: 218317DB-96
+      device_name: Optimizer 1.0.4
+      device_type: OPTIMIZER
+      enabled: true
+      inverter: 7403D7C5-13
+      measurements:
+        MODULE_CURRENT:
+          enabled: true
+        MODULE_OUTPUT_VOLTAGE:
+          enabled: true
+        OPTIMIZER_OUTPUT_VOLTAGE:
+          enabled: true
+        PRODUCTION_ENERGY:
+          enabled: true
+        PRODUCTION_POWER:
+          enabled: true
+    optimizer_218317DC-97:
+      device_id: 218317DC-97
+      device_name: Optimizer 1.0.3
+      device_type: OPTIMIZER
+      enabled: true
+      inverter: 7403D7C5-13
+      measurements:
+        MODULE_CURRENT:
+          enabled: true
+        MODULE_OUTPUT_VOLTAGE:
+          enabled: true
+        OPTIMIZER_OUTPUT_VOLTAGE:
+          enabled: true
+        PRODUCTION_ENERGY:
+          enabled: true
+        PRODUCTION_POWER:
+          enabled: true
+    optimizer_218317E0-9B:
+      device_id: 218317E0-9B
+      device_name: Optimizer 1.0.2
+      device_type: OPTIMIZER
+      enabled: true
+      inverter: 7403D7C5-13
+      measurements:
+        MODULE_CURRENT:
+          enabled: true
+        MODULE_OUTPUT_VOLTAGE:
+          enabled: true
+        OPTIMIZER_OUTPUT_VOLTAGE:
+          enabled: true
+        PRODUCTION_ENERGY:
+          enabled: true
+        PRODUCTION_POWER:
+          enabled: true
+    optimizer_21831855-11:
+      device_id: 21831855-11
+      device_name: Optimizer 1.0.15
+      device_type: OPTIMIZER
+      enabled: true
+      inverter: 7403D7C5-13
+      measurements:
+        MODULE_CURRENT:
+          enabled: true
+        MODULE_OUTPUT_VOLTAGE:
+          enabled: true
+        OPTIMIZER_OUTPUT_VOLTAGE:
+          enabled: true
+        PRODUCTION_ENERGY:
+          enabled: true
+        PRODUCTION_POWER:
+          enabled: true
+    optimizer_21831859-15:
+      device_id: 21831859-15
+      device_name: Optimizer 1.0.13
+      device_type: OPTIMIZER
+      enabled: true
+      inverter: 7403D7C5-13
+      measurements:
+        MODULE_CURRENT:
+          enabled: true
+        MODULE_OUTPUT_VOLTAGE:
+          enabled: true
+        OPTIMIZER_OUTPUT_VOLTAGE:
+          enabled: true
+        PRODUCTION_ENERGY:
+          enabled: true
+        PRODUCTION_POWER:
+          enabled: true
+    optimizer_2183185A-16:
+      device_id: 2183185A-16
+      device_name: Optimizer 1.0.9
+      device_type: OPTIMIZER
+      enabled: true
+      inverter: 7403D7C5-13
+      measurements:
+        MODULE_CURRENT:
+          enabled: true
+        MODULE_OUTPUT_VOLTAGE:
+          enabled: true
+        OPTIMIZER_OUTPUT_VOLTAGE:
+          enabled: true
+        PRODUCTION_ENERGY:
+          enabled: true
+        PRODUCTION_POWER:
+          enabled: true
+    optimizer_2183185D-19:
+      device_id: 2183185D-19
+      device_name: Optimizer 1.0.12
+      device_type: OPTIMIZER
+      enabled: true
+      inverter: 7403D7C5-13
+      measurements:
+        MODULE_CURRENT:
+          enabled: true
+        MODULE_OUTPUT_VOLTAGE:
+          enabled: true
+        OPTIMIZER_OUTPUT_VOLTAGE:
+          enabled: true
+        PRODUCTION_ENERGY:
+          enabled: true
+        PRODUCTION_POWER:
+          enabled: true
+    optimizer_21831860-1C:
+      device_id: 21831860-1C
+      device_name: Optimizer 1.0.6
+      device_type: OPTIMIZER
+      enabled: true
+      inverter: 7403D7C5-13
+      measurements:
+        MODULE_CURRENT:
+          enabled: true
+        MODULE_OUTPUT_VOLTAGE:
+          enabled: true
+        OPTIMIZER_OUTPUT_VOLTAGE:
+          enabled: true
+        PRODUCTION_ENERGY:
+          enabled: true
+        PRODUCTION_POWER:
+          enabled: true
+    optimizer_21831861-1D:
+      device_id: 21831861-1D
+      device_name: Optimizer 1.0.7
+      device_type: OPTIMIZER
+      enabled: true
+      inverter: 7403D7C5-13
+      measurements:
+        MODULE_CURRENT:
+          enabled: true
+        MODULE_OUTPUT_VOLTAGE:
+          enabled: true
+        OPTIMIZER_OUTPUT_VOLTAGE:
+          enabled: true
+        PRODUCTION_ENERGY:
+          enabled: true
+        PRODUCTION_POWER:
+          enabled: true
+    optimizer_21831863-1F:
+      device_id: 21831863-1F
+      device_name: Optimizer 1.0.5
+      device_type: OPTIMIZER
+      enabled: true
+      inverter: 7403D7C5-13
+      measurements:
+        MODULE_CURRENT:
+          enabled: true
+        MODULE_OUTPUT_VOLTAGE:
+          enabled: true
+        OPTIMIZER_OUTPUT_VOLTAGE:
+          enabled: true
+        PRODUCTION_ENERGY:
+          enabled: true
+        PRODUCTION_POWER:
+          enabled: true
+    site_2489781:
+      device_id: '2489781'
+      device_name: Sorrentino Carlo
+      device_type: SITE
+      enabled: true
+      measurements:
+        EXPORT_ENERGY:
+          enabled: true
+        EXPORT_POWER:
+          enabled: true
+        IMPORT_ENERGY:
+          enabled: true
+        IMPORT_POWER:
+          enabled: true
+        KWH_KWP_RATIO:
+          enabled: true
+        PRODUCTION_ENERGY:
+          enabled: true
+        PRODUCTION_POWER:
+          enabled: true
+    string_0:
+      device_id: '0'
+      device_name: String 1.0
+      device_type: STRING
+      enabled: true
+      identifier: 7403D7C5_30
+      inverter: 7403D7C5-13
+      measurements:
+        PRODUCTION_ENERGY:
+          enabled: true
+        PRODUCTION_POWER:
+          enabled: true
+    weather_weather_default:
+      device_id: weather_default
+      device_name: WEATHER_weather_default
+      device_type: WEATHER
+      enabled: true
+      measurements:
+        HUMIDITY:
+          enabled: true
+        TEMPERATURE:
+          enabled: true
+        WIND_SPEED:
+          enabled: true

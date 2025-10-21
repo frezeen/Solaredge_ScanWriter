@@ -1,0 +1,70 @@
+# SolarEdge Data Collector - Docker ignore file
+
+# Git
+.git
+.gitignore
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+venv/
+env/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+logs/
+*.log
+
+# Cache
+cache/
+*.cache
+
+# Temporary files
+*.tmp
+*.temp
+
+# Documentation
+docs/
+README_INSTALLATION.md
+
+# Installation files
+install.sh
+docker-compose.yml
+Dockerfile
+
+# Environment files (will be mounted)
+.env
+
+# Cookies (will be mounted)
+cookies/

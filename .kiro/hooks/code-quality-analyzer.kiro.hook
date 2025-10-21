@@ -1,0 +1,27 @@
+{
+  "enabled": true,
+  "name": "Code Quality Analyzer",
+  "description": "Monitors source code files for changes and provides automated code quality analysis including code smells, design patterns, and best practices suggestions",
+  "version": "1",
+  "when": {
+    "type": "fileEdited",
+    "patterns": [
+      "*.py",
+      "main.py",
+      "collector/*.py",
+      "parser/*.py",
+      "filtro/*.py",
+      "storage/*.py",
+      "scheduler/*.py",
+      "cache/*.py",
+      "config/*.py",
+      "app_logging/*.py",
+      "gui/*.py",
+      "tools/*.py"
+    ]
+  },
+  "then": {
+    "type": "askAgent",
+    "prompt": "Analyze the modified Python code for potential improvements. Focus on:\n\n1. **Code Smells & Anti-patterns**: Identify long methods, duplicate code, complex conditionals, and violation of single responsibility principle\n2. **Architecture Compliance**: Ensure adherence to the pipeline pattern (Collector → Parser → Filter → Writer), async/await usage, and dependency injection\n3. **Python Best Practices**: Check for proper type hints, dataclass usage, error handling patterns, and PEP 8 compliance\n4. **Performance Optimizations**: Look for opportunities to improve async operations, caching, batch processing, and resource management\n5. **Maintainability**: Suggest improvements for readability, documentation, naming conventions, and code organization\n6. **SolarEdge Project Specific**: Verify compliance with project architecture rules, proper use of configuration management, logging standards, and data validation patterns\n\nProvide specific, actionable suggestions that maintain existing functionality while improving code quality. Include code examples where helpful.\n\nle risposte le voglio in italiano"
+  }
+}

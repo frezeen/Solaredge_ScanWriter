@@ -1,0 +1,37 @@
+# SolarEdge Data Collector - Python Dependencies
+# Core dependencies for Python 3.10+
+
+# HTTP Client (async)
+aiohttp>=3.8.0
+
+# InfluxDB Client
+influxdb-client>=1.36.0
+
+# YAML Configuration
+PyYAML>=6.0
+
+# Modbus TCP Communication - CRITICAL: pymodbus 3.5.4 is required for solaredge-modbus compatibility
+pymodbus==3.5.4
+solaredge-modbus>=0.8.0
+
+# HTTP Requests (sync fallback)
+requests>=2.28.0
+
+# Environment Variables
+python-dotenv>=1.0.0
+
+# Date/Time utilities
+python-dateutil>=2.8.0
+
+# Async file operations
+aiofiles>=22.1.0
+
+# Optional: Web interface dependencies
+jinja2>=3.1.0
+aiohttp-jinja2>=1.5.0
+
+# Timezone support
+pytz>=2023.3
+
+# Optional: Monitoring and metrics
+prometheus-client>=0.15.0

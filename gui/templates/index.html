@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>⚡ SolarEdge Control Dashboard</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/js-yaml@4.1.0/dist/js-yaml.min.js"></script>
+</head>
+<body>
+    <div class="dashboard">
+        <!-- HEADER -->
+        <header class="header">
+            <div class="header-content">
+                <div class="logo">
+                    <span class="logo-icon">⚡</span>
+                    <h1>SolarEdge Dashboard</h1>
+                </div>
+                <div class="header-stats">
+                    <div class="stat-item">
+                        <span class="stat-label">Status</span>
+                        <span class="stat-value online" id="connectionStatus">Online</span>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- NAVIGATION -->
+        <nav class="navigation">
+            <button class="nav-btn" data-section="devices">
+                <span class="nav-icon">🔌</span>
+                Device Web Scraping
+            </button>
+            <button class="nav-btn" data-section="api">
+                <span class="nav-icon">🌐</span>
+                API Endpoints
+            </button>
+            <button class="nav-btn" data-section="modbus">
+                <span class="nav-icon">⚡</span>
+                Modbus Realtime
+            </button>
+            <button class="nav-btn active" data-section="loop">
+                <span class="nav-icon">🔄</span>
+                Loop Monitor
+            </button>
+            <button class="nav-btn" data-section="config">
+                <span class="nav-icon">⚙️</span>
+                YAML Config
+            </button>
+        </nav>
+
+        <!-- MAIN CONTENT -->
+        <main class="main-content">
+            <!-- DEVICES SECTION -->
+            <section class="content-section" id="devices-section">
+                <div class="section-header">
+                    <h2>🔌 Device Web Scraping</h2>
+                    <p>Gestisci i dispositivi e le metriche dal portale SolarEdge</p>
+                </div>
+                <div class="devices-grid" id="devicesGrid">
+                    <!-- Devices will be loaded here -->
+                </div>
+            </section>
+
+            <!-- API SECTION -->
+            <section class="content-section" id="api-section">
+                <div class="section-header">
+                    <h2>🌐 API Endpoints</h2>
+                    <p>Configura gli endpoint dell'API REST di SolarEdge</p>
+                </div>
+                
+                <!-- API Categories -->
+                <div class="api-categories" id="apiCategories">
+                    <button class="category-btn active" data-category="all">
+                        <span class="category-icon">📋</span>
+                        Tutte
+                    </button>
+                    <button class="category-btn" data-category="Info">
+                        <span class="category-icon">ℹ️</span>
+                        Info
+                    </button>
+                    <button class="category-btn" data-category="Inverter">
+                        <span class="category-icon">⚡</span>
+                        Inverter
+                    </button>
+                    <button class="category-btn" data-category="Meter">
+                        <span class="category-icon">📊</span>
+                        Meter
+                    </button>
+                    <button class="category-btn" data-category="Flusso">
+                        <span class="category-icon">🔄</span>
+                        Flusso
+                    </button>
+                </div>
+                
+                <div class="endpoints-grid" id="endpointsGrid">
+                    <!-- Endpoints will be loaded here -->
+                </div>
+            </section>
+
+            <!-- MODBUS SECTION -->
+            <section class="content-section" id="modbus-section">
+                <div class="section-header">
+                    <h2>⚡ Modbus Realtime</h2>
+                    <p>Configura i dispositivi Modbus TCP per dati realtime</p>
+                </div>
+                
+                <!-- Modbus Categories -->
+                <div class="modbus-categories" id="modbusCategories">
+                    <button class="category-btn active" data-category="all">
+                        <span class="category-icon">📋</span>
+                        Tutti
+                    </button>
+                    <button class="category-btn" data-category="Inverter">
+                        <span class="category-icon">🔋</span>
+                        Inverter
+                    </button>
+                    <button class="category-btn" data-category="Meter">
+                        <span class="category-icon">⚡</span>
+                        Contatori
+                    </button>
+                    <button class="category-btn" data-category="Battery">
+                        <span class="category-icon">🔋</span>
+                        Batterie
+                    </button>
+                </div>
+                
+                <div class="modbus-grid" id="modbusGrid">
+                    <!-- Modbus devices will be loaded here -->
+                </div>
+            </section>
+
+            <!-- LOOP MONITOR SECTION -->
+            <section class="content-section active" id="loop-section">
+                <div class="section-header">
+                    <h2>🔄 Loop Monitor</h2>
+                    <p>Monitoraggio in tempo reale del loop 24/7</p>
+                </div>
+                
+                <!-- Loop Status -->
+                <div class="loop-status-container" id="loopStatusContainer">
+                    <div class="status-card">
+                        <h3>📊 Statistiche Loop</h3>
+                        <div class="stats-grid" id="statsGrid">
+                            <div class="stat-item">
+                                <span class="stat-label">Stato</span>
+                                <span class="stat-value" id="loopStatus">Caricamento...</span>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-label">Uptime</span>
+                                <span class="stat-value" id="loopUptime">--</span>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-label">API Runs</span>
+                                <span class="stat-value" id="apiRuns">0/0</span>
+                                <span class="stat-timing" id="apiTiming">last: -- / next: --</span>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-label">Web Runs</span>
+                                <span class="stat-value" id="webRuns">0/0</span>
+                                <span class="stat-timing" id="webTiming">last: -- / next: --</span>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-label">Realtime Runs</span>
+                                <span class="stat-value" id="realtimeRuns">0</span>
+                                <span class="stat-timing" id="realtimeTiming">ogni 5 secondi</span>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-label">Ultimo Update</span>
+                                <span class="stat-value" id="lastUpdate">--</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Informazioni -->
+                <div class="logs-container">
+                    <div class="logs-header">
+                        <h3>ℹ️ Informazioni</h3>
+                        <div class="logs-controls">
+                            <button class="btn btn-success" onclick="startLoop()" id="startBtn">▶️ Start Loop</button>
+                            <button class="btn btn-danger" onclick="stopLoop()" id="stopBtn">⏹️ Stop Loop</button>
+                        </div>
+                    </div>
+                    <div class="info-content" id="infoContent">
+                        <div class="info-entry">
+                            <span class="info-timestamp">03:32:15</span>
+                            <span class="info-level info">INFO</span>
+                            <span class="info-message">🚀 SOLAREDGE DASHBOARD MODERNA</span>
+                        </div>
+                        <div class="info-entry">
+                            <span class="info-timestamp">03:32:15</span>
+                            <span class="info-level info">INFO</span>
+                            <span class="info-message">[GUI] GUI Web avviata su: http://127.0.0.1:8092</span>
+                        </div>
+                        <div class="info-entry">
+                            <span class="info-timestamp">03:32:15</span>
+                            <span class="info-level warning">WARN</span>
+                            <span class="info-message">⚠️ Per modificare .env o endpoint: ferma il loop prima!</span>
+                        </div>
+                        <div class="info-entry">
+                            <span class="info-timestamp">03:32:15</span>
+                            <span class="info-level info">INFO</span>
+                            <span class="info-message">⏰ Intervalli: API/Web ogni 15 min, Realtime ogni 5 sec</span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- CONFIG SECTION -->
+            <section class="content-section" id="config-section">
+                <div class="section-header">
+                    <h2>⚙️ Configuration Files</h2>
+                    <p>Visualizza e modifica i file di configurazione (YAML e .env)</p>
+                </div>
+                <div class="config-container">
+                    <div class="config-toolbar">
+                        <div class="config-file-selector">
+                            <label for="yamlFileSelect">File Config:</label>
+                            <select id="yamlFileSelect" onchange="loadSelectedYaml()">
+                                <option value="main">main.yaml</option>
+                                <option value="web_endpoints">web_endpoints.yaml</option>
+                                <option value="api_endpoints">api_endpoints.yaml</option>
+                                <option value="modbus_endpoints">modbus_endpoints.yaml</option>
+                                <option value="env">.env</option>
+                            </select>
+                        </div>
+                        <div class="config-actions">
+                            <button class="btn btn-primary" onclick="validateYAML()">Valida YAML</button>
+                            <button class="btn btn-secondary" onclick="refreshConfig()">Ricarica</button>
+                            <button class="btn btn-success" onclick="saveConfig()">Salva</button>
+                        </div>
+                    </div>
+                    <div class="config-editor">
+                        <textarea id="yamlEditor" placeholder="Caricamento configurazione..."></textarea>
+                    </div>
+                    <div class="config-status" id="configStatus"></div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script src="/static/dashboard.js"></script>
+</body>
+</html>

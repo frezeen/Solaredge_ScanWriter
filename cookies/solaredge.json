@@ -1,0 +1,48 @@
+{
+  "cookies": [
+    {
+      "name": "JSESSIONID",
+      "value": "B5A361F9DB17519146A358B6CD72D00D6EC6B8E476BB9AA86C583198095CFF0D3233127FA898A41D5A6CD3672AC1B4523D80D2BCE85C657EF3282142933093BE9C096F45B74F9901848BA792C03F0AEAB11142E7D8D7ED501398DA6409970734DB710361B6C613995C538CEA8AC3C75F1347C8C66621C3D24B397BA326AAB083",
+      "domain": "monitoring.solaredge.com",
+      "path": "/solaredge-apigw",
+      "expires": null,
+      "secure": true,
+      "rest": {
+        "HttpOnly": null
+      }
+    },
+    {
+      "name": "SPRING_SECURITY_REMEMBER_ME_COOKIE",
+      "value": "Q0FSTE8uU09SUkVOVElOTzJATElCRVJPLklUOjM5MDQ0MjQzMTEzNzA6OTE5ZDAwMzhlZWYzM2EyMWFiNWIxZDBiYzczNTY0ZTc",
+      "domain": "monitoring.solaredge.com",
+      "path": "/solaredge-apigw",
+      "expires": 3904424297,
+      "secure": true,
+      "rest": {
+        "HttpOnly": null
+      }
+    },
+    {
+      "name": "SolarEdge_SSO-1.4",
+      "value": "80a8f825cb5ae18df0a9a2fa4e1a8438214d01907440bf1cf9ece0f7693f909b95a52c1d425e6f55b6b48d61f61529c7",
+      "domain": "monitoring.solaredge.com",
+      "path": "/",
+      "expires": 1758755050,
+      "secure": false,
+      "rest": {
+        "HttpOnly": null
+      }
+    },
+    {
+      "name": "CSRF-TOKEN",
+      "value": "50D0602A9DB0EC4F14736A34DB40B25F9575409F5023F4A00247DDC764A045B1B48E1335AF9A4FAAB3819CF4228199FB8426",
+      "domain": "monitoring.solaredge.com",
+      "path": "/",
+      "expires": null,
+      "secure": false,
+      "rest": {
+        "SameSite": "Strict"
+      }
+    }
+  ]
+}

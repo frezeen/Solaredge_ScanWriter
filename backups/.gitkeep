@@ -1,0 +1,2 @@
+# This file ensures the backups directory is created in the repository
+# Backup files are ignored but the directory structure is preserved
