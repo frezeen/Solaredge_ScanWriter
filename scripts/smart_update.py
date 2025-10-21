@@ -4,53 +4,72 @@ SolarEdge Data Collector - Smart Update System
 Sistema di aggiornamento intelligente che preserva configurazioni e permessi
 """
 
+# Standard library (alphabetical)
+import asyncio
 import os
-import sys
+import pwd
 import shutil
 import subprocess
-from pathlib import Path
+import sys
+import time
+from dataclasses import dataclass
 from datetime import datetime
+from pathlib import Path
 from typing import List, Optional, Tuple
+
+# Local modules (alphabetical)
+from app_logging.universal_logger import get_logger
+from config.config_manager import ConfigManager
+
+@dataclass(frozen=True)
+class UpdateConfig:
+    """Configurazione immutabile per il sistema di aggiornamento"""
+    preserve_files: Tuple[str, ...] = (
+        ".env",
+        "config/main.yaml",
+        "config/sources/api_endpoints.yaml",
+        "config/sources/web_endpoints.yaml", 
+        "config/sources/modbus_endpoints.yaml",
+    )
+    
+    preserve_dirs: Tuple[str, ...] = (
+        "logs",
+        "cache", 
+        "scripts",
+        "config"
+    )
+    
+    executable_files: Tuple[str, ...] = (
+        "update.sh",
+        "install.sh", 
+        "setup-permissions.sh",
+        "scripts/smart_update.py",
+        "scripts/cleanup_logs.sh",
+        "venv.sh"
+    )
+    
+    possible_services: Tuple[str, ...] = (
+        "solaredge-scanwriter", 
+        "solaredge-collector", 
+        "solaredge", 
+        "collector"
+    )
+    
+    service_start_timeout: int = 3
+    backup_dir_name: str = ".temp_config_backup"
+
 
 class SmartUpdater:
     """Sistema di aggiornamento intelligente per SolarEdge Data Collector"""
     
-    def __init__(self, project_root: str = "."):
+    def __init__(self, project_root: str = ".", config_manager: Optional[ConfigManager] = None):
         self.project_root = Path(project_root).resolve()
+        self.config = UpdateConfig()
+        self.config_manager = config_manager or ConfigManager()
+        self.logger = get_logger(__name__)
         
-        # File e directory critici da preservare
-        self.preserve_files = [
-            ".env",
-            "config/main.yaml",
-            "config/sources/api_endpoints.yaml",
-            "config/sources/web_endpoints.yaml", 
-            "config/sources/modbus_endpoints.yaml",
-        ]
-        
-        # Directory da preservare i permessi
-        self.preserve_dirs = [
-            "logs",
-            "cache", 
-            "scripts",
-            "config"
-        ]
-
-        
-        # File che devono essere eseguibili
-        self.executable_files = [
-            "update.sh",
-            "install.sh", 
-            "setup-permissions.sh",
-            "scripts/smart_update.py",
-            "scripts/cleanup_logs.sh",
-            "venv.sh"
-        ]
-        
-        # Servizi systemd possibili
-        self.possible_services = ["solaredge-collector", "solaredge", "collector"]
-        
-    def log(self, message: str, level: str = "INFO"):
-        """Log con timestamp e colori"""
+    def _log_with_color(self, message: str, level: str = "INFO") -> None:
+        """Log con colori per output console (mantiene compatibilità con output esistente)"""
         colors = {
             "INFO": "\033[0;34m",    # Blue
             "SUCCESS": "\033[0;32m", # Green  
@@ -72,6 +91,20 @@ class SmartUpdater:
         
         icon = icons.get(level, "•")
         print(f"{color}[{timestamp}] {icon} {message}{reset}")
+        
+        # Log anche nel sistema di logging del progetto
+        if level == "ERROR":
+            self.logger.error(message)
+        elif level == "WARNING":
+            self.logger.warning(message)
+        elif level == "SUCCESS":
+            self.logger.info(f"SUCCESS: {message}")
+        else:
+            self.logger.info(message)
+    
+    def log(self, message: str, level: str = "INFO") -> None:
+        """Wrapper per compatibilità con codice esistente"""
+        self._log_with_color(message, level)
         
     def run_command(self, cmd: List[str], capture_output: bool = True, 
                    check: bool = True) -> subprocess.CompletedProcess:
