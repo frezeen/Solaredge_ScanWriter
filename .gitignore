@@ -1,0 +1,121 @@
+# SolarEdge Data Collector - Git Ignore
+
+# Hidden directories (IDE and system specific)
+.vscode/
+.idea/
+.kiro/
+.trae/
+.temp_config_backup/
+
+# Environment variables (contains sensitive data)
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# Logs (may contain sensitive operational data)
+logs/*
+!logs/.gitkeep
+*.log
+*.log.*
+
+# Cache data (contains API responses with potentially sensitive data)
+cache/api_ufficiali/
+cache/*.json
+cache/*.cache
+*.cache
+
+# Cookies and session data (contains sensitive authentication tokens)
+cookies/*
+!cookies/.gitkeep
+*.cookie
+web_cookies.json
+solaredge.json
+
+# IDE files
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Temporary files and runtime data
+*.tmp
+*.temp
+temp/
+*.pid
+*.state
+.update_state.json
+*.session
+
+# Local configuration and sensitive data
+local_config.yaml
+config/local/
+*.db
+*.sqlite
+*.sqlite3
+
+# Test files
+test_output/
+*.test
+
+# Coverage reports
+htmlcov/
+.coverage
+.coverage.*
+coverage.xml
+*.cover
+.hypothesis/
+.pytest_cache/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# pyenv
+.python-version
+
+# Backup files
+*.bak
+*.backup
+*~
+
+# Local backups directory (contains configuration backups with sensitive data)
+backups/*
+!backups/.gitkeep
+config_latest/
+*.backup
+.temp_config_backup/

@@ -1,0 +1,79 @@
+version: '3.8'
+
+services:
+  solaredge-collector:
+    build: .
+    container_name: solaredge-collector
+    restart: unless-stopped
+    
+    # Environment variables from .env file
+    env_file:
+      - .env
+    
+    # Volumes for persistent data
+    volumes:
+      - ./logs:/app/logs
+      - ./cache:/app/cache
+      - ./cookies:/app/cookies
+      - ./config:/app/config
+    
+    # Network configuration
+    ports:
+      - "8092:8092"  # Web GUI
+    
+    # Health check
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8092/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    
+    # No resource limits
+    
+    # Logging configuration
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    
+    # Dependencies (optional InfluxDB)
+    depends_on:
+      - influxdb
+    
+    # Network
+    networks:
+      - solaredge-network
+
+  # Optional: InfluxDB service
+  influxdb:
+    image: influxdb:2.7
+    container_name: solaredge-influxdb
+    restart: unless-stopped
+    
+    environment:
+      - DOCKER_INFLUXDB_INIT_MODE=setup
+      - DOCKER_INFLUXDB_INIT_USERNAME=admin
+      - DOCKER_INFLUXDB_INIT_PASSWORD=password123
+      - DOCKER_INFLUXDB_INIT_ORG=fotovoltaico
+      - DOCKER_INFLUXDB_INIT_BUCKET=solaredge_test
+      - DOCKER_INFLUXDB_INIT_ADMIN_TOKEN=your-super-secret-auth-token
+    
+    volumes:
+      - influxdb-data:/var/lib/influxdb2
+      - influxdb-config:/etc/influxdb2
+    
+    ports:
+      - "8086:8086"
+    
+    networks:
+      - solaredge-network
+
+volumes:
+  influxdb-data:
+  influxdb-config:
+
+networks:
+  solaredge-network:
+    driver: bridge

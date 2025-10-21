@@ -1,0 +1,670 @@
+modbus:
+  enabled: true
+  endpoints:
+    batteries:
+      category: Battery
+      data_format: structured
+      data_type: realtime
+      description: Dati realtime delle batterie tramite Modbus TCP
+      device_type: Battery
+      enabled: false
+      measurements:
+        manufacturer:
+          description: Produttore batteria
+          enabled: false
+          field_name: c_manufacturer
+        model:
+          description: Modello batteria
+          enabled: false
+          field_name: c_model
+        serial:
+          description: Numero seriale
+          enabled: false
+          field_name: c_serialnumber
+        version:
+          description: Versione firmware
+          enabled: false
+          field_name: c_version
+    inverter_realtime:
+      category: Inverter
+      data_format: structured
+      data_type: realtime
+      description: Dati realtime dell'inverter tramite protocollo Modbus TCP. Include
+        potenza AC/DC, tensione, corrente, frequenza, temperatura e stato operativo.
+      device_id: ${MODBUS_UNIT}
+      device_name: Inverter Modbus
+      device_type: Inverter
+      enabled: true
+      measurements:
+        active_power_limit:
+          description: Limite potenza attiva
+          enabled: true
+          field_name: active_power_limit
+          unit: '%'
+        advanced_power_control_enable:
+          description: Controllo potenza avanzato abilitato
+          enabled: true
+          field_name: advanced_power_control_enable
+        commit_power_control_settings:
+          description: Commit impostazioni controllo potenza
+          enabled: true
+          field_name: commit_power_control_settings
+        common_did:
+          description: DID comune SunSpec
+          enabled: true
+          field_name: c_did
+        common_id:
+          description: ID comune SunSpec
+          enabled: true
+          field_name: c_id
+        common_length:
+          description: Lunghezza comune SunSpec
+          enabled: true
+          field_name: c_length
+        cosphi:
+          description: Coseno phi
+          enabled: true
+          field_name: cosphi
+        current:
+          description: Corrente AC totale
+          enabled: true
+          field_name: current
+          scale_field: current_scale
+          unit: A
+        current_dc:
+          description: Corrente DC
+          enabled: true
+          field_name: current_dc
+          scale_field: current_dc_scale
+          unit: A
+        device_address:
+          description: Indirizzo dispositivo Modbus
+          enabled: true
+          field_name: c_deviceaddress
+        energy_total:
+          description: Energia totale prodotta
+          enabled: true
+          field_name: energy_total
+          scale_field: energy_total_scale
+          unit: Wh
+        export_control_limit_mode:
+          description: Modalità limite controllo esportazione
+          enabled: true
+          field_name: export_control_limit_mode
+        export_control_mode:
+          description: Modalità controllo esportazione
+          enabled: true
+          field_name: export_control_mode
+        export_control_site_limit:
+          description: Limite sito controllo esportazione
+          enabled: true
+          field_name: export_control_site_limit
+        frequency:
+          description: Frequenza AC
+          enabled: true
+          field_name: frequency
+          scale_field: frequency_scale
+          unit: Hz
+        l1_current:
+          description: Corrente fase L1 (trifase/monofase)
+          enabled: true
+          field_name: l1_current
+          scale_field: current_scale
+          unit: A
+        l1_voltage:
+          description: Tensione fase L1
+          enabled: true
+          field_name: l1_voltage
+          scale_field: voltage_scale
+          unit: V
+        l1n_voltage:
+          description: Tensione L1-N
+          enabled: true
+          field_name: l1n_voltage
+          scale_field: voltage_scale
+          unit: V
+        l2_current:
+          description: Corrente fase L2 (solo trifase)
+          enabled: true
+          field_name: l2_current
+          scale_field: current_scale
+          unit: A
+        l2_voltage:
+          description: Tensione fase L2 (solo trifase)
+          enabled: true
+          field_name: l2_voltage
+          scale_field: voltage_scale
+          unit: V
+        l2n_voltage:
+          description: Tensione L2-N (solo trifase)
+          enabled: true
+          field_name: l2n_voltage
+          scale_field: voltage_scale
+          unit: V
+        l3_current:
+          description: Corrente fase L3 (solo trifase)
+          enabled: true
+          field_name: l3_current
+          scale_field: current_scale
+          unit: A
+        l3_voltage:
+          description: Tensione fase L3 (solo trifase)
+          enabled: true
+          field_name: l3_voltage
+          scale_field: voltage_scale
+          unit: V
+        l3n_voltage:
+          description: Tensione L3-N (solo trifase)
+          enabled: true
+          field_name: l3n_voltage
+          scale_field: voltage_scale
+          unit: V
+        manufacturer:
+          description: Produttore inverter
+          enabled: true
+          field_name: c_manufacturer
+        model:
+          description: Modello inverter
+          enabled: true
+          field_name: c_model
+        power_ac:
+          description: Potenza AC attiva
+          enabled: true
+          field_name: power_ac
+          scale_field: power_ac_scale
+          unit: W
+        power_apparent:
+          description: Potenza apparente
+          enabled: true
+          field_name: power_apparent
+          scale_field: power_apparent_scale
+          unit: VA
+        power_dc:
+          description: Potenza DC
+          enabled: true
+          field_name: power_dc
+          scale_field: power_dc_scale
+          unit: W
+        power_factor:
+          description: Fattore di potenza
+          enabled: true
+          field_name: power_factor
+          scale_field: power_factor_scale
+          unit: '%'
+        power_reactive:
+          description: Potenza reattiva
+          enabled: true
+          field_name: power_reactive
+          scale_field: power_reactive_scale
+          unit: VAr
+        reactive_power_config:
+          description: Configurazione potenza reattiva
+          enabled: true
+          field_name: reactive_power_config
+        reactive_power_response_time:
+          description: Tempo risposta potenza reattiva
+          enabled: true
+          field_name: reactive_power_response_time
+          unit: ms
+        restore_power_control_default_settings:
+          description: Ripristina impostazioni controllo potenza default
+          enabled: true
+          field_name: restore_power_control_default_settings
+        rrcr_state:
+          description: Stato RRCR (Rapid Rate Change Response)
+          enabled: true
+          field_name: rrcr_state
+        serial:
+          description: Numero seriale
+          enabled: true
+          field_name: c_serialnumber
+        status:
+          description: Stato operativo inverter
+          enabled: true
+          field_name: status
+        sunspec_did:
+          description: SunSpec Device ID
+          enabled: true
+          field_name: c_sunspec_did
+        sunspec_length:
+          description: Lunghezza blocco SunSpec
+          enabled: true
+          field_name: c_sunspec_length
+        temperature:
+          description: Temperatura inverter
+          enabled: true
+          field_name: temperature
+          scale_field: temperature_scale
+          unit: C
+        type:
+          description: Tipo inverter (calcolato da SunSpec DID)
+          enabled: true
+          field_name: c_sunspec_did
+        vendor_status:
+          description: Status specifico del produttore
+          enabled: true
+          field_name: vendor_status
+        version:
+          description: Versione firmware
+          enabled: true
+          field_name: c_version
+        voltage_dc:
+          description: Tensione DC
+          enabled: true
+          field_name: voltage_dc
+          scale_field: voltage_dc_scale
+          unit: V
+    meters:
+      category: Meter
+      data_format: structured
+      data_type: realtime
+      description: Dati realtime dei contatori energia tramite Modbus TCP
+      device_type: Meter
+      enabled: true
+      measurements:
+        apparent_energy_status:
+          description: Stato energia apparente (N/A se scale invalido)
+          enabled: true
+          field_name: energy_apparent_scale
+        current:
+          description: Corrente totale
+          enabled: true
+          field_name: current
+          scale_field: current_scale
+          unit: A
+        device_address:
+          description: Indirizzo dispositivo Modbus
+          enabled: true
+          field_name: c_deviceaddress
+        export_energy_active:
+          description: Energia esportata
+          enabled: true
+          field_name: export_energy_active
+          scale_field: energy_active_scale
+          unit: Wh
+        export_energy_apparent:
+          description: Energia apparente esportata (condizionale)
+          enabled: true
+          field_name: export_energy_apparent
+          scale_field: energy_apparent_scale
+          unit: VAh
+        export_energy_reactive_q3:
+          description: Energia reattiva esportata Q3
+          enabled: true
+          field_name: export_energy_reactive_q3
+          scale_field: energy_reactive_scale
+          unit: VArh
+        export_energy_reactive_q4:
+          description: Energia reattiva esportata Q4
+          enabled: true
+          field_name: export_energy_reactive_q4
+          scale_field: energy_reactive_scale
+          unit: VArh
+        frequency:
+          description: Frequenza
+          enabled: true
+          field_name: frequency
+          scale_field: frequency_scale
+          unit: Hz
+        import_energy_active:
+          description: Energia importata
+          enabled: true
+          field_name: import_energy_active
+          scale_field: energy_active_scale
+          unit: Wh
+        import_energy_apparent:
+          description: Energia apparente importata (condizionale)
+          enabled: true
+          field_name: import_energy_apparent
+          scale_field: energy_apparent_scale
+          unit: VAh
+        import_energy_reactive_q1:
+          description: Energia reattiva importata Q1
+          enabled: true
+          field_name: import_energy_reactive_q1
+          scale_field: energy_reactive_scale
+          unit: VArh
+        import_energy_reactive_q2:
+          description: Energia reattiva importata Q2
+          enabled: true
+          field_name: import_energy_reactive_q2
+          scale_field: energy_reactive_scale
+          unit: VArh
+        l12_voltage:
+          description: Tensione L1-L2
+          enabled: true
+          field_name: l12_voltage
+          scale_field: voltage_scale
+          unit: V
+        l1_current:
+          description: Corrente L1
+          enabled: true
+          field_name: l1_current
+          scale_field: current_scale
+          unit: A
+        l1_export_energy_active:
+          description: Energia esportata L1
+          enabled: true
+          field_name: l1_export_energy_active
+          scale_field: energy_active_scale
+          unit: Wh
+        l1_export_energy_apparent:
+          description: Energia apparente esportata L1 (condizionale)
+          enabled: true
+          field_name: l1_export_energy_apparent
+          scale_field: energy_apparent_scale
+          unit: VAh
+        l1_export_energy_reactive_q3:
+          description: Energia reattiva esportata Q3 L1
+          enabled: true
+          field_name: l1_export_energy_reactive_q3
+          scale_field: energy_reactive_scale
+          unit: VArh
+        l1_export_energy_reactive_q4:
+          description: Energia reattiva esportata Q4 L1
+          enabled: true
+          field_name: l1_export_energy_reactive_q4
+          scale_field: energy_reactive_scale
+          unit: VArh
+        l1_import_energy_active:
+          description: Energia importata L1
+          enabled: true
+          field_name: l1_import_energy_active
+          scale_field: energy_active_scale
+          unit: Wh
+        l1_import_energy_apparent:
+          description: Energia apparente importata L1 (condizionale)
+          enabled: true
+          field_name: l1_import_energy_apparent
+          scale_field: energy_apparent_scale
+          unit: VAh
+        l1_import_energy_reactive_q1:
+          description: Energia reattiva importata Q1 L1
+          enabled: true
+          field_name: l1_import_energy_reactive_q1
+          scale_field: energy_reactive_scale
+          unit: VArh
+        l1_import_energy_reactive_q2:
+          description: Energia reattiva importata Q2 L1
+          enabled: true
+          field_name: l1_import_energy_reactive_q2
+          scale_field: energy_reactive_scale
+          unit: VArh
+        l1_power:
+          description: Potenza attiva L1
+          enabled: true
+          field_name: l1_power
+          scale_field: power_scale
+          unit: W
+        l1_power_apparent:
+          description: Potenza apparente L1
+          enabled: true
+          field_name: l1_power_apparent
+          scale_field: power_apparent_scale
+          unit: VA
+        l1_power_factor:
+          description: Fattore di potenza L1
+          enabled: true
+          field_name: l1_power_factor
+          scale_field: power_factor_scale
+          unit: '%'
+        l1_power_reactive:
+          description: Potenza reattiva L1
+          enabled: true
+          field_name: l1_power_reactive
+          scale_field: power_reactive_scale
+          unit: VAr
+        l1n_voltage:
+          description: Tensione L1-N
+          enabled: true
+          field_name: l1n_voltage
+          scale_field: voltage_scale
+          unit: V
+        l23_voltage:
+          description: Tensione L2-L3
+          enabled: true
+          field_name: l23_voltage
+          scale_field: voltage_scale
+          unit: V
+        l2_current:
+          description: Corrente L2
+          enabled: true
+          field_name: l2_current
+          scale_field: current_scale
+          unit: A
+        l2_export_energy_active:
+          description: Energia esportata L2
+          enabled: true
+          field_name: l2_export_energy_active
+          scale_field: energy_active_scale
+          unit: Wh
+        l2_export_energy_apparent:
+          description: Energia apparente esportata L2 (condizionale)
+          enabled: true
+          field_name: l2_export_energy_apparent
+          scale_field: energy_apparent_scale
+          unit: VAh
+        l2_export_energy_reactive_q3:
+          description: Energia reattiva esportata Q3 L2
+          enabled: true
+          field_name: l2_export_energy_reactive_q3
+          scale_field: energy_reactive_scale
+          unit: VArh
+        l2_export_energy_reactive_q4:
+          description: Energia reattiva esportata Q4 L2
+          enabled: true
+          field_name: l2_export_energy_reactive_q4
+          scale_field: energy_reactive_scale
+          unit: VArh
+        l2_import_energy_active:
+          description: Energia importata L2
+          enabled: true
+          field_name: l2_import_energy_active
+          scale_field: energy_active_scale
+          unit: Wh
+        l2_import_energy_apparent:
+          description: Energia apparente importata L2 (condizionale)
+          enabled: true
+          field_name: l2_import_energy_apparent
+          scale_field: energy_apparent_scale
+          unit: VAh
+        l2_import_energy_reactive_q1:
+          description: Energia reattiva importata Q1 L2
+          enabled: true
+          field_name: l2_import_energy_reactive_q1
+          scale_field: energy_reactive_scale
+          unit: VArh
+        l2_import_energy_reactive_q2:
+          description: Energia reattiva importata Q2 L2
+          enabled: true
+          field_name: l2_import_energy_reactive_q2
+          scale_field: energy_reactive_scale
+          unit: VArh
+        l2_power:
+          description: Potenza attiva L2
+          enabled: true
+          field_name: l2_power
+          scale_field: power_scale
+          unit: W
+        l2_power_apparent:
+          description: Potenza apparente L2
+          enabled: true
+          field_name: l2_power_apparent
+          scale_field: power_apparent_scale
+          unit: VA
+        l2_power_factor:
+          description: Fattore di potenza L2
+          enabled: true
+          field_name: l2_power_factor
+          scale_field: power_factor_scale
+          unit: '%'
+        l2_power_reactive:
+          description: Potenza reattiva L2
+          enabled: true
+          field_name: l2_power_reactive
+          scale_field: power_reactive_scale
+          unit: VAr
+        l2n_voltage:
+          description: Tensione L2-N
+          enabled: true
+          field_name: l2n_voltage
+          scale_field: voltage_scale
+          unit: V
+        l31_voltage:
+          description: Tensione L3-L1
+          enabled: true
+          field_name: l31_voltage
+          scale_field: voltage_scale
+          unit: V
+        l3_current:
+          description: Corrente L3
+          enabled: true
+          field_name: l3_current
+          scale_field: current_scale
+          unit: A
+        l3_export_energy_active:
+          description: Energia esportata L3
+          enabled: true
+          field_name: l3_export_energy_active
+          scale_field: energy_active_scale
+          unit: Wh
+        l3_export_energy_apparent:
+          description: Energia apparente esportata L3 (condizionale)
+          enabled: true
+          field_name: l3_export_energy_apparent
+          scale_field: energy_apparent_scale
+          unit: VAh
+        l3_export_energy_reactive_q3:
+          description: Energia reattiva esportata Q3 L3
+          enabled: true
+          field_name: l3_export_energy_reactive_q3
+          scale_field: energy_reactive_scale
+          unit: VArh
+        l3_export_energy_reactive_q4:
+          description: Energia reattiva esportata Q4 L3
+          enabled: true
+          field_name: l3_export_energy_reactive_q4
+          scale_field: energy_reactive_scale
+          unit: VArh
+        l3_import_energy_active:
+          description: Energia importata L3
+          enabled: true
+          field_name: l3_import_energy_active
+          scale_field: energy_active_scale
+          unit: Wh
+        l3_import_energy_apparent:
+          description: Energia apparente importata L3 (condizionale)
+          enabled: true
+          field_name: l3_import_energy_apparent
+          scale_field: energy_apparent_scale
+          unit: VAh
+        l3_import_energy_reactive_q1:
+          description: Energia reattiva importata Q1 L3
+          enabled: true
+          field_name: l3_import_energy_reactive_q1
+          scale_field: energy_reactive_scale
+          unit: VArh
+        l3_import_energy_reactive_q2:
+          description: Energia reattiva importata Q2 L3
+          enabled: true
+          field_name: l3_import_energy_reactive_q2
+          scale_field: energy_reactive_scale
+          unit: VArh
+        l3_power:
+          description: Potenza attiva L3
+          enabled: true
+          field_name: l3_power
+          scale_field: power_scale
+          unit: W
+        l3_power_apparent:
+          description: Potenza apparente L3
+          enabled: true
+          field_name: l3_power_apparent
+          scale_field: power_apparent_scale
+          unit: VA
+        l3_power_factor:
+          description: Fattore di potenza L3
+          enabled: true
+          field_name: l3_power_factor
+          scale_field: power_factor_scale
+          unit: '%'
+        l3_power_reactive:
+          description: Potenza reattiva L3
+          enabled: true
+          field_name: l3_power_reactive
+          scale_field: power_reactive_scale
+          unit: VAr
+        l3n_voltage:
+          description: Tensione L3-N
+          enabled: true
+          field_name: l3n_voltage
+          scale_field: voltage_scale
+          unit: V
+        manufacturer:
+          description: Produttore contatore
+          enabled: true
+          field_name: c_manufacturer
+        model:
+          description: Modello contatore
+          enabled: true
+          field_name: c_model
+        option:
+          description: Opzione contatore (Export+Import)
+          enabled: true
+          field_name: c_option
+        power:
+          description: Potenza attiva totale
+          enabled: true
+          field_name: power
+          scale_field: power_scale
+          unit: W
+        power_apparent:
+          description: Potenza apparente totale
+          enabled: true
+          field_name: power_apparent
+          scale_field: power_apparent_scale
+          unit: VA
+        power_factor:
+          description: Fattore di potenza totale
+          enabled: true
+          field_name: power_factor
+          scale_field: power_factor_scale
+          unit: '%'
+        power_reactive:
+          description: Potenza reattiva totale
+          enabled: true
+          field_name: power_reactive
+          scale_field: power_reactive_scale
+          unit: VAr
+        reactive_energy_status:
+          description: Stato energia reattiva (N/A se scale invalido)
+          enabled: true
+          field_name: energy_reactive_scale
+        serial:
+          description: Numero seriale
+          enabled: true
+          field_name: c_serialnumber
+        sunspec_did:
+          description: SunSpec Device ID
+          enabled: true
+          field_name: c_sunspec_did
+        sunspec_length:
+          description: Lunghezza blocco SunSpec
+          enabled: true
+          field_name: c_sunspec_length
+        version:
+          description: Versione firmware
+          enabled: true
+          field_name: c_version
+        voltage_ll:
+          description: Tensione L-L
+          enabled: true
+          field_name: voltage_ll
+          scale_field: voltage_scale
+          unit: V
+        voltage_ln:
+          description: Tensione L-N
+          enabled: true
+          field_name: voltage_ln
+          scale_field: voltage_scale
+          unit: V

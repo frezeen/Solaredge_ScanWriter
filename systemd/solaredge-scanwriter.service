@@ -1,0 +1,44 @@
+[Unit]
+Description=Solaredge_ScanWriter (GUI + Loop 24/7)
+Documentation=https://github.com/frezeen/Solaredge_ScanWriter
+After=network.target network-online.target
+Wants=network-online.target
+Requires=network.target
+
+[Service]
+Type=simple
+User=solaredge
+Group=solaredge
+WorkingDirectory=/opt/Solaredge_ScanWriter
+Environment=PATH=/opt/Solaredge_ScanWriter/venv/bin
+Environment=PYTHONPATH=/opt/Solaredge_ScanWriter
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/opt/Solaredge_ScanWriter/venv/bin/python main.py
+ExecReload=/bin/kill -HUP $MAINPID
+KillMode=mixed
+KillSignal=SIGTERM
+TimeoutStopSec=30
+Restart=always
+RestartSec=10
+StartLimitInterval=60
+StartLimitBurst=3
+
+# Security settings
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/Solaredge_ScanWriter/logs /opt/Solaredge_ScanWriter/cache /opt/Solaredge_ScanWriter/cookies
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+
+# No resource limits
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=solaredge-scanwriter
+
+[Install]
+WantedBy=multi-user.target
