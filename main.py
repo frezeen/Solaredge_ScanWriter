@@ -53,7 +53,8 @@ def setup_logging(args, config: Dict[str, Any]) -> str:
         'scan': 'scanner.log',
         'web': 'web_flow.log',
         'api': 'api_flow.log',
-        'realtime': 'realtime_flow.log'
+        'realtime': 'realtime_flow.log',
+        'gui': 'loop_mode.log'
     }
     
     mode = 'scan' if args.scan else ('web' if args.web else 'api' if args.api else 'realtime' if args.realtime else 'gui')
