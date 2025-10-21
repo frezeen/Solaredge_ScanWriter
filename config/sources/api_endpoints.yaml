@@ -1,0 +1,370 @@
+api_ufficiali:
+  enabled: true
+  endpoints:
+    accounts_list:
+      category: Info
+      data_format: raw_json
+      data_type: metadata
+      description: Lista degli account e sub-account associati al token API. Include
+        informazioni su nomi, posizioni, contatti e configurazioni aziendali. Utile
+        per gestione multi-sito.
+      enabled: false
+      endpoint: /accounts/list
+      extraction:
+        raw_json_field: raw_json
+      method: GET
+      parameters: {}
+      requires_serial: false
+    api_version_current:
+      category: Info
+      data_format: raw_json
+      data_type: metadata
+      description: Versione corrente dell'API SolarEdge in uso. Utile per verificare
+        la versione attiva e pianificare aggiornamenti delle integrazioni.
+      enabled: true
+      endpoint: /version/current
+      extraction:
+        raw_json_field: raw_json
+      method: GET
+      parameters: {}
+      requires_serial: false
+    api_versions:
+      category: Info
+      data_format: raw_json
+      data_type: metadata
+      description: Informazioni sulle versioni dell'API SolarEdge disponibili. Include
+        versione corrente e versioni supportate per garantire compatibilit├á e accesso
+        alle nuove funzionalit├á.
+      enabled: true
+      endpoint: /version/supported
+      extraction:
+        raw_json_field: raw_json
+      method: GET
+      parameters: {}
+      requires_serial: false
+    equipment_change_log:
+      category: Info
+      data_format: raw_json
+      data_type: metadata
+      description: Registro storico delle sostituzioni e cambi di attrezzatura. Traccia
+        tutte le modifiche hardware ordinate per data, utile per manutenzione e analisi
+        dell'evoluzione del sistema.
+      enabled: true
+      endpoint: /equipment/{siteId}/{serialNumber}/changeLog
+      extraction:
+        raw_json_field: raw_json
+      method: GET
+      parameters: {}
+      requires_serial: true
+    equipment_data:
+      category: Inverter
+      data_format: structured
+      data_type: technical
+      description: Restituisce dati tecnici specifici dell'inverter per un timeframe
+        richiesto, inclusi parametri di performance come tensione AC/DC, corrente,
+        frequenza, potenza attiva/reattiva, fattore di potenza, temperatura e modalit├á
+        operative. Include anche versione software e tipo di inverter (monofase/trifase).
+        Dati divisi per fase dove applicabile. Limitato a una settimana di dati.
+      enabled: true
+      endpoint: /equipment/{siteId}/{serialNumber}/data
+      extraction:
+        values_path: data.telemetries
+      method: GET
+      parameters:
+        endTime: ${API_END_TIME}
+        startTime: ${API_START_TIME}
+      requires_serial: true
+    equipment_list:
+      category: Info
+      data_format: raw_json
+      data_type: metadata
+      description: Lista degli inverter e SMI (Safety Monitoring Interface) installati.
+        Fornisce nomi, modelli, produttori e numeri seriali di tutti i dispositivi
+        di conversione energia del sito.
+      enabled: true
+      endpoint: /equipment/{siteId}/list
+      extraction:
+        raw_json_field: raw_json
+      method: GET
+      parameters: {}
+      requires_serial: false
+    site_data_period:
+      category: Info
+      data_format: raw_json
+      data_type: metadata
+      description: Periodo temporale di produzione energetica del sito. Indica le
+        date di inizio e fine della raccolta dati, utile per determinare la disponibilit├á
+        storica dei dati e pianificare analisi temporali.
+      enabled: true
+      endpoint: /site/{siteId}/dataPeriod
+      extraction:
+        raw_json_field: raw_json
+      method: GET
+      parameters: {}
+      requires_serial: false
+    site_details:
+      category: Info
+      data_format: raw_json
+      data_type: metadata
+      description: Dettagli completi del sito fotovoltaico. Include informazioni su
+        nome, posizione, stato, configurazione, dati di installazione e specifiche
+        tecniche. Metadati essenziali per identificare e caratterizzare l'impianto.
+      enabled: true
+      endpoint: /site/{siteId}/details
+      extraction:
+        raw_json_field: raw_json
+      method: GET
+      parameters: {}
+      requires_serial: false
+    site_energy_day:
+      category: Inverter
+      data_format: structured
+      data_type: production
+      description: Restituisce le misurazioni di energia del sito con la stessa energia
+        visualizzata nel Site Dashboard di SolarEdge. Fornisce dati di produzione
+        energetica aggregati per giorno, utili per analisi storiche e confronti con
+        il pannello di controllo ufficiale. Limitato a un anno di dati quando si usa
+        risoluzione giornaliera.
+      enabled: true
+      endpoint: /site/{siteId}/energy
+      extraction:
+        time_field: date
+        unit: Wh
+        value_field: value
+        values_path: energy.values
+      method: GET
+      parameters:
+        endDate: ${API_START_DATE}
+        startDate: ${API_START_DATE}
+        timeUnit: DAY
+      requires_serial: false
+    site_energy_details:
+      category: Meter
+      data_format: structured
+      data_type: detailed
+      description: Dettagli energia del sito con granularit├á temporale fine. Fornisce
+        dati di produzione, consumo, autoconsumo, immissione in rete e acquisto energia
+        per intervalli di 15 minuti. Utilizzato per analisi energetica dettagliata
+        e monitoraggio prestazioni impianto fotovoltaico.
+      enabled: true
+      endpoint: /site/{siteId}/energyDetails
+      extraction:
+        time_field: date
+        unit: Wh
+        value_field: value
+        values_path: energyDetails.meters[].values
+      method: GET
+      parameters:
+        meters: PRODUCTION,CONSUMPTION,SELFCONSUMPTION,FEEDIN,PURCHASED
+        timeUnit: QUARTER_OF_AN_HOUR
+      requires_serial: false
+    site_energy_hour:
+      category: Inverter
+      data_format: structured
+      data_type: production
+      description: Restituisce le misurazioni di energia del sito con risoluzione
+        oraria, corrispondenti ai dati del Site Dashboard di SolarEdge. Utile per
+        analisi di produzione giornaliera con dettaglio sufficiente per identificare
+        variazioni orarie dovute a condizioni meteorologiche o configurazione impianto.
+        Limitato a un mese di dati.
+      enabled: true
+      endpoint: /site/{siteId}/energy
+      extraction:
+        time_field: date
+        unit: Wh
+        value_field: value
+        values_path: energy.values
+      method: GET
+      parameters:
+        endDate: ${API_START_DATE}
+        startDate: ${API_START_DATE}
+        timeUnit: HOUR
+      requires_serial: false
+    site_energy_quarter:
+      category: Inverter
+      data_format: structured
+      data_type: production
+      description: Restituisce le misurazioni di energia del sito con risoluzione
+        massima di 15 minuti (QUARTER_OF_AN_HOUR), corrispondenti ai dati del Site
+        Dashboard. Ideale per analisi dettagliate di produzione energetica, monitoraggio
+        prestazioni impianto e identificazione picchi di produzione. Limitato a un
+        mese di dati.
+      enabled: true
+      endpoint: /site/{siteId}/energy
+      extraction:
+        time_field: date
+        unit: Wh
+        value_field: value
+        values_path: energy.values
+      method: GET
+      parameters:
+        endDate: ${API_START_DATE}
+        startDate: ${API_START_DATE}
+        timeUnit: QUARTER_OF_AN_HOUR
+      requires_serial: false
+    site_env_benefits:
+      category: Info
+      data_format: raw_json
+      data_type: metadata
+      description: Benefici ambientali derivanti dalla produzione energetica del sito.
+        Include calcolo di emissioni CO2 evitate, alberi equivalenti piantati e impatto
+        ambientale positivo. Metriche di sostenibilit├á e impatto ambientale.
+      enabled: true
+      endpoint: /site/{siteId}/envBenefits
+      extraction:
+        raw_json_field: raw_json
+      method: GET
+      parameters: {}
+      requires_serial: false
+    site_inventory:
+      category: Info
+      data_format: raw_json
+      data_type: metadata
+      description: Inventario completo dell'attrezzatura SolarEdge installata. Include
+        dettagli su inverter, batterie, contatori, gateway, sensori con numeri seriali,
+        modelli, versioni firmware e connessioni. Database completo dell'hardware
+        del sito.
+      enabled: true
+      endpoint: /site/{siteId}/inventory
+      extraction:
+        raw_json_field: raw_json
+      method: GET
+      parameters: {}
+      requires_serial: false
+    site_meters:
+      category: Info
+      data_format: raw_json
+      data_type: metadata
+      description: Metadati completi dei contatori installati nel sito. Salva la risposta
+        JSON grezza dell'endpoint per accesso completo ai metadati del contatore (numero
+        seriale, modello, dispositivo connesso, tipo contatore) e valori di energia
+        lifetime. Perfetto per analisi metadata e integrazione con Grafana per parsing
+        JSON avanzato.
+      enabled: true
+      endpoint: /site/{siteId}/meters
+      extraction:
+        raw_json_field: raw_json
+        values_path: meterEnergyDetails
+      method: GET
+      parameters: {}
+      requires_serial: false
+    site_overview:
+      category: Info
+      data_format: raw_json
+      data_type: metadata
+      description: Panoramica corrente del sito con metriche chiave. Include potenza
+        istantanea, energia giornaliera/mensile/lifetime e dati di produzione aggregati.
+        Overview completo delle prestazioni attuali.
+      enabled: true
+      endpoint: /site/{siteId}/overview
+      extraction:
+        raw_json_field: raw_json
+      method: GET
+      parameters: {}
+      requires_serial: false
+    site_power_details:
+      category: Meter
+      data_format: structured
+      data_type: detailed
+      description: Dettagli potenza istantanea del sito con risoluzione temporale
+        elevata. Monitora in tempo reale produzione, consumo, autoconsumo, immissione
+        e acquisto di potenza. Critico per analisi di prestazioni in tempo reale e
+        ottimizzazione sistema.
+      enabled: true
+      endpoint: /site/{siteId}/powerDetails
+      extraction:
+        time_field: date
+        unit: W
+        value_field: value
+        values_path: powerDetails.meters[].values
+      method: GET
+      parameters:
+        meters: PRODUCTION,CONSUMPTION,SELFCONSUMPTION,FEEDIN,PURCHASED
+      requires_serial: false
+    site_power_flow:
+      category: Flusso
+      data_format: raw_json
+      data_type: metadata
+      description: Site current power flow (grid, load, PV, storage). Uses the official
+        currentPowerFlow endpoint which may return complex JSON describing connections
+        and elements.
+      enabled: true
+      endpoint: /site/{siteId}/currentPowerFlow
+      extraction:
+        raw_json_field: siteCurrentPowerFlow
+      method: GET
+      parameters: {}
+      requires_serial: false
+    site_sensors_list:
+      category: Info
+      data_format: raw_json
+      data_type: metadata
+      description: Lista completa dei sensori installati nel sito. Include sensori
+        di irradianza, temperatura, vento con dettagli su posizione, tipo e dispositivi
+        collegati. Inventario completo dell'infrastruttura di monitoraggio ambientale.
+      enabled: true
+      endpoint: /equipment/{siteId}/sensors
+      extraction:
+        raw_json_field: raw_json
+      method: GET
+      parameters: {}
+      requires_serial: false
+    site_storage_data:
+      category: Inverter
+      data_format: structured
+      data_type: storage
+      description: Restituisce informazioni dettagliate sulle batterie di storage,
+        inclusi stato di energia, potenza e energia lifetime. Fornisce dati per batteria
+        come numero seriale, capacit├á nominale, modello, stato batteria (standby,
+        thermal management, enabled, fault), energia caricata/scaricata lifetime e
+        telemetrie di potenza (positiva per carica, negativa per scarica). Applicabile
+        solo a sistemi con batterie.
+      enabled: true
+      endpoint: /site/{siteId}/storageData
+      extraction:
+        time_field: date
+        unit: Wh
+        value_field: value
+        values_path: storageData
+      method: GET
+      parameters:
+        endTime: ${API_END_TIME}
+        startTime: ${API_START_TIME}
+      requires_serial: true
+    site_timeframe_energy:
+      category: Inverter
+      data_format: structured
+      data_type: production
+      description: Restituisce l'energia totale prodotta dal sito per l'anno corrente.
+        Fornisce un singolo valore aggregato di energia prodotta dal sistema fotovoltaico,
+        utile per report annuali e confronti con il Site Dashboard. Corrisponde al
+        valore mostrato come "energia prodotta totale" nell'app SolarEdge.
+      enabled: true
+      endpoint: /site/{siteId}/timeFrameEnergy
+      extraction:
+        time_field: startLifetimeEnergy.date
+        unit: Wh
+        value_field: energy
+        values_path: timeFrameEnergy
+      method: GET
+      parameters:
+        endDate: ${CURRENT_YEAR_END}
+        startDate: ${CURRENT_YEAR_START}
+      requires_serial: false
+    sites_list:
+      category: Info
+      data_format: raw_json
+      data_type: metadata
+      description: Lista completa di tutti i siti associati all'account API. Include
+        informazioni su nome, posizione, stato, configurazione e dettagli tecnici
+        di ogni sito. Essenziale per gestione multi-sito e monitoraggio di pi├╣ impianti.
+      enabled: true
+      endpoint: /sites/list
+      extraction:
+        raw_json_field: raw_json
+      method: GET
+      parameters:
+        size: 100
+        sortOrder: ASC
+        sortProperty: name
+      requires_serial: false

@@ -1,0 +1,79 @@
+#!/bin/bash
+# Git hook per ripristinare permessi di esecuzione sui file script
+# Viene eseguito automaticamente dopo git checkout/pull
+
+echo "🔧 Ripristino permessi di esecuzione e configurazione..."
+
+# Lista dei file che devono essere eseguibili
+EXECUTABLE_FILES=(
+    "update.sh"
+    "install.sh"
+    "setup-permissions.sh"
+    "scripts/smart_update.py"
+    "scripts/cleanup_logs.sh"
+    "test.sh"
+    "status.sh"
+    "check-buckets.sh"
+)
+
+# Applica permessi di esecuzione
+for file in "${EXECUTABLE_FILES[@]}"; do
+    if [[ -f "$file" ]]; then
+        chmod +x "$file"
+        echo "✅ $file ora eseguibile"
+    else
+        echo "⚠️  $file non trovato"
+    fi
+done
+
+# Determina l'utente appropriato per i file di configurazione
+if id "solaredge" &>/dev/null; then
+    CONFIG_USER="solaredge"
+    CONFIG_GROUP="solaredge"
+elif [[ "$EUID" -ne 0 ]]; then
+    CONFIG_USER="$USER"
+    CONFIG_GROUP="$(id -gn)"
+else
+    CONFIG_USER="root"
+    CONFIG_GROUP="root"
+fi
+
+# Ripristina permessi directory di configurazione (solo se esistono)
+CONFIG_DIRS=(
+    "config"
+    "config/sources"
+    "logs"
+    "cache"
+    "cookies"
+    "storage"
+    "backups"
+)
+
+for dir in "${CONFIG_DIRS[@]}"; do
+    if [[ -d "$dir" ]]; then
+        if [[ "$EUID" -eq 0 ]] || [[ "$CONFIG_USER" = "$USER" ]]; then
+            chown -R "$CONFIG_USER:$CONFIG_GROUP" "$dir" 2>/dev/null || true
+        fi
+        chmod -R 755 "$dir" 2>/dev/null || true
+    fi
+done
+
+# Ripristina permessi file di configurazione (solo se esistono)
+CONFIG_FILES=(
+    "config/main.yaml"
+    "config/sources/api_endpoints.yaml"
+    "config/sources/web_endpoints.yaml"
+    "config/sources/modbus_endpoints.yaml"
+    ".env"
+)
+
+for file in "${CONFIG_FILES[@]}"; do
+    if [[ -f "$file" ]]; then
+        if [[ "$EUID" -eq 0 ]] || [[ "$CONFIG_USER" = "$USER" ]]; then
+            chown "$CONFIG_USER:$CONFIG_GROUP" "$file" 2>/dev/null || true
+        fi
+        chmod 664 "$file" 2>/dev/null || true
+    fi
+done
+
+echo "🎉 Permessi ripristinati!"

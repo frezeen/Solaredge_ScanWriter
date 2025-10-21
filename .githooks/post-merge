@@ -1,0 +1,5 @@
+#!/bin/bash
+# Git hook per ripristinare permessi di esecuzione dopo git pull/merge
+
+# Richiama lo stesso script del post-checkout
+exec .githooks/post-checkout
