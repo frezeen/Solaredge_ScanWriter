@@ -481,26 +481,71 @@ ENV
             ${SUDO_CMD} chown solaredge:solaredge "$APP_DIR/.env"
         fi
         
-        # Create systemd service
+        # Create activation script for better venv management
+        log "📝 Creating Python virtual environment activation script..."
+        ${SUDO_CMD} tee "$APP_DIR/activate-and-run.sh" > /dev/null << 'ACTIVATE_SCRIPT'
+#!/bin/bash
+# SolarEdge Data Collector - Virtual Environment Activation Script
+
+# Set working directory
+cd /opt/Solaredge_ScanWriter
+
+# Activate virtual environment
+source /opt/Solaredge_ScanWriter/venv/bin/activate
+
+# Verify Python environment
+echo "Using Python: $(which python)"
+echo "Python version: $(python --version)"
+echo "Virtual environment: $VIRTUAL_ENV"
+
+# Run the main application
+exec python main.py "$@"
+ACTIVATE_SCRIPT
+        
+        ${SUDO_CMD} chmod +x "$APP_DIR/activate-and-run.sh"
+        ${SUDO_CMD} chown solaredge:solaredge "$APP_DIR/activate-and-run.sh"
+        
+
+        
+        # Create systemd service with improved venv handling
         log "🔧 Creating systemd service..."
         ${SUDO_CMD} tee /etc/systemd/system/solaredge-scanwriter.service > /dev/null << 'SERVICE'
 [Unit]
 Description=Solaredge_ScanWriter (GUI + Loop 24/7)
-After=network.target
+After=network.target influxdb.service
 Wants=network.target
+Requires=influxdb.service
 
 [Service]
 Type=simple
 User=solaredge
 Group=solaredge
 WorkingDirectory=/opt/Solaredge_ScanWriter
-Environment=PATH=/opt/Solaredge_ScanWriter/venv/bin
-ExecStart=/opt/Solaredge_ScanWriter/venv/bin/python main.py
+
+# Environment variables for Python virtual environment
+Environment=PATH=/opt/Solaredge_ScanWriter/venv/bin:/usr/local/bin:/usr/bin:/bin
+Environment=VIRTUAL_ENV=/opt/Solaredge_ScanWriter/venv
+Environment=PYTHONPATH=/opt/Solaredge_ScanWriter
+
+# Use the activation script for proper venv setup
+ExecStart=/opt/Solaredge_ScanWriter/activate-and-run.sh
+
+# Restart configuration
 Restart=always
 RestartSec=10
+StartLimitInterval=300
+StartLimitBurst=5
+
+# Logging
 StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=solaredge-scanwriter
+
+# Security settings
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/opt/Solaredge_ScanWriter
 
 [Install]
 WantedBy=multi-user.target
@@ -508,41 +553,265 @@ SERVICE
         
         ${SUDO_CMD} systemctl daemon-reload >/dev/null 2>&1
         
+        # Configure log rotation
+        log "🔄 Configuring log rotation..."
+        if [[ -f "$APP_DIR/config/logrotate.conf" ]]; then
+            ${SUDO_CMD} cp "$APP_DIR/config/logrotate.conf" /etc/logrotate.d/solaredge-collector
+            ${SUDO_CMD} chown root:root /etc/logrotate.d/solaredge-collector
+            ${SUDO_CMD} chmod 644 /etc/logrotate.d/solaredge-collector
+            
+            # Update paths in logrotate config to match actual installation
+            ${SUDO_CMD} sed -i "s|/opt/solaredge-collector|$APP_DIR|g" /etc/logrotate.d/solaredge-collector
+            
+            # Update service names to match actual systemd service
+            ${SUDO_CMD} sed -i "s|solaredge-collector|solaredge-scanwriter|g" /etc/logrotate.d/solaredge-collector
+            ${SUDO_CMD} sed -i "s|solaredge-gui|solaredge-scanwriter|g" /etc/logrotate.d/solaredge-collector
+            
+            log "✅ Log rotation configured - logs will be rotated daily and kept for 7 days"
+        else
+            warn "Logrotate configuration file not found at $APP_DIR/config/logrotate.conf, skipping log rotation setup"
+        fi
+        
+        # Configure systemd journal retention
+        log "📰 Configuring systemd journal retention..."
+        
+        # Create journald configuration directory if not exists
+        ${SUDO_CMD} mkdir -p /etc/systemd/journald.conf.d
+        
+        # Configure journal retention for our service specifically
+        ${SUDO_CMD} tee /etc/systemd/journald.conf.d/solaredge-retention.conf > /dev/null << 'JOURNAL'
+# SolarEdge Data Collector - Journal Retention Configuration
+# Keep journal logs for maximum 48 hours to prevent disk space issues
+
+[Journal]
+# Maximum retention time (48 hours)
+MaxRetentionSec=48h
+
+# Maximum disk usage for journal (100MB)
+SystemMaxUse=100M
+
+# Maximum size for individual journal files (10MB)
+SystemMaxFileSize=10M
+
+# Force sync every 5 minutes to ensure logs are written
+SyncIntervalSec=5m
+
+# Compress journal files
+Compress=yes
+
+# Forward to syslog (optional - disable if not needed)
+ForwardToSyslog=no
+JOURNAL
+        
+        # Apply journal configuration
+        ${SUDO_CMD} systemctl restart systemd-journald >/dev/null 2>&1 || warn "Could not restart journald service"
+        
+        # Configure journal vacuum for immediate cleanup of old logs
+        log "🧹 Cleaning up old journal logs..."
+        ${SUDO_CMD} journalctl --vacuum-time=48h >/dev/null 2>&1 || warn "Could not vacuum old journal logs"
+        ${SUDO_CMD} journalctl --vacuum-size=100M >/dev/null 2>&1 || warn "Could not vacuum journal by size"
+        
+        log "✅ Journal retention configured - systemd logs kept for max 48 hours (100MB limit)"
+        
+        # Optional: Create cron job for automatic journal cleanup (runs daily at 3 AM)
+        log "⏰ Setting up automatic journal cleanup..."
+        CRON_JOB="0 3 * * * /usr/bin/journalctl --vacuum-time=48h --vacuum-size=100M >/dev/null 2>&1"
+        
+        # Add cron job for root user (journalctl requires root privileges)
+        if ! ${SUDO_CMD} crontab -l 2>/dev/null | grep -q "journalctl --vacuum"; then
+            (${SUDO_CMD} crontab -l 2>/dev/null; echo "$CRON_JOB") | ${SUDO_CMD} crontab -
+            log "✅ Daily journal cleanup scheduled at 3:00 AM"
+        else
+            log "ℹ️ Journal cleanup cron job already exists"
+        fi
+        
         # Create helper scripts
         log "📝 Creating helper scripts..."
         ${SUDO_CMD} tee "$APP_DIR/test.sh" > /dev/null << 'TEST'
 #!/bin/bash
+# SolarEdge Installation Test Script
+
 cd /opt/Solaredge_ScanWriter
+
 echo "=== SolarEdge Installation Test ==="
-echo "Python version: $(./venv/bin/python --version)"
 echo ""
-echo "Installed packages:"
-./venv/bin/pip list | grep -E "(aiohttp|influxdb|yaml|pymodbus|requests)"
+
+# Test virtual environment
+echo "🐍 Python Virtual Environment:"
+if [[ -f venv/bin/activate ]]; then
+    echo "✅ Virtual environment exists"
+    source venv/bin/activate
+    echo "  Python path: $(which python)"
+    echo "  Python version: $(python --version)"
+    echo "  Virtual env: $VIRTUAL_ENV"
+else
+    echo "❌ Virtual environment not found"
+fi
 echo ""
-echo "Services status:"
-echo "InfluxDB: $(systemctl is-active influxdb)"
-echo "Grafana: $(systemctl is-active grafana-server)"
+
+# Test installed packages
+echo "📦 Installed Python packages:"
+if [[ -f venv/bin/pip ]]; then
+    ./venv/bin/pip list | grep -E "(aiohttp|influxdb|yaml|pymodbus|requests|solaredge)" | head -10
+else
+    echo "❌ pip not found in virtual environment"
+fi
 echo ""
-echo "Directories:"
+
+# Test services
+echo "🔧 Services status:"
+echo "  SolarEdge: $(systemctl is-active solaredge-scanwriter 2>/dev/null || echo 'not-found')"
+echo "  InfluxDB: $(systemctl is-active influxdb 2>/dev/null || echo 'not-found')"
+echo "  Grafana: $(systemctl is-active grafana-server 2>/dev/null || echo 'not-found')"
+echo ""
+
+# Test directories and permissions
+echo "📁 Directory structure:"
 ls -la /opt/Solaredge_ScanWriter/ | head -10
 echo ""
-echo "Configuration file:"
+
+# Test configuration
+echo "⚙️ Configuration:"
 if [[ -f .env ]]; then
     echo "✅ .env file exists"
-    grep -E "^[A-Z]" .env | head -5
+    echo "  Key variables:"
+    grep -E "^[A-Z].*=" .env | head -5 | sed 's/=.*/=***/' | sed 's/^/    /'
 else
     echo "❌ .env file missing"
 fi
+echo ""
+
+# Test main application
+echo "🧪 Application test:"
+if [[ -f main.py ]]; then
+    echo "✅ main.py exists"
+    if source venv/bin/activate && python -c "import main" 2>/dev/null; then
+        echo "✅ Main module imports successfully"
+    else
+        echo "⚠️ Main module has import issues (check dependencies)"
+    fi
+else
+    echo "❌ main.py not found"
+fi
+
+echo ""
+echo "=== Test Complete ==="
 TEST
         
         ${SUDO_CMD} tee "$APP_DIR/status.sh" > /dev/null << 'STATUS'
 #!/bin/bash
+# SolarEdge Service Status Script
+
 echo "=== Solaredge_ScanWriter Status ==="
-systemctl status solaredge-scanwriter
 echo ""
-echo "=== Recent Logs ==="
-journalctl -u solaredge-scanwriter --lines=10 --no-pager
+
+# Service status
+echo "🔧 Service Status:"
+systemctl status solaredge-scanwriter --no-pager
+echo ""
+
+# Process information
+echo "🔍 Process Information:"
+if pgrep -f "solaredge" >/dev/null; then
+    echo "✅ SolarEdge processes running:"
+    ps aux | grep -E "(solaredge|main\.py)" | grep -v grep | head -5
+else
+    echo "❌ No SolarEdge processes found"
+fi
+echo ""
+
+# Virtual environment check
+echo "🐍 Virtual Environment:"
+if [[ -d /opt/Solaredge_ScanWriter/venv ]]; then
+    echo "✅ Virtual environment exists"
+    echo "  Python: $(/opt/Solaredge_ScanWriter/venv/bin/python --version)"
+else
+    echo "❌ Virtual environment not found"
+fi
+echo ""
+
+# Recent logs
+echo "📋 Recent Logs (last 15 lines):"
+journalctl -u solaredge-scanwriter --lines=15 --no-pager
+echo ""
+
+# Log files
+echo "📁 Log Files:"
+if [[ -d /opt/Solaredge_ScanWriter/logs ]]; then
+    find /opt/Solaredge_ScanWriter/logs -name "*.log" -type f 2>/dev/null | head -5 | while read file; do
+        size=$(du -h "$file" 2>/dev/null | cut -f1)
+        modified=$(stat -c %y "$file" 2>/dev/null | cut -d' ' -f1)
+        echo "  • $(basename "$file"): $size (modified: $modified)"
+    done
+else
+    echo "  ❌ Log directory not found"
+fi
 STATUS
+
+        # Create manual run script for testing
+        ${SUDO_CMD} tee "$APP_DIR/run-manual.sh" > /dev/null << 'MANUAL'
+#!/bin/bash
+# Manual run script for testing SolarEdge application
+
+cd /opt/Solaredge_ScanWriter
+
+echo "🚀 SolarEdge Manual Run Script"
+echo "============================="
+echo ""
+
+# Check if running as solaredge user
+if [[ "$(whoami)" != "solaredge" ]]; then
+    echo "⚠️ Warning: Not running as 'solaredge' user"
+    echo "   Current user: $(whoami)"
+    echo "   For production, run as: sudo -u solaredge $0"
+    echo ""
+fi
+
+# Activate virtual environment
+echo "🐍 Activating virtual environment..."
+if [[ -f venv/bin/activate ]]; then
+    source venv/bin/activate
+    echo "✅ Virtual environment activated"
+    echo "  Python: $(which python)"
+    echo "  Virtual env: $VIRTUAL_ENV"
+else
+    echo "❌ Virtual environment not found!"
+    exit 1
+fi
+echo ""
+
+# Show available options
+echo "📋 Available run modes:"
+echo "  1. GUI mode (default): python main.py"
+echo "  2. API test: python main.py --api"
+echo "  3. Web test: python main.py --web"
+echo "  4. Realtime test: python main.py --realtime"
+echo ""
+
+# Ask user what to run
+read -p "Enter mode number (1-4) or press Enter for GUI mode: " choice
+
+case $choice in
+    2)
+        echo "🔄 Running API test..."
+        python main.py --api
+        ;;
+    3)
+        echo "🔄 Running Web test..."
+        python main.py --web
+        ;;
+    4)
+        echo "🔄 Running Realtime test..."
+        python main.py --realtime
+        ;;
+    *)
+        echo "🔄 Running GUI mode..."
+        echo "   Access GUI at: http://$(hostname -I | awk '{print $1}'):8092"
+        echo "   Press Ctrl+C to stop"
+        python main.py
+        ;;
+esac
+MANUAL
 
         # Create bucket verification script
         ${SUDO_CMD} tee "$APP_DIR/check-buckets.sh" > /dev/null << 'BUCKETS'
@@ -589,9 +858,154 @@ fi
 echo ""
 echo "💡 I bucket vengono creati automaticamente durante l'installazione"
 BUCKETS
+
+        # Create logrotate verification script
+        ${SUDO_CMD} tee "$APP_DIR/check-logrotate.sh" > /dev/null << 'LOGROTATE'
+#!/bin/bash
+# Script per verificare configurazione logrotate
+
+echo "🔄 Verifica Configurazione Log Rotation"
+echo "======================================"
+echo ""
+
+# Check if logrotate config exists
+if [[ -f /etc/logrotate.d/solaredge-collector ]]; then
+    echo "✅ File configurazione logrotate trovato: /etc/logrotate.d/solaredge-collector"
+    echo ""
+    echo "📋 Configurazione attuale:"
+    cat /etc/logrotate.d/solaredge-collector
+    echo ""
+    
+    # Test logrotate configuration
+    echo "🧪 Test configurazione logrotate..."
+    if sudo logrotate -d /etc/logrotate.d/solaredge-collector 2>/dev/null; then
+        echo "✅ Configurazione logrotate valida"
+    else
+        echo "❌ Errore nella configurazione logrotate"
+    fi
+    
+    echo ""
+    echo "📁 File di log attuali:"
+    find /opt/Solaredge_ScanWriter/logs -name "*.log" -type f 2>/dev/null | head -10 | while read file; do
+        size=$(du -h "$file" 2>/dev/null | cut -f1)
+        echo "  • $(basename "$file"): $size"
+    done
+    
+    echo ""
+    echo "🗂️ File di log ruotati (se presenti):"
+    find /opt/Solaredge_ScanWriter/logs -name "*.log.*" -type f 2>/dev/null | head -5 | while read file; do
+        size=$(du -h "$file" 2>/dev/null | cut -f1)
+        echo "  • $(basename "$file"): $size"
+    done
+    
+else
+    echo "❌ File configurazione logrotate non trovato"
+    echo "   Dovrebbe essere in: /etc/logrotate.d/solaredge-collector"
+fi
+
+echo ""
+echo "💡 La rotazione dei log avviene automaticamente ogni giorno via cron"
+echo "💡 Per forzare una rotazione manuale: sudo logrotate -f /etc/logrotate.d/solaredge-collector"
+LOGROTATE
+
+        # Create journal management script
+        ${SUDO_CMD} tee "$APP_DIR/manage-journal.sh" > /dev/null << 'JOURNAL_SCRIPT'
+#!/bin/bash
+# Script per gestire i log systemd journal
+
+echo "📰 Gestione Journal Systemd"
+echo "==========================="
+echo ""
+
+case "${1:-status}" in
+    "status"|"")
+        echo "📊 Stato attuale del journal:"
+        echo ""
         
-        ${SUDO_CMD} chmod +x "$APP_DIR"/{test.sh,status.sh}
-        ${SUDO_CMD} chown solaredge:solaredge "$APP_DIR"/{test.sh,status.sh}
+        # Journal disk usage
+        echo "💾 Utilizzo disco journal:"
+        sudo journalctl --disk-usage 2>/dev/null || echo "  Errore recupero utilizzo disco"
+        echo ""
+        
+        # Journal configuration
+        echo "⚙️ Configurazione journal:"
+        if [[ -f /etc/systemd/journald.conf.d/solaredge-retention.conf ]]; then
+            echo "  ✅ Configurazione personalizzata attiva:"
+            grep -E "^[A-Z]" /etc/systemd/journald.conf.d/solaredge-retention.conf | sed 's/^/    /'
+        else
+            echo "  ⚠️ Configurazione personalizzata non trovata"
+        fi
+        echo ""
+        
+        # Recent logs for our service
+        echo "📋 Log recenti del servizio (ultime 10 righe):"
+        sudo journalctl -u solaredge-scanwriter --lines=10 --no-pager 2>/dev/null || echo "  Servizio non trovato o non attivo"
+        echo ""
+        
+        # Journal files info
+        echo "📁 File journal attuali:"
+        sudo find /var/log/journal -name "*.journal*" -type f 2>/dev/null | head -5 | while read file; do
+            size=$(sudo du -h "$file" 2>/dev/null | cut -f1)
+            modified=$(sudo stat -c %y "$file" 2>/dev/null | cut -d' ' -f1)
+            echo "  • $(basename "$file"): $size (modificato: $modified)"
+        done
+        ;;
+        
+    "clean")
+        echo "🧹 Pulizia journal logs..."
+        echo ""
+        
+        echo "Prima della pulizia:"
+        sudo journalctl --disk-usage
+        echo ""
+        
+        # Clean logs older than 48 hours
+        echo "Rimozione log più vecchi di 48 ore..."
+        sudo journalctl --vacuum-time=48h
+        echo ""
+        
+        # Limit total size to 100MB
+        echo "Limitazione dimensione totale a 100MB..."
+        sudo journalctl --vacuum-size=100M
+        echo ""
+        
+        echo "Dopo la pulizia:"
+        sudo journalctl --disk-usage
+        ;;
+        
+    "logs")
+        echo "📋 Log del servizio SolarEdge (ultime 50 righe):"
+        echo ""
+        sudo journalctl -u solaredge-scanwriter --lines=50 --no-pager
+        ;;
+        
+    "follow")
+        echo "📡 Monitoraggio log in tempo reale (Ctrl+C per uscire):"
+        echo ""
+        sudo journalctl -u solaredge-scanwriter -f
+        ;;
+        
+    "help")
+        echo "Utilizzo: $0 [comando]"
+        echo ""
+        echo "Comandi disponibili:"
+        echo "  status  - Mostra stato journal e configurazione (default)"
+        echo "  clean   - Pulisce log vecchi (>48h) e limita dimensione"
+        echo "  logs    - Mostra log recenti del servizio"
+        echo "  follow  - Monitora log in tempo reale"
+        echo "  help    - Mostra questo aiuto"
+        ;;
+        
+    *)
+        echo "❌ Comando non riconosciuto: $1"
+        echo "Usa '$0 help' per vedere i comandi disponibili"
+        exit 1
+        ;;
+esac
+JOURNAL_SCRIPT
+        
+        ${SUDO_CMD} chmod +x "$APP_DIR"/{test.sh,status.sh,check-buckets.sh,check-logrotate.sh,manage-journal.sh}
+        ${SUDO_CMD} chown solaredge:solaredge "$APP_DIR"/{test.sh,status.sh,check-buckets.sh,check-logrotate.sh,manage-journal.sh,activate-and-run.sh,run-manual.sh,venv.sh}
         
         # Configure executable permissions for all scripts
         log "🔧 Configuring script permissions..."
@@ -604,6 +1018,11 @@ BUCKETS
             "test.sh"
             "status.sh"
             "check-buckets.sh"
+            "check-logrotate.sh"
+            "manage-journal.sh"
+            "activate-and-run.sh"
+            "run-manual.sh"
+            "venv.sh"
         )
         
         for file in "${EXECUTABLE_FILES[@]}"; do
@@ -706,6 +1125,9 @@ BUCKETS
         echo "• ✅ Dual bucket setup (API/Web + Realtime with 2-day retention)"
         echo "• ✅ Smart update system (configurations auto-preserved)"
         echo "• ✅ Automatic permission management"
+        echo "• ✅ Log rotation (daily, 7-day retention for main logs, 3-day for debug)"
+        echo "• ✅ Journal retention (systemd logs kept for max 48 hours, 100MB limit)"
+        echo "• ✅ Python virtual environment (isolated dependencies with activation scripts)"
         echo ""
         echo "Access URLs:"
         echo "• SolarEdge GUI: http://$(hostname -I | awk '{print $1}'):8092"
@@ -716,6 +1138,10 @@ BUCKETS
         echo "• ./test.sh - Test installation and dependencies"
         echo "• ./status.sh - Check service status and logs"
         echo "• ./check-buckets.sh - Verify InfluxDB bucket configuration"
+        echo "• ./check-logrotate.sh - Verify log rotation configuration"
+        echo "• ./manage-journal.sh - Manage systemd journal logs (status/clean/logs/follow)"
+        echo "• ./run-manual.sh - Run application manually for testing (with venv activated)"
+        echo "• ./venv.sh - Activate Python virtual environment (interactive shell)"
         echo "• ./update.sh - Update system (configurations auto-preserved)"
         echo ""
         echo "Don't forget to configure your .env file with SolarEdge credentials!"
