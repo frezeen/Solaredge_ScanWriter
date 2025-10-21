@@ -27,6 +27,13 @@ class SmartUpdater:
             "config/sources/modbus_endpoints.yaml",
         ]
         
+        # Directory da preservare i permessi
+        self.preserve_dirs = [
+            "logs",
+            "cache", 
+            "scripts",
+            "config"
+        ]
 
         
         # File che devono essere eseguibili
@@ -35,7 +42,8 @@ class SmartUpdater:
             "install.sh", 
             "setup-permissions.sh",
             "scripts/smart_update.py",
-            "scripts/cleanup_logs.sh"
+            "scripts/cleanup_logs.sh",
+            "venv.sh"
         ]
         
         # Servizi systemd possibili
