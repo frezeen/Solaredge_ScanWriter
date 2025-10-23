@@ -331,13 +331,20 @@ class CollectorAPI:
         
         # Identifica endpoint che richiedono date
         endpoint_path = endpoint_config.get('endpoint', '')
+        config_params = endpoint_config.get('parameters', {})
         
-        if any(x in endpoint_path for x in ['energyDetails', 'powerDetails', 'meters', 'energy', 'power']):
-            params['startTime'] = start_time
-            params['endTime'] = end_time
-        elif 'data' in endpoint_path:
-            # Equipment data API supporta solo 1 settimana, ma proviamo comunque
-            # Se fallisce, verrà gestito dal try/except
+        # Controlla se l'endpoint usa startDate/endDate o startTime/endTime
+        uses_date_only = any(k in config_params for k in ['startDate', 'endDate'])
+        uses_time = any(k in config_params for k in ['startTime', 'endTime'])
+        
+        if uses_date_only:
+            # Endpoint che usano solo date (es: site_energy_day)
+            start_date = start_time.split(' ')[0]  # Estrai solo YYYY-MM-DD
+            end_date = end_time.split(' ')[0]
+            params['startDate'] = start_date
+            params['endDate'] = end_date
+        elif uses_time or any(x in endpoint_path for x in ['energyDetails', 'powerDetails', 'meters', 'data']):
+            # Endpoint che usano date + orari
             params['startTime'] = start_time
             params['endTime'] = end_time
             
