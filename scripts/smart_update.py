@@ -17,9 +17,20 @@ from datetime import datetime
 from pathlib import Path
 from typing import List, Optional, Tuple
 
-# Local modules (alphabetical)
-from app_logging.universal_logger import get_logger
-from config.config_manager import ConfigManager
+# Add project root to Python path for imports
+project_root = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(project_root))
+
+# Now we can import project modules
+try:
+    from app_logging.universal_logger import get_logger
+    from config.config_manager import ConfigManager
+    USE_PROJECT_MODULES = True
+except ImportError as e:
+    print(f"Warning: Could not import project modules: {e}")
+    print("Falling back to basic logging...")
+    import logging
+    USE_PROJECT_MODULES = False
 
 @dataclass(frozen=True)
 class UpdateConfig:
@@ -55,29 +66,42 @@ class UpdateConfig:
         "collector"
     )
     
+    # Timeout configurations
     service_start_timeout: int = 3
+    command_timeout: int = 300  # 5 minutes default for commands
+    git_timeout: int = 600      # 10 minutes for git operations
     backup_dir_name: str = ".temp_config_backup"
 
 
 class SmartUpdater:
     """Sistema di aggiornamento intelligente per SolarEdge Data Collector"""
     
-    def __init__(self, project_root: str = ".", config_manager: Optional[ConfigManager] = None):
+    def __init__(self, project_root: str = ".", config_manager=None):
         self.project_root = Path(project_root).resolve()
-        self.logger = get_logger(__name__)
-        self.config = UpdateConfig()
         
-        # Ensure config has all required attributes
-        if not hasattr(self.config, 'preserve_dirs'):
-            self.logger.error("UpdateConfig missing preserve_dirs attribute")
-            raise AttributeError("UpdateConfig missing preserve_dirs attribute")
-            
-        try:
-            self.config_manager = config_manager or ConfigManager()
-        except Exception as e:
-            # Fallback if ConfigManager fails to initialize
-            self.logger.warning(f"ConfigManager initialization failed: {e}")
+        # Setup logging - use project logger if available, fallback to basic
+        if USE_PROJECT_MODULES:
+            self.logger = get_logger(__name__)
+            try:
+                self.config_manager = config_manager or ConfigManager()
+            except Exception as e:
+                print(f"Warning: ConfigManager failed: {e}")
+                self.config_manager = None
+        else:
+            logging.basicConfig(
+                level=logging.INFO,
+                format='%(asctime)s - %(levelname)s - %(message)s'
+            )
+            self.logger = logging.getLogger(__name__)
             self.config_manager = None
+        
+        self.config = UpdateConfig()
+        self.update_metrics = {
+            'start_time': None,
+            'end_time': None,
+            'steps_completed': [],
+            'errors_encountered': []
+        }
         
     def _log_with_color(self, message: str, level: str = "INFO") -> None:
         """Log con colori per output console (mantiene compatibilità con output esistente)"""
@@ -118,8 +142,8 @@ class SmartUpdater:
         self._log_with_color(message, level)
         
     async def run_command_async(self, cmd: List[str], capture_output: bool = True, 
-                               check: bool = True) -> subprocess.CompletedProcess:
-        """Esegue comando asincrono con logging"""
+                               check: bool = True, timeout: Optional[int] = 300) -> subprocess.CompletedProcess:
+        """Esegue comando asincrono con logging e timeout"""
         self.log(f"Executing: {' '.join(cmd)}")
         try:
             # Usa asyncio.create_subprocess_exec per operazioni async
@@ -130,7 +154,9 @@ class SmartUpdater:
                     stderr=asyncio.subprocess.PIPE,
                     cwd=self.project_root
                 )
-                stdout, stderr = await process.communicate()
+                stdout, stderr = await asyncio.wait_for(
+                    process.communicate(), timeout=timeout
+                )
                 
                 # Crea oggetto compatibile con subprocess.CompletedProcess
                 result = subprocess.CompletedProcess(
@@ -140,7 +166,7 @@ class SmartUpdater:
                 )
             else:
                 process = await asyncio.create_subprocess_exec(*cmd, cwd=self.project_root)
-                await process.wait()
+                await asyncio.wait_for(process.wait(), timeout=timeout)
                 result = subprocess.CompletedProcess(cmd, process.returncode)
             
             if check and result.returncode != 0:
@@ -150,6 +176,9 @@ class SmartUpdater:
                 self.log(f"Output: {result.stdout.strip()}")
             return result
             
+        except asyncio.TimeoutError:
+            self.log(f"Command timed out after {timeout}s: {' '.join(cmd)}", "ERROR")
+            raise
         except subprocess.CalledProcessError as e:
             self.log(f"Command failed: {e}", "ERROR")
             if e.stdout:
@@ -301,7 +330,7 @@ class SmartUpdater:
             return False, 0
             
     def apply_git_update(self) -> bool:
-        """Applica aggiornamento Git in modo sicuro"""
+        """Applica aggiornamento Git in modo sicuro con timeout configurabile"""
         try:
             # Stash modifiche locali
             self.log("Stashing local changes...")
@@ -310,17 +339,27 @@ class SmartUpdater:
             # Configura strategia di merge se necessario
             try:
                 self.run_command(["git", "config", "pull.rebase", "false"])
-            except:
+            except subprocess.CalledProcessError:
+                # Non critico se fallisce
                 pass
                 
-            # Prova pull normale
+            # Prova pull normale con timeout esteso per operazioni Git
             try:
                 self.log("Attempting git pull...")
-                self.run_command(["git", "pull", "origin", "main"])
-                self.log("Git pull successful", "SUCCESS")
-                return True
+                result = subprocess.run(
+                    ["git", "pull", "origin", "main"],
+                    capture_output=True,
+                    text=True,
+                    timeout=self.config.git_timeout,
+                    cwd=self.project_root
+                )
+                if result.returncode == 0:
+                    self.log("Git pull successful", "SUCCESS")
+                    return True
+                else:
+                    raise subprocess.CalledProcessError(result.returncode, result.args, result.stdout, result.stderr)
                 
-            except subprocess.CalledProcessError:
+            except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
                 self.log("Git pull failed, trying reset strategy...", "WARNING")
                 
                 # Backup aggiuntivo delle modifiche locali
@@ -329,7 +368,8 @@ class SmartUpdater:
                         "git", "stash", "push", "-m", 
                         f"Additional changes before reset {datetime.now()}"
                     ])
-                except:
+                except subprocess.CalledProcessError:
+                    # Non critico se fallisce
                     pass
                     
                 # Reset hard
@@ -378,16 +418,6 @@ class SmartUpdater:
         """Ripristina tutti i permessi necessari"""
         try:
             self.log("Fixing permissions...")
-            
-            # Debug: Check if config and its attributes exist
-            if not hasattr(self, 'config'):
-                self.log("ERROR: SmartUpdater has no config attribute", "ERROR")
-                return False
-                
-            if not hasattr(self.config, 'preserve_dirs'):
-                self.log("ERROR: UpdateConfig has no preserve_dirs attribute", "ERROR")
-                self.log(f"Available attributes: {dir(self.config)}", "ERROR")
-                return False
             
             # Ripristina permessi eseguibili
             executable_count = 0
@@ -456,11 +486,23 @@ class SmartUpdater:
             self.log("requirements.txt not found, skipping dependency update")
             return True
             
+        # Check for virtual environment
+        venv_pip = self.project_root / "venv" / "bin" / "pip"
+        if venv_pip.exists():
+            pip_cmd = str(venv_pip)
+            self.log("Using virtual environment pip")
+        else:
+            pip_cmd = sys.executable
+            self.log("Virtual environment not found, using system pip", "WARNING")
+            
         try:
             self.log("Updating Python dependencies...")
-            self.run_command([
-                sys.executable, "-m", "pip", "install", "-r", "requirements.txt", "--upgrade"
-            ])
+            if venv_pip.exists():
+                # Use venv pip directly
+                self.run_command([pip_cmd, "install", "-r", "requirements.txt", "--upgrade"])
+            else:
+                # Use system python with pip module
+                self.run_command([pip_cmd, "-m", "pip", "install", "-r", "requirements.txt", "--upgrade"])
             self.log("Dependencies updated successfully", "SUCCESS")
             return True
         except Exception as e:
@@ -468,15 +510,42 @@ class SmartUpdater:
             return False
             
     def validate_configuration(self) -> bool:
-        """Valida la configurazione dopo l'aggiornamento"""
+        """Valida la configurazione dopo l'aggiornamento seguendo le linee guida del progetto"""
         try:
             self.log("Validating configuration...")
             
-            # Test import del config manager
+            # 1. Test import del config manager (pattern del progetto)
+            validation_script = """
+import sys
+try:
+    from config.config_manager import get_config_manager
+    config_manager = get_config_manager()
+    
+    # Test basic configuration access
+    api_config = config_manager.get_solaredge_api_config()
+    print("Configuration validation: SUCCESS")
+    sys.exit(0)
+except ImportError as e:
+    print(f"Import error: {e}")
+    sys.exit(1)
+except Exception as e:
+    print(f"Configuration error: {e}")
+    sys.exit(2)
+"""
+            
             result = self.run_command([
-                sys.executable, "-c", 
-                "from config.config_manager import get_config_manager; get_config_manager()"
+                sys.executable, "-c", validation_script
             ])
+            
+            # 2. Verifica file di configurazione essenziali
+            missing_files = []
+            for config_file in self.config.preserve_files:
+                if not (self.project_root / config_file).exists():
+                    missing_files.append(config_file)
+            
+            if missing_files:
+                self.log(f"Missing configuration files: {missing_files}", "WARNING")
+                # Non è critico se alcuni file mancano
             
             self.log("Configuration validation successful", "SUCCESS")
             return True
@@ -555,8 +624,21 @@ class SmartUpdater:
         else:
             self.log("Start manually: python main.py", "INFO")
     
+    def _log_update_metrics(self) -> None:
+        """Log delle metriche dell'aggiornamento per monitoraggio"""
+        if self.update_metrics['start_time'] and self.update_metrics['end_time']:
+            duration = self.update_metrics['end_time'] - self.update_metrics['start_time']
+            self.log(f"Update duration: {duration.total_seconds():.2f}s", "INFO")
+            
+        if self.update_metrics['steps_completed']:
+            self.log(f"Steps completed: {len(self.update_metrics['steps_completed'])}", "INFO")
+            
+        if self.update_metrics['errors_encountered']:
+            self.log(f"Errors encountered: {len(self.update_metrics['errors_encountered'])}", "WARNING")
+    
     def run_update(self, force: bool = False) -> bool:
-        """Esegue l'aggiornamento completo"""
+        """Esegue l'aggiornamento completo con metriche"""
+        self.update_metrics['start_time'] = datetime.now()
         self.log("🚀 Starting Smart Update System", "INFO")
         self.log("=" * 50, "INFO")
         
@@ -575,12 +657,17 @@ class SmartUpdater:
                 return False
                 
             # Log completamento
+            self.update_metrics['end_time'] = datetime.now()
             self._log_update_completion(service_name)
+            self._log_update_metrics()
             return True
             
         except Exception as e:
+            self.update_metrics['end_time'] = datetime.now()
+            self.update_metrics['errors_encountered'].append(str(e))
             self.log(f"Update failed with error: {e}", "ERROR")
             self.logger.exception("Detailed error information:")
+            self._log_update_metrics()
             return False
 
 
@@ -595,12 +682,13 @@ async def main_async() -> int:
     args = parser.parse_args()
     
     try:
-        # Usa ConfigManager se disponibile
+        # Create updater with ConfigManager if available
         config_manager = None
-        try:
-            config_manager = ConfigManager()
-        except Exception as e:
-            print(f"Warning: Could not load ConfigManager: {e}")
+        if USE_PROJECT_MODULES:
+            try:
+                config_manager = ConfigManager()
+            except Exception as e:
+                print(f"Warning: Could not load ConfigManager: {e}")
         
         updater = SmartUpdater(config_manager=config_manager)
         
