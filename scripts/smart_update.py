@@ -172,12 +172,10 @@ class SmartUpdater:
             if check and result.returncode != 0:
                 raise subprocess.CalledProcessError(result.returncode, cmd, result.stdout, result.stderr)
                 
-            if result.stdout and capture_output:
-                self.log(f"Output: {result.stdout.strip()}")
             return result
             
         except asyncio.TimeoutError:
-            self.log(f"Command timed out after {timeout}s: {' '.join(cmd)}", "ERROR")
+            self.log(f"Command timed out after {timeout}s", "ERROR")
             raise
         except subprocess.CalledProcessError as e:
             self.log(f"Command failed: {e}", "ERROR")
@@ -189,8 +187,7 @@ class SmartUpdater:
     
     def run_command(self, cmd: List[str], capture_output: bool = True, 
                    check: bool = True) -> subprocess.CompletedProcess:
-        """Wrapper sincrono per compatibilità (deprecato - usa run_command_async)"""
-        self.log(f"Executing: {' '.join(cmd)}")
+        """Wrapper sincrono per compatibilità"""
         try:
             result = subprocess.run(
                 cmd, 
@@ -199,8 +196,6 @@ class SmartUpdater:
                 check=check,
                 cwd=self.project_root
             )
-            if result.stdout and capture_output:
-                self.log(f"Output: {result.stdout.strip()}")
             return result
         except subprocess.CalledProcessError as e:
             self.log(f"Command failed: {e}", "ERROR")
@@ -222,7 +217,6 @@ class SmartUpdater:
                     check=False
                 )
                 if result.returncode == 0:
-                    self.log(f"Found active service: {service}")
                     return service
             except (subprocess.CalledProcessError, FileNotFoundError) as e:
                 self.logger.debug(f"Service {service} not found or not enabled: {e}")
@@ -236,7 +230,6 @@ class SmartUpdater:
         try:
             self.log(f"Stopping service {service_name}...")
             self.run_command(["sudo", "systemctl", "stop", service_name])
-            self.log(f"Service {service_name} stopped", "SUCCESS")
             return True
         except (subprocess.CalledProcessError, FileNotFoundError) as e:
             self.log(f"Failed to stop service {service_name}: {e}", "WARNING")
@@ -257,7 +250,6 @@ class SmartUpdater:
             )
             
             if result.returncode == 0:
-                self.log(f"Service {service_name} started successfully", "SUCCESS")
                 return True
             else:
                 self.log(f"Service {service_name} may not be active", "WARNING")
@@ -490,10 +482,8 @@ class SmartUpdater:
         venv_pip = self.project_root / "venv" / "bin" / "pip"
         if venv_pip.exists():
             pip_cmd = str(venv_pip)
-            self.log("Using virtual environment pip")
         else:
             pip_cmd = sys.executable
-            self.log("Virtual environment not found, using system pip", "WARNING")
             
         try:
             self.log("Updating Python dependencies...")
@@ -535,15 +525,11 @@ except Exception as e:
             
             # Use venv python if available, fallback to system python
             venv_python = self.project_root / "venv" / "bin" / "python3"
-            self.log(f"DEBUG: Looking for venv python at: {venv_python}")
-            self.log(f"DEBUG: Venv exists: {venv_python.exists()}")
             
             if venv_python.exists():
                 python_cmd = str(venv_python)
-                self.log(f"Using virtual environment python: {python_cmd}")
             else:
                 python_cmd = sys.executable
-                self.log(f"Virtual environment not found, using system python: {python_cmd}", "WARNING")
             
             result = self.run_command([
                 python_cmd, "-c", validation_script
