@@ -26,9 +26,8 @@ try:
     from app_logging.universal_logger import get_logger
     from config.config_manager import ConfigManager
     USE_PROJECT_MODULES = True
-except ImportError as e:
-    print(f"Warning: Could not import project modules: {e}")
-    print("Falling back to basic logging...")
+except ImportError:
+    # Silent fallback to basic logging
     import logging
     USE_PROJECT_MODULES = False
 
@@ -84,8 +83,7 @@ class SmartUpdater:
             self.logger = get_logger(__name__)
             try:
                 self.config_manager = config_manager or ConfigManager()
-            except Exception as e:
-                print(f"Warning: ConfigManager failed: {e}")
+            except Exception:
                 self.config_manager = None
         else:
             logging.basicConfig(
@@ -261,8 +259,6 @@ class SmartUpdater:
     def backup_configs(self) -> bool:
         """Backup temporaneo delle configurazioni durante l'aggiornamento"""
         try:
-            self.log("Creating temporary backup of configurations...")
-            
             # Crea backup temporaneo
             temp_backup = self.project_root / self.config.backup_dir_name
             if temp_backup.exists():
@@ -277,7 +273,6 @@ class SmartUpdater:
                     dst = temp_backup / file_path
                     dst.parent.mkdir(parents=True, exist_ok=True)
                     shutil.copy2(src, dst)
-                    self.log(f"Backed up: {file_path}")
                     backed_up_count += 1
                 else:
                     self.logger.debug(f"Configuration file not found: {file_path}")
@@ -300,7 +295,6 @@ class SmartUpdater:
     def check_for_updates(self) -> Tuple[bool, int]:
         """Controlla se ci sono aggiornamenti disponibili"""
         try:
-            self.log("Checking for updates...")
             self.run_command(["git", "fetch", "origin"])
             
             result = self.run_command([
@@ -325,7 +319,6 @@ class SmartUpdater:
         """Applica aggiornamento Git in modo sicuro con timeout configurabile"""
         try:
             # Stash modifiche locali
-            self.log("Stashing local changes...")
             self.run_command(["git", "stash", "push", "-m", f"Auto-stash before update {datetime.now()}"])
             
             # Configura strategia di merge se necessario
@@ -337,7 +330,6 @@ class SmartUpdater:
                 
             # Prova pull normale con timeout esteso per operazioni Git
             try:
-                self.log("Attempting git pull...")
                 result = subprocess.run(
                     ["git", "pull", "origin", "main"],
                     capture_output=True,
@@ -381,8 +373,6 @@ class SmartUpdater:
                 self.log("No temporary backup found", "WARNING")
                 return True
                 
-            self.log("Restoring configurations...")
-            
             restored_count = 0
             for file_path in self.config.preserve_files:
                 src = temp_backup / file_path
@@ -391,7 +381,6 @@ class SmartUpdater:
                 if src.exists():
                     dst.parent.mkdir(parents=True, exist_ok=True)
                     shutil.copy2(src, dst)
-                    self.log(f"Restored: {file_path}")
                     restored_count += 1
                 else:
                     self.logger.debug(f"Backup file not found: {file_path}")
@@ -409,15 +398,12 @@ class SmartUpdater:
     def fix_permissions(self) -> bool:
         """Ripristina tutti i permessi necessari"""
         try:
-            self.log("Fixing permissions...")
-            
             # Ripristina permessi eseguibili
             executable_count = 0
             for file_path in self.config.executable_files:
                 full_path = self.project_root / file_path
                 if full_path.exists():
                     os.chmod(full_path, 0o755)
-                    self.log(f"Fixed executable: {file_path}")
                     executable_count += 1
                     
             # Determina utente e gruppo per configurazioni
@@ -437,7 +423,6 @@ class SmartUpdater:
                         if config_user != "root":
                             shutil.chown(full_path, config_user, config_group)
                         os.chmod(full_path, 0o755)
-                        self.log(f"Fixed directory permissions: {dir_path}")
                         dir_count += 1
                     except PermissionError as e:
                         self.log(f"Cannot change ownership of {dir_path}: {e}", "WARNING")
@@ -451,7 +436,6 @@ class SmartUpdater:
                         if config_user != "root":
                             shutil.chown(full_path, config_user, config_group)
                         os.chmod(full_path, 0o664)
-                        self.log(f"Fixed file permissions: {file_path}")
                         file_count += 1
                     except PermissionError as e:
                         self.log(f"Cannot change ownership of {file_path}: {e}", "WARNING")
@@ -486,7 +470,6 @@ class SmartUpdater:
             pip_cmd = sys.executable
             
         try:
-            self.log("Updating Python dependencies...")
             if venv_pip.exists():
                 # Use venv pip directly
                 self.run_command([pip_cmd, "install", "-r", "requirements.txt", "--upgrade"])
@@ -502,8 +485,6 @@ class SmartUpdater:
     def validate_configuration(self) -> bool:
         """Valida la configurazione dopo l'aggiornamento seguendo le linee guida del progetto"""
         try:
-            self.log("Validating configuration...")
-            
             # 1. Test import del config manager (pattern del progetto)
             validation_script = """
 import sys
@@ -685,8 +666,7 @@ async def main_async() -> int:
         if USE_PROJECT_MODULES:
             try:
                 config_manager = ConfigManager()
-            except Exception as e:
-                print(f"Warning: Could not load ConfigManager: {e}")
+            except Exception:
         
         updater = SmartUpdater(config_manager=config_manager)
         
