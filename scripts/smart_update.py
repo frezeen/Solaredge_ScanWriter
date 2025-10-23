@@ -533,8 +533,17 @@ except Exception as e:
     sys.exit(2)
 """
             
+            # Use venv python if available, fallback to system python
+            venv_python = self.project_root / "venv" / "bin" / "python3"
+            if venv_python.exists():
+                python_cmd = str(venv_python)
+                self.log("Using virtual environment python for validation")
+            else:
+                python_cmd = sys.executable
+                self.log("Virtual environment not found, using system python for validation", "WARNING")
+            
             result = self.run_command([
-                sys.executable, "-c", validation_script
+                python_cmd, "-c", validation_script
             ])
             
             # 2. Verifica file di configurazione essenziali
