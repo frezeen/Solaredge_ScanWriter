@@ -40,6 +40,7 @@ class UpdateConfig:
         "config/sources/api_endpoints.yaml",
         "config/sources/web_endpoints.yaml", 
         "config/sources/modbus_endpoints.yaml",
+        "cookies/web_cookies.json",
     )
     
     preserve_dirs: Tuple[str, ...] = (
@@ -438,6 +439,18 @@ class SmartUpdater:
                         file_count += 1
                     except PermissionError as e:
                         self.log(f"Cannot change ownership of {file_path}: {e}", "WARNING")
+            
+            # Sistema permessi per tutti i file nella directory cookies
+            cookies_dir = self.project_root / "cookies"
+            if cookies_dir.exists():
+                for cookie_file in cookies_dir.glob("*.json"):
+                    try:
+                        if config_user != "root":
+                            shutil.chown(cookie_file, config_user, config_group)
+                        os.chmod(cookie_file, 0o664)
+                        file_count += 1
+                    except PermissionError as e:
+                        self.log(f"Cannot change ownership of {cookie_file.name}: {e}", "WARNING")
                         
             self.log(f"Permissions fixed: {executable_count} executables, {dir_count} directories, {file_count} files", "SUCCESS")
             return True
