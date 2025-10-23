@@ -45,6 +45,7 @@ class UpdateConfig:
     preserve_dirs: Tuple[str, ...] = (
         "logs",
         "cache", 
+        "cookies",
         "scripts",
         "config"
     )
