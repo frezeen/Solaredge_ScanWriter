@@ -410,18 +410,21 @@ class SmartUpdater:
                 config_user = os.getenv("USER", "root")
                 config_group = config_user
                 
-            # Ripristina permessi directory
+            # Ripristina permessi directory (crea se non esistono)
             dir_count = 0
             for dir_path in self.config.preserve_dirs:
                 full_path = self.project_root / dir_path
-                if full_path.exists():
-                    try:
-                        if config_user != "root":
-                            shutil.chown(full_path, config_user, config_group)
-                        os.chmod(full_path, 0o755)
-                        dir_count += 1
-                    except PermissionError as e:
-                        self.log(f"Cannot change ownership of {dir_path}: {e}", "WARNING")
+                try:
+                    # Crea directory se non esiste
+                    full_path.mkdir(parents=True, exist_ok=True)
+                    
+                    # Sistema permessi
+                    if config_user != "root":
+                        shutil.chown(full_path, config_user, config_group)
+                    os.chmod(full_path, 0o755)
+                    dir_count += 1
+                except PermissionError as e:
+                    self.log(f"Cannot change ownership of {dir_path}: {e}", "WARNING")
                         
             # Ripristina permessi file di configurazione
             file_count = 0
