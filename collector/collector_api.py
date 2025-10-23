@@ -234,14 +234,28 @@ class CollectorAPI:
                 if self.cache:
                     logger.debug(f"🔄 Usando cache diretta per {endpoint_name} ({start_date})")
                     
+                    # Tutti gli endpoint usano cache.get_or_fetch come API mode
+                    # SEMPRE, anche per periodi multipli (history mode gestisce mese per mese)
                     if endpoint_name in ['equipment_change_log', 'equipment_data', 'site_storage_data']:
-                        # Endpoint speciali - per ora usa API
-                        use_cache = False
-                        cached_data = None
-                        logger.debug(f"⚠️ Endpoint speciale {endpoint_name} - usa API")
+                        # Endpoint equipment - usano logiche speciali ma con cache
+                        if endpoint_name == 'equipment_data':
+                            cached_data = self.cache.get_or_fetch(
+                                'api_ufficiali', endpoint_name, start_date,
+                                lambda: self._collect_equipment_endpoint_with_dates(
+                                    endpoint_name, endpoint_config, 
+                                    f"{start_date} 00:00:00", f"{end_date} 23:59:59"
+                                )
+                            )
+                        else:
+                            # Altri endpoint equipment (change_log, storage_data)
+                            cached_data = self.cache.get_or_fetch(
+                                'api_ufficiali', endpoint_name, start_date,
+                                lambda: self._collect_equipment_endpoint(endpoint_name, endpoint_config)
+                            )
+                        use_cache = True
+                        logger.info(f"✅ Cache per endpoint equipment {endpoint_name}")
                     else:
-                        # Endpoint normali - usa cache.get_or_fetch come API mode
-                        # SEMPRE, anche per periodi multipli (history mode gestisce mese per mese)
+                        # Endpoint normali
                         url = self._build_url(endpoint_config)
                         params = self._build_params_with_dates(endpoint_config, 
                                                              f"{start_date} 00:00:00", 

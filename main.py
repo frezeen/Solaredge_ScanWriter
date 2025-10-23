@@ -276,12 +276,16 @@ def run_api_flow(log, cache, config, start_date=None, end_date=None) -> int:
     collector = CollectorAPI(cache=cache, scheduler=scheduler)
     
     # Raccolta dati (scheduler gestito internamente dal collector)
-    if start_date and end_date:
-        # Modalità history con date specifiche
-        raw_data = collector.collect_with_dates(start_date, end_date)
-    else:
-        # Modalità normale (oggi)
-        raw_data = collector.collect()
+    try:
+        if start_date and end_date:
+            # Modalità history con date specifiche
+            raw_data = collector.collect_with_dates(start_date, end_date)
+        else:
+            # Modalità normale (oggi)
+            raw_data = collector.collect()
+    except KeyboardInterrupt:
+        log.info("🛑 Interruzione durante raccolta dati")
+        raise  # Propaga l'interruzione
     
     log.info(f"Raccolti dati da {len(raw_data)} endpoint")
     
@@ -513,38 +517,59 @@ def run_history_mode(log, cache, config) -> int:
     
     log.info(f"📊 Totale mesi da processare: {len(months)}")
     
-    # Processa ogni mese
+    # Processa ogni mese con gestione interruzione pulita
     success_count = 0
     failed_count = 0
+    interrupted = False
     
-    for idx, month_data in enumerate(months, 1):
-        log.info(f"🔄 [{idx}/{len(months)}] Processando {month_data['label']}: {month_data['start']} → {month_data['end']}")
-        
-        try:
-            # Usa il flow API normale con date personalizzate
-            result = run_api_flow(log, cache, config, 
-                                 start_date=month_data['start'], 
-                                 end_date=month_data['end'])
+    try:
+        for idx, month_data in enumerate(months, 1):
+            log.info(f"🔄 [{idx}/{len(months)}] Processando {month_data['label']}: {month_data['start']} → {month_data['end']}")
             
-            if result == 0:
-                success_count += 1
-                log.info(f"✅ {month_data['label']} completato")
-            else:
-                failed_count += 1
-                log.error(f"❌ {month_data['label']} fallito")
+            try:
+                # Usa il flow API normale con date personalizzate
+                result = run_api_flow(log, cache, config, 
+                                     start_date=month_data['start'], 
+                                     end_date=month_data['end'])
                 
-        except Exception as e:
-            failed_count += 1
-            log.error(f"❌ Errore processando {month_data['label']}: {e}")
+                if result == 0:
+                    success_count += 1
+                    log.info(f"✅ {month_data['label']} completato")
+                else:
+                    failed_count += 1
+                    log.error(f"❌ {month_data['label']} fallito")
+                    
+            except KeyboardInterrupt:
+                # Propaga l'interruzione al livello superiore
+                raise
+            except Exception as e:
+                failed_count += 1
+                log.error(f"❌ Errore processando {month_data['label']}: {e}")
+                
+    except KeyboardInterrupt:
+        interrupted = True
+        log.info("🛑 Interruzione richiesta dall'utente (Ctrl+C)")
+        log.info(f"📊 Processati {success_count + failed_count}/{len(months)} mesi prima dell'interruzione")
     
     # Statistiche finali
     log.info("=" * 60)
-    log.info(f"📈 History Mode Completato")
-    log.info(f"✅ Successi: {success_count}/{len(months)}")
-    log.info(f"❌ Fallimenti: {failed_count}/{len(months)}")
+    if interrupted:
+        log.info(f"📈 History Mode Interrotto")
+        log.info(f"✅ Successi: {success_count}/{len(months)}")
+        log.info(f"❌ Fallimenti: {failed_count}/{len(months)}")
+        log.info(f"⏸️ Rimanenti: {len(months) - success_count - failed_count}/{len(months)}")
+        log.info("💡 Riavvia con --history per continuare dal punto di interruzione")
+    else:
+        log.info(f"📈 History Mode Completato")
+        log.info(f"✅ Successi: {success_count}/{len(months)}")
+        log.info(f"❌ Fallimenti: {failed_count}/{len(months)}")
     log.info("=" * 60)
     
-    return 0 if failed_count == 0 else 1
+    # Ritorna 0 se interrotto pulitamente o completato con successo
+    if interrupted:
+        return 0  # Uscita pulita per interruzione
+    else:
+        return 0 if failed_count == 0 else 1
 
 
 def run_loop_mode_with_gui(log, cache, config) -> int:
@@ -789,6 +814,9 @@ def main() -> int:
             return handle_scan_mode(log)
         elif args.history:
             return run_history_mode(log, cache, config)
+    except KeyboardInterrupt:
+        log.info("👋 Uscita pulita richiesta dall'utente")
+        return 0
     except Exception as e:
         log.error(f"Errore esecuzione: {e}")
         return 1
