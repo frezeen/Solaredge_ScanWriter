@@ -535,12 +535,15 @@ except Exception as e:
             
             # Use venv python if available, fallback to system python
             venv_python = self.project_root / "venv" / "bin" / "python3"
+            self.log(f"DEBUG: Looking for venv python at: {venv_python}")
+            self.log(f"DEBUG: Venv exists: {venv_python.exists()}")
+            
             if venv_python.exists():
                 python_cmd = str(venv_python)
-                self.log("Using virtual environment python for validation")
+                self.log(f"Using virtual environment python: {python_cmd}")
             else:
                 python_cmd = sys.executable
-                self.log("Virtual environment not found, using system python for validation", "WARNING")
+                self.log(f"Virtual environment not found, using system python: {python_cmd}", "WARNING")
             
             result = self.run_command([
                 python_cmd, "-c", validation_script
