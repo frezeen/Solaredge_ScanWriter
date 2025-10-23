@@ -322,10 +322,13 @@ class CollectorAPI:
                             self.cache.save_to_cache('api_ufficiali', endpoint_name, day, day_data)
                             logger.debug(f"💾 Cache salvata: {endpoint_name} - {day}")
                 
-                # Aggiungi sempre i dati al risultato finale (da cache o API)
-                if month_data:
+                # Aggiungi i dati al risultato finale solo se sono freschi dall'API
+                # In history mode, i dati dalla cache sono già stati processati e scritti in InfluxDB
+                if month_data and not use_cache:
                     aggregated_results[endpoint_name] = month_data
-                    logger.debug(f"📋 Dati aggiunti al risultato finale per {endpoint_name}")
+                    logger.debug(f"📋 Dati freschi dall'API aggiunti al risultato finale per {endpoint_name}")
+                elif month_data and use_cache:
+                    logger.debug(f"📋 Dati da cache per {endpoint_name} - skip processing (già in InfluxDB)")
                     
             except Exception as e:
                 logger.error(f"Errore raccolta {endpoint_name} per {start_date}: {e}")
