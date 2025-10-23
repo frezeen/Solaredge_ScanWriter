@@ -16,8 +16,7 @@ logger = logging.getLogger(__name__)
 class CollectorAPI:
     """Collector minimale che segue il YAML"""
     
-    # Endpoint supportati per history mode (con range temporali)
-    HISTORY_SUPPORTED_ENDPOINTS = ['site_power_details', 'site_energy_details', 'equipment_data', 'site_energy_day', 'site_timeframe_energy']
+    # Rimossa lista hardcoded - history mode usa tutti gli endpoint abilitati nel YAML
     
 
 
@@ -225,11 +224,10 @@ class CollectorAPI:
         
 
         
-        for endpoint_name in self.HISTORY_SUPPORTED_ENDPOINTS:
-            endpoint_config = self._get_enabled_endpoints().get(endpoint_name)
-            if not endpoint_config:
-                logger.warning(f"Endpoint {endpoint_name} non abilitato, saltato")
-                continue
+        # Usa tutti gli endpoint abilitati nel YAML invece di lista hardcoded
+        enabled_endpoints = self._get_enabled_endpoints()
+        
+        for endpoint_name, endpoint_config in enabled_endpoints.items():
             
             try:
                 # USA SEMPRE cache.get_or_fetch() come API mode - semplice e funziona!
