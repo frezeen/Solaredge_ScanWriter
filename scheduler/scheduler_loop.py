@@ -70,10 +70,15 @@ class SchedulerLoop:
         # Calcola pausa necessaria
         delay_needed = self._calculate_delay(source_type, cache_hit)
         
-        # Applica pausa se necessaria
+        # Applica pausa se necessaria (interrompibile)
         if delay_needed > 0:
             self._log.debug(f"Pausa {delay_needed:.2f}s per {source_type.value}")
-            time.sleep(delay_needed)
+            # Sleep interrompibile per Ctrl+C più responsivo
+            try:
+                time.sleep(delay_needed)
+            except KeyboardInterrupt:
+                self._log.info("⚠️ Interruzione richiesta durante pausa scheduler")
+                raise
         
         # Registra tempo chiamata
         self._last_call_time[source_type] = time.time()
