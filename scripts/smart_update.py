@@ -86,10 +86,8 @@ class SmartUpdater:
             except Exception:
                 self.config_manager = None
         else:
-            logging.basicConfig(
-                level=logging.INFO,
-                format='%(asctime)s - %(levelname)s - %(message)s'
-            )
+            # Silent logging for fallback
+            logging.basicConfig(level=logging.ERROR)  # Only show errors
             self.logger = logging.getLogger(__name__)
             self.config_manager = None
         
@@ -142,7 +140,6 @@ class SmartUpdater:
     async def run_command_async(self, cmd: List[str], capture_output: bool = True, 
                                check: bool = True, timeout: Optional[int] = 300) -> subprocess.CompletedProcess:
         """Esegue comando asincrono con logging e timeout"""
-        self.log(f"Executing: {' '.join(cmd)}")
         try:
             # Usa asyncio.create_subprocess_exec per operazioni async
             if capture_output:
@@ -226,7 +223,6 @@ class SmartUpdater:
     def stop_service(self, service_name: str) -> bool:
         """Ferma il servizio systemd"""
         try:
-            self.log(f"Stopping service {service_name}...")
             self.run_command(["sudo", "systemctl", "stop", service_name])
             return True
         except (subprocess.CalledProcessError, FileNotFoundError) as e:
@@ -236,7 +232,6 @@ class SmartUpdater:
     def start_service(self, service_name: str) -> bool:
         """Avvia il servizio systemd"""
         try:
-            self.log(f"Starting service {service_name}...")
             self.run_command(["sudo", "systemctl", "start", service_name])
             
             # Verifica che sia attivo con timeout configurabile
@@ -305,7 +300,7 @@ class SmartUpdater:
             has_updates = commits_behind > 0
             
             if has_updates:
-                self.log(f"Found {commits_behind} new commits", "INFO")
+                pass  # Found updates - will be handled by caller
             else:
                 self.log("Repository is up to date", "SUCCESS")
                 
@@ -594,23 +589,12 @@ except Exception as e:
     
     def _log_update_completion(self, service_name: Optional[str]) -> None:
         """Log finale dell'aggiornamento completato"""
-        self.log("=" * 50, "SUCCESS")
         self.log("🎉 Smart update completed successfully!", "SUCCESS")
-        self.log(f"Current commit: {self.get_current_commit()[:8]}", "INFO")
-        
-        if service_name:
-            self.log(f"Monitor logs: sudo journalctl -u {service_name} -f", "INFO")
-        else:
-            self.log("Start manually: python main.py", "INFO")
     
     def _log_update_metrics(self) -> None:
         """Log delle metriche dell'aggiornamento per monitoraggio"""
-        if self.update_metrics['start_time'] and self.update_metrics['end_time']:
-            duration = self.update_metrics['end_time'] - self.update_metrics['start_time']
-            self.log(f"Update duration: {duration.total_seconds():.2f}s", "INFO")
-            
-        if self.update_metrics['steps_completed']:
-            self.log(f"Steps completed: {len(self.update_metrics['steps_completed'])}", "INFO")
+        # Metrics logging removed for cleaner output
+        pass
             
         if self.update_metrics['errors_encountered']:
             self.log(f"Errors encountered: {len(self.update_metrics['errors_encountered'])}", "WARNING")
@@ -618,9 +602,6 @@ except Exception as e:
     def run_update(self, force: bool = False) -> bool:
         """Esegue l'aggiornamento completo con metriche"""
         self.update_metrics['start_time'] = datetime.now()
-        self.log("🚀 Starting Smart Update System", "INFO")
-        self.log("=" * 50, "INFO")
-        
         try:
             # Preparazione
             should_update, service_name, service_was_running = self._prepare_update(force)
@@ -667,6 +648,7 @@ async def main_async() -> int:
             try:
                 config_manager = ConfigManager()
             except Exception:
+                pass  # Silent fallback
         
         updater = SmartUpdater(config_manager=config_manager)
         
