@@ -316,6 +316,9 @@ REQS
         if [[ -f "$APP_DIR/grafana/dashboard-solaredge.json" ]]; then
             log "📊 Importing Grafana dashboard..."
             
+            # Disable exit on error for this section
+            set +e
+            
             # Get data source UIDs
             DATASOURCES_LIST=$(curl -s http://localhost:3000/api/datasources -u "$GRAFANA_USER:$GRAFANA_PASS" 2>/dev/null)
             INFLUX_UID=$(echo "$DATASOURCES_LIST" | jq -r '.[] | select(.name=="Solaredge") | .uid' 2>/dev/null)
@@ -364,16 +367,25 @@ REQS
                     rm -f "${TEMP_DASHBOARD}.bak"
                 fi
                 
-                # Import dashboard via API
-                DASHBOARD_JSON=$(cat "$TEMP_DASHBOARD")
+                # Import dashboard via API using file directly
+                # Create wrapper JSON for import
+                IMPORT_PAYLOAD="/tmp/dashboard-import-payload.json"
+                jq -n --slurpfile dashboard "$TEMP_DASHBOARD" '{
+                    dashboard: $dashboard[0],
+                    overwrite: true,
+                    message: "Imported by installation script"
+                }' > "$IMPORT_PAYLOAD" 2>/dev/null || {
+                    warn "Failed to create import payload"
+                    rm -f "$TEMP_DASHBOARD" "$IMPORT_PAYLOAD"
+                    continue
+                }
+                
                 IMPORT_RESPONSE=$(curl -s -X POST http://localhost:3000/api/dashboards/db \
                     -u "$GRAFANA_USER:$GRAFANA_PASS" \
                     -H "Content-Type: application/json" \
-                    -d "{
-                        \"dashboard\": $DASHBOARD_JSON,
-                        \"overwrite\": true,
-                        \"message\": \"Imported by installation script\"
-                    }" 2>/dev/null)
+                    -d @"$IMPORT_PAYLOAD" 2>/dev/null)
+                
+                rm -f "$IMPORT_PAYLOAD"
                 
                 if echo "$IMPORT_RESPONSE" | grep -q '"status":"success"'; then
                     DASHBOARD_URL=$(echo "$IMPORT_RESPONSE" | jq -r '.url' 2>/dev/null)
@@ -392,6 +404,9 @@ REQS
         else
             warn "Dashboard file not found at $APP_DIR/grafana/dashboard-solaredge.json"
         fi
+        
+        # Re-enable exit on error
+        set -e
         
         # Create .env file
         log "📝 Creating configuration file..."
