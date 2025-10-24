@@ -151,13 +151,20 @@ def _get_category_from_config(measurement_type: str, device_id: str, config: Dic
     # Cerca nella sezione web_scraping usando device_id
     web_endpoints = config.get('sources', {}).get('web_scraping', {}).get('endpoints', {})
     
+    _log.debug(f"Cercando categoria per device_id: '{device_id}', measurement: '{measurement_type}'")
+    _log.debug(f"Endpoints disponibili: {list(web_endpoints.keys()) if web_endpoints else 'Nessuno'}")
+    
     # Cerca il device specifico nella configurazione web_scraping
     for endpoint_name, endpoint_config in web_endpoints.items():
         if isinstance(endpoint_config, dict):
             endpoint_device_id = str(endpoint_config.get('device_id', ''))
+            _log.debug(f"Confronto: '{endpoint_device_id}' == '{device_id}' -> {endpoint_device_id == device_id}")
             if endpoint_device_id == device_id:
-                return endpoint_config.get('category', 'Info')
+                category = endpoint_config.get('category', 'Info')
+                _log.debug(f"Trovata categoria per {device_id}: {category}")
+                return category
     
+    _log.warning(f"Nessuna categoria trovata per device_id: '{device_id}', usando 'Info'")
     return 'Info'  # Default fallback se device non trovato
 
 
