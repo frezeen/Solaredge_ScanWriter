@@ -117,6 +117,10 @@ def _convert_raw_point_to_influx_point(raw_point: Dict[str, Any]) -> Point | Non
         metric = raw_point.get("metric")  # measurement_type come endpoint
         category = raw_point.get("category")
         unit = _normalize_unit(raw_point.get("unit"))
+        value = raw_point.get("value")
+        
+        if value is None:
+            return None
         
         # Crea Point base
         point = Point("web")
@@ -130,9 +134,16 @@ def _convert_raw_point_to_influx_point(raw_point: Dict[str, Any]) -> Point | Non
         if device_id := raw_point.get("device_id"):
             point.tag("device_id", device_id)
         
-        # Field con categoria come nome campo
-        if category and (value := raw_point.get("value")) is not None:
-            point.field(category, float(value))
+        # Field con categoria come nome campo - FIX: usa category come field name
+        if category:
+            try:
+                point.field(category, float(value))
+            except (ValueError, TypeError):
+                # Se non è convertibile in float, usa come stringa
+                point.field(category, str(value))
+        else:
+            # Fallback se category manca
+            point.field("value", float(value))
         
         # Timestamp
         if timestamp := raw_point.get("timestamp"):
@@ -151,20 +162,18 @@ def _get_category_from_config(measurement_type: str, device_id: str, config: Dic
     # Cerca nella sezione web_scraping usando device_id
     web_endpoints = config.get('sources', {}).get('web_scraping', {}).get('endpoints', {})
     
-    _log.info(f"🔍 Cercando categoria per device_id: '{device_id}', measurement: '{measurement_type}'")
-    _log.info(f"📋 Endpoints disponibili: {list(web_endpoints.keys()) if web_endpoints else 'Nessuno'}")
+    _log.debug(f"🔍 Cercando categoria per device_id: '{device_id}', measurement: '{measurement_type}'")
     
     # Cerca il device specifico nella configurazione web_scraping
     for endpoint_name, endpoint_config in web_endpoints.items():
         if isinstance(endpoint_config, dict):
             endpoint_device_id = str(endpoint_config.get('device_id', ''))
-            _log.info(f"🔍 Confronto: '{endpoint_device_id}' == '{device_id}' -> {endpoint_device_id == device_id}")
             if endpoint_device_id == device_id:
                 category = endpoint_config.get('category', 'Info')
-                _log.info(f"✅ Trovata categoria per {device_id}: {category}")
+                _log.debug(f"✅ Trovata categoria per {device_id}: {category}")
                 return category
     
-    _log.warning(f"❌ Nessuna categoria trovata per device_id: '{device_id}', usando 'Info'")
+    _log.debug(f"❌ Nessuna categoria trovata per device_id: '{device_id}', usando 'Info'")
     return 'Info'  # Default fallback se device non trovato
 
 
@@ -201,7 +210,6 @@ def parse_web(measurements_raw: Dict[str, Any], config: Dict[str, Any] = None) -
                 continue
 
             # Ottieni category dal config YAML
-            _log.info(f"🔍 Processando: device_id='{device_id}', device_type='{device_type}', measurement='{measurement_type}'")
             category = _get_category_from_config(measurement_type, device_id, config)
             
             raw_point = _create_raw_point(
