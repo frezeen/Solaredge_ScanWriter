@@ -225,7 +225,7 @@ class SmartUpdater:
     def stop_service(self, service_name: str) -> bool:
         """Ferma il servizio systemd"""
         try:
-            self.run_command(["sudo", "systemctl", "stop", service_name])
+            self.run_command(["systemctl", "stop", service_name])
             return True
         except (subprocess.CalledProcessError, FileNotFoundError) as e:
             self.log(f"Failed to stop service {service_name}: {e}", "WARNING")
@@ -234,7 +234,7 @@ class SmartUpdater:
     def start_service(self, service_name: str) -> bool:
         """Avvia il servizio systemd"""
         try:
-            self.run_command(["sudo", "systemctl", "start", service_name])
+            self.run_command(["systemctl", "start", service_name])
             
             # Verifica che sia attivo con timeout configurabile
             time.sleep(self.config.service_start_timeout)

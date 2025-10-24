@@ -132,10 +132,18 @@ systemctl enable solaredge-collector
 systemctl start solaredge-collector
 ```
 
-Il servizio principale include già GUI e loop:
+#### Permessi per Controllo Servizio (Opzionale)
+
+Per permettere all'utente `solaredge` di controllare il servizio senza sudo (utile per update automatici):
+
 ```bash
-systemctl enable solaredge-collector
-systemctl start solaredge-collector
+# Installa regola polkit
+sudo cp systemd/solaredge-user-service.conf /etc/polkit-1/rules.d/10-solaredge-service.rules
+sudo systemctl restart polkit
+
+# Ora l'utente solaredge può controllare il servizio senza sudo
+sudo -u solaredge systemctl stop solaredge-collector
+sudo -u solaredge systemctl start solaredge-collector
 ```
 
 ## Configurazione
