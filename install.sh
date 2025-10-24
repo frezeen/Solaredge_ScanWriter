@@ -328,15 +328,40 @@ REQS
                 TEMP_DASHBOARD="/tmp/dashboard-solaredge-temp.json"
                 cp "$APP_DIR/grafana/dashboard-solaredge.json" "$TEMP_DASHBOARD"
                 
-                # Replace data source UIDs in the dashboard JSON
-                # This replaces any existing UID with the new ones
-                sed -i "s/\"uid\": \"[^\"]*\",.*\"type\": \"influxdb\"/\"uid\": \"$INFLUX_UID\", \"type\": \"influxdb\"/g" "$TEMP_DASHBOARD" 2>/dev/null || \
-                    sed "s/\"uid\": \"[^\"]*\",.*\"type\": \"influxdb\"/\"uid\": \"$INFLUX_UID\", \"type\": \"influxdb\"/g" "$TEMP_DASHBOARD" > "${TEMP_DASHBOARD}.new" && mv "${TEMP_DASHBOARD}.new" "$TEMP_DASHBOARD"
-                
-                if [[ -n "$SUNMOON_UID" && "$SUNMOON_UID" != "null" ]]; then
-                    log "Found Sun and Moon data source UID: $SUNMOON_UID"
-                    sed -i "s/\"uid\": \"[^\"]*\",.*\"type\": \"fetzerch-sunandmoon-datasource\"/\"uid\": \"$SUNMOON_UID\", \"type\": \"fetzerch-sunandmoon-datasource\"/g" "$TEMP_DASHBOARD" 2>/dev/null || \
-                        sed "s/\"uid\": \"[^\"]*\",.*\"type\": \"fetzerch-sunandmoon-datasource\"/\"uid\": \"$SUNMOON_UID\", \"type\": \"fetzerch-sunandmoon-datasource\"/g" "$TEMP_DASHBOARD" > "${TEMP_DASHBOARD}.new" && mv "${TEMP_DASHBOARD}.new" "$TEMP_DASHBOARD"
+                # Replace data source UIDs in the dashboard JSON using jq for safer manipulation
+                if command -v jq &> /dev/null; then
+                    # Use jq to properly update UIDs
+                    jq --arg uid "$INFLUX_UID" '
+                        walk(
+                            if type == "object" and .type == "influxdb" then
+                                .uid = $uid
+                            else
+                                .
+                            end
+                        )
+                    ' "$TEMP_DASHBOARD" > "${TEMP_DASHBOARD}.tmp" && mv "${TEMP_DASHBOARD}.tmp" "$TEMP_DASHBOARD"
+                    
+                    if [[ -n "$SUNMOON_UID" && "$SUNMOON_UID" != "null" ]]; then
+                        log "Found Sun and Moon data source UID: $SUNMOON_UID"
+                        jq --arg uid "$SUNMOON_UID" '
+                            walk(
+                                if type == "object" and .type == "fetzerch-sunandmoon-datasource" then
+                                    .uid = $uid
+                                else
+                                    .
+                                end
+                            )
+                        ' "$TEMP_DASHBOARD" > "${TEMP_DASHBOARD}.tmp" && mv "${TEMP_DASHBOARD}.tmp" "$TEMP_DASHBOARD"
+                    fi
+                else
+                    # Fallback to sed if jq not available (should not happen as we install jq earlier)
+                    sed -i.bak "s/\"uid\": \"[^\"]*\",.*\"type\": \"influxdb\"/\"uid\": \"$INFLUX_UID\", \"type\": \"influxdb\"/g" "$TEMP_DASHBOARD" 2>/dev/null
+                    
+                    if [[ -n "$SUNMOON_UID" && "$SUNMOON_UID" != "null" ]]; then
+                        log "Found Sun and Moon data source UID: $SUNMOON_UID"
+                        sed -i.bak "s/\"uid\": \"[^\"]*\",.*\"type\": \"fetzerch-sunandmoon-datasource\"/\"uid\": \"$SUNMOON_UID\", \"type\": \"fetzerch-sunandmoon-datasource\"/g" "$TEMP_DASHBOARD" 2>/dev/null
+                    fi
+                    rm -f "${TEMP_DASHBOARD}.bak"
                 fi
                 
                 # Import dashboard via API
