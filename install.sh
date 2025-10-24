@@ -112,6 +112,7 @@ REQS
         
         # Install InfluxDB
         log "🗄️ Installing InfluxDB..."
+        rm -f /usr/share/keyrings/influxdata-archive-keyring.gpg
         curl -s https://repos.influxdata.com/influxdata-archive_compat.key | gpg --dearmor -o /usr/share/keyrings/influxdata-archive-keyring.gpg 2>/dev/null
         echo "deb [signed-by=/usr/share/keyrings/influxdata-archive-keyring.gpg] https://repos.influxdata.com/debian stable main" | tee /etc/apt/sources.list.d/influxdb.list >/dev/null
         
@@ -226,6 +227,7 @@ REQS
         
         # Install Grafana
         log "📊 Installing Grafana..."
+        rm -f /usr/share/keyrings/grafana-archive-keyring.gpg
         curl -s https://packages.grafana.com/gpg.key | gpg --dearmor -o /usr/share/keyrings/grafana-archive-keyring.gpg 2>/dev/null
         echo "deb [signed-by=/usr/share/keyrings/grafana-archive-keyring.gpg] https://packages.grafana.com/oss/deb stable main" | tee /etc/apt/sources.list.d/grafana.list >/dev/null
         
@@ -682,9 +684,14 @@ TEST
 echo "=== Solaredge_ScanWriter Status ==="
 echo ""
 
-# Service status
+# Service status (only if service is loaded)
 echo "🔧 Service Status:"
-systemctl status solaredge-scanwriter --no-pager
+if systemctl is-enabled solaredge-scanwriter >/dev/null 2>&1; then
+    systemctl status solaredge-scanwriter --no-pager 2>/dev/null || echo "  Service not started yet"
+else
+    echo "  Service created but not enabled yet"
+    echo "  Run: systemctl enable --now solaredge-scanwriter"
+fi
 echo ""
 
 # Process information
