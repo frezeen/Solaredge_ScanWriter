@@ -151,20 +151,20 @@ def _get_category_from_config(measurement_type: str, device_id: str, config: Dic
     # Cerca nella sezione web_scraping usando device_id
     web_endpoints = config.get('sources', {}).get('web_scraping', {}).get('endpoints', {})
     
-    _log.debug(f"Cercando categoria per device_id: '{device_id}', measurement: '{measurement_type}'")
-    _log.debug(f"Endpoints disponibili: {list(web_endpoints.keys()) if web_endpoints else 'Nessuno'}")
+    _log.info(f"🔍 Cercando categoria per device_id: '{device_id}', measurement: '{measurement_type}'")
+    _log.info(f"📋 Endpoints disponibili: {list(web_endpoints.keys()) if web_endpoints else 'Nessuno'}")
     
     # Cerca il device specifico nella configurazione web_scraping
     for endpoint_name, endpoint_config in web_endpoints.items():
         if isinstance(endpoint_config, dict):
             endpoint_device_id = str(endpoint_config.get('device_id', ''))
-            _log.debug(f"Confronto: '{endpoint_device_id}' == '{device_id}' -> {endpoint_device_id == device_id}")
+            _log.info(f"🔍 Confronto: '{endpoint_device_id}' == '{device_id}' -> {endpoint_device_id == device_id}")
             if endpoint_device_id == device_id:
                 category = endpoint_config.get('category', 'Info')
-                _log.debug(f"Trovata categoria per {device_id}: {category}")
+                _log.info(f"✅ Trovata categoria per {device_id}: {category}")
                 return category
     
-    _log.warning(f"Nessuna categoria trovata per device_id: '{device_id}', usando 'Info'")
+    _log.warning(f"❌ Nessuna categoria trovata per device_id: '{device_id}', usando 'Info'")
     return 'Info'  # Default fallback se device non trovato
 
 
@@ -201,6 +201,7 @@ def parse_web(measurements_raw: Dict[str, Any], config: Dict[str, Any] = None) -
                 continue
 
             # Ottieni category dal config YAML
+            _log.info(f"🔍 Processando: device_id='{device_id}', device_type='{device_type}', measurement='{measurement_type}'")
             category = _get_category_from_config(measurement_type, device_id, config)
             
             raw_point = _create_raw_point(
