@@ -743,41 +743,28 @@ echo "🚀 SolarEdge Manual Run Script"
 echo "============================="
 echo ""
 
-# Check if running as solaredge user
-if [[ "$(whoami)" != "solaredge" ]]; then
-    echo "⚠️ Warning: Not running as 'solaredge' user"
-    echo "   Current user: $(whoami)"
-    echo "   For production, run as: sudo -u solaredge $0"
-    echo ""
-fi
-
-# Activate System Python
-echo "🐍 Activating System Python..."
-if [[ -f venv/bin/activate ]]; then
-    # Using system Python
-    echo "✅ System Python activated"
-    echo "  Python: $(which python)"
-    echo "  Virtual env: $VIRTUAL_ENV"
-else
-    echo "❌ System Python not found!"
-    exit 1
-fi
+# Show Python info
+echo "🐍 Python Environment:"
+echo "  Python: $(which python3)"
+echo "  Version: $(python3 --version)"
 echo ""
 
 # Show available options
 echo "📋 Available run modes:"
-echo "  1. GUI mode (default): python main.py"
-echo "  2. API test: python main.py --api"
-echo "  3. Web test: python main.py --web"
-echo "  4. Realtime test: python main.py --realtime"
+echo "  1. GUI mode (default): python3 main.py"
+echo "  2. API test: python3 main.py --api"
+echo "  3. Web test: python3 main.py --web"
+echo "  4. Realtime test: python3 main.py --realtime"
+echo "  5. History mode: python3 main.py --history"
 echo ""
 
 # Ask user what to run
-read -p "Enter mode number (1-4) or press Enter for GUI mode: " choice
+read -p "Enter mode number (1-5) or press Enter for GUI mode: " choice
 
 case $choice in
     2)
         echo "🔄 Running API test..."
+        python3 main.py --api
         python main.py --api
         ;;
     3)
@@ -785,14 +772,26 @@ case $choice in
         python main.py --web
         ;;
     4)
+        python3 main.py --api
+        ;;
+    3)
+        echo "🔄 Running Web test..."
+        python3 main.py --web
+        ;;
+    4)
         echo "🔄 Running Realtime test..."
-        python main.py --realtime
+        python3 main.py --realtime
+        ;;
+    5)
+        echo "🔄 Running History mode..."
+        python3 main.py --history
         ;;
     *)
         echo "🔄 Running GUI mode..."
         echo "   Access GUI at: http://$(hostname -I | awk '{print $1}'):8092"
         echo "   Press Ctrl+C to stop"
-        python main.py
+        echo ""
+        python3 main.py
         ;;
 esac
 MANUAL
@@ -1087,42 +1086,69 @@ JOURNAL_SCRIPT
         
         log "✅ Installation completed successfully!"
         echo ""
-        echo "=== Installation Complete ==="
+        echo "╔════════════════════════════════════════════════════════════╗"
+        echo "║           🎉 Installation Complete!                       ║"
+        echo "╚════════════════════════════════════════════════════════════╝"
         echo ""
-        echo "Next Steps:"
-        echo "1. Configure your SolarEdge credentials:"
-        echo "   nano /opt/Solaredge_ScanWriter/.env"
+        echo "📋 System Information:"
+        echo "  • Installation path: /opt/Solaredge_ScanWriter"
+        echo "  • Service name: solaredge-scanwriter"
+        echo "  • Running as: root"
         echo ""
-        echo "2. Test the installation:"
-        echo "   /opt/Solaredge_ScanWriter/test.sh"
+        echo "🌐 Access URLs:"
+        echo "  • SolarEdge GUI: http://$(hostname -I | awk '{print $1}'):8092"
+        echo "  • InfluxDB UI:   http://$(hostname -I | awk '{print $1}'):8086"
+        echo "  • Grafana:       http://$(hostname -I | awk '{print $1}'):3000"
         echo ""
-        echo "3. Start the service:"
-        echo "   systemctl enable --now solaredge-scanwriter"
+        echo "🔑 Default Credentials:"
+        echo "  • InfluxDB: admin / solaredge123"
+        echo "  • Grafana:  admin / admin (change on first login)"
         echo ""
-        echo "📋 Features Configured:"
-        echo "• ✅ Dual bucket setup (API/Web + Realtime with 2-day retention)"
-        echo "• ✅ Smart update system (configurations auto-preserved)"
-        echo "• ✅ Automatic permission management"
-        echo "• ✅ Log rotation (daily, 7-day retention for main logs, 3-day for debug)"
-        echo "• ✅ Journal retention (systemd logs kept for max 48 hours, 100MB limit)"
-        echo "• ✅ Python System Python (isolated dependencies with activation scripts)"
+        echo "📝 InfluxDB Token (save this!):"
+        echo "  Token: $INFLUX_TOKEN"
+        echo "  Already configured in .env file"
         echo ""
-        echo "Access URLs:"
-        echo "• SolarEdge GUI: http://$(hostname -I | awk '{print $1}'):8092"
-        echo "• InfluxDB: http://$(hostname -I | awk '{print $1}'):8086 (admin/solaredge123)"
-        echo "• Grafana: http://$(hostname -I | awk '{print $1}'):3000 (admin/admin)"
+        echo "⚙️ Next Steps:"
         echo ""
-        echo "🛠️ Utility Scripts Available:"
-        echo "• ./test.sh - Test installation and dependencies"
-        echo "• ./status.sh - Check service status and logs"
-        echo "• ./check-buckets.sh - Verify InfluxDB bucket configuration"
-        echo "• ./check-logrotate.sh - Verify log rotation configuration"
-        echo "• ./manage-journal.sh - Manage systemd journal logs (status/clean/logs/follow)"
-        echo "• ./run-manual.sh - Run application manually for testing (with venv activated)"
-        echo "• ./# venv.sh removed - Activate Python System Python (interactive shell)"
-        echo "• ./update.sh - Update system (configurations auto-preserved)"
+        echo "1️⃣  Configure SolarEdge credentials:"
+        echo "    nano /opt/Solaredge_ScanWriter/.env"
+        echo "    # Update these values:"
+        echo "    #   SOLAREDGE_API_KEY=your_api_key"
+        echo "    #   SOLAREDGE_USERNAME=your_email"
+        echo "    #   SOLAREDGE_PASSWORD=your_password"
+        echo "    #   SOLAREDGE_SITE_ID=your_site_id"
         echo ""
-        echo "Don't forget to configure your .env file with SolarEdge credentials!"
+        echo "2️⃣  Verify InfluxDB token (if you get 401 errors):"
+        echo "    cat /opt/Solaredge_ScanWriter/.env | grep INFLUXDB_TOKEN"
+        echo "    # Or get it from InfluxDB UI → Data → API Tokens"
+        echo ""
+        echo "3️⃣  Start the service:"
+        echo "    systemctl enable --now solaredge-scanwriter"
+        echo ""
+        echo "4️⃣  Monitor the logs:"
+        echo "    journalctl -u solaredge-scanwriter -f"
+        echo ""
+        echo "🛠️  Utility Scripts (in /opt/Solaredge_ScanWriter):"
+        echo "  • ./test.sh           - Test installation"
+        echo "  • ./status.sh         - Check service status"
+        echo "  • ./run-manual.sh     - Run manually for testing"
+        echo "  • ./check-buckets.sh  - Verify InfluxDB buckets"
+        echo "  • ./update.sh         - Update system"
+        echo ""
+        echo "✨ Features Configured:"
+        echo "  ✅ Dual bucket setup (Solaredge + Solaredge_Realtime)"
+        echo "  ✅ 2-day retention for realtime data"
+        echo "  ✅ Log rotation (7 days main, 3 days debug)"
+        echo "  ✅ Journal retention (48h, 100MB limit)"
+        echo "  ✅ System Python with global dependencies"
+        echo "  ✅ Grafana dashboard pre-configured"
+        echo ""
+        echo "📚 Documentation:"
+        echo "  • README: /opt/Solaredge_ScanWriter/README.md"
+        echo "  • API Docs: /opt/Solaredge_ScanWriter/docs/"
+        echo ""
+        echo "⚠️  Important: Configure .env before starting the service!"
+        echo ""
         
     else
         error "Could not find extracted project directory"
