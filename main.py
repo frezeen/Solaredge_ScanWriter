@@ -215,13 +215,12 @@ def run_gui_mode(log, cache, config) -> int:
     return 0
 
 
-def run_web_flow(log, cache, start_date=None, end_date=None, force_db_check=False) -> int:
+def run_web_flow(log, cache, start_date=None, end_date=None) -> int:
     """Pipeline web scraping con supporto date storiche
     
     Args:
         start_date: Data inizio per history mode (formato YYYY-MM-DD)
         end_date: Data fine per history mode (formato YYYY-MM-DD)
-        force_db_check: Se True, verifica che i dati siano effettivamente nel database
         
     Se start_date/end_date sono fornite, raccoglie dati giorno per giorno.
     Altrimenti raccoglie solo i dati di oggi.
@@ -240,7 +239,7 @@ def run_web_flow(log, cache, start_date=None, end_date=None, force_db_check=Fals
     scheduler_config = SchedulerConfig.from_config(config)
     scheduler = SchedulerLoop(scheduler_config)
     
-    collector = CollectorWeb(scheduler=scheduler, force_db_check=force_db_check)
+    collector = CollectorWeb(scheduler=scheduler)
     collector.set_cache(cache)
     
     # Costruzione richieste
@@ -298,13 +297,12 @@ def run_web_flow(log, cache, start_date=None, end_date=None, force_db_check=Fals
     return 0
 
 
-def run_api_flow(log, cache, config, start_date=None, end_date=None, force_db_check=False) -> int:
+def run_api_flow(log, cache, config, start_date=None, end_date=None) -> int:
     """Pipeline API semplificata
     
     Args:
         start_date: Data inizio per history mode (formato YYYY-MM-DD)
         end_date: Data fine per history mode (formato YYYY-MM-DD)
-        force_db_check: Se True, verifica che i dati siano effettivamente nel database
     """
     from collector.collector_api import CollectorAPI
     from parser.api_parser import create_parser
@@ -315,7 +313,7 @@ def run_api_flow(log, cache, config, start_date=None, end_date=None, force_db_ch
     scheduler = SchedulerLoop(scheduler_config)
     
     # Raccolta dati con scheduler
-    collector = CollectorAPI(cache=cache, scheduler=scheduler, force_db_check=force_db_check)
+    collector = CollectorAPI(cache=cache, scheduler=scheduler)
     
     # Raccolta dati (scheduler gestito internamente dal collector)
     try:
@@ -570,12 +568,11 @@ def run_history_mode(log, cache, config) -> int:
             log.info(f"🔄 [{idx}/{len(months)}] Processando {month_data['label']}: {month_data['start']} → {month_data['end']}")
             
             try:
-                # 1. API Flow con date personalizzate (sempre) - con verifica database
+                # 1. API Flow con date personalizzate (sempre)
                 log.info(f"🔄 API flow per {month_data['label']}")
                 api_result = run_api_flow(log, cache, config, 
                                          start_date=month_data['start'], 
-                                         end_date=month_data['end'],
-                                         force_db_check=True)
+                                         end_date=month_data['end'])
                 
                 # 2. Web Flow solo per gli ultimi 7 giorni (alla fine)
                 web_result = 0
@@ -589,7 +586,7 @@ def run_history_mode(log, cache, config) -> int:
                     web_end = end_dt.strftime('%Y-%m-%d')
                     
                     log.info(f"🔄 Web flow per ultimi 7 giorni: {web_start} → {web_end}")
-                    web_result = run_web_flow(log, cache, start_date=web_start, end_date=web_end, force_db_check=True)
+                    web_result = run_web_flow(log, cache, start_date=web_start, end_date=web_end)
                     web_executed = True
                 
                 # Considera successo se API è ok (web è opzionale)

@@ -27,7 +27,7 @@ class CollectorWebInterface(Protocol):
     def fetch_measurements(self, device_requests: List[Dict[str, Any]]) -> Dict[str, Any]: ...
 
 class CollectorWeb(CollectorWebInterface):
-    def __init__(self, scheduler: Optional[SchedulerLoop] = None, force_db_check: bool = False) -> None:
+    def __init__(self, scheduler: Optional[SchedulerLoop] = None) -> None:
         self._log = get_logger("collector.web")
         self._config_manager = get_config_manager()
         self._web_config = self._config_manager.get_solaredge_web_config()
@@ -36,7 +36,6 @@ class CollectorWeb(CollectorWebInterface):
         self._init_session_state()
         self.cache = None
         self.scheduler = scheduler
-        self.force_db_check = force_db_check
         self.load_cookie_if_present()
     
     def _validate_environment(self) -> None:
@@ -374,10 +373,7 @@ class CollectorWeb(CollectorWebInterface):
         
         if self.cache:
             date = datetime.now().strftime("%Y-%m-%d")
-            if self.force_db_check:
-                return self.cache.get_or_fetch_with_db_check("web", "tree", date, _fetch, force_db_check=True)
-            else:
-                return self.cache.get_or_fetch("web", "tree", date, _fetch)
+            return self.cache.get_or_fetch("web", "tree", date, _fetch)
         return _fetch()
     
     def _make_tree_request(self) -> Dict[str, Any]:
@@ -419,10 +415,7 @@ class CollectorWeb(CollectorWebInterface):
             # Usa target_date se impostata, altrimenti oggi
             date = getattr(self, '_target_date', None) or datetime.now().strftime("%Y-%m-%d")
             key = self._generate_cache_key(device_requests, date)
-            if self.force_db_check:
-                return self.cache.get_or_fetch_with_db_check("web", key, date, _fetch, force_db_check=True)
-            else:
-                return self.cache.get_or_fetch("web", key, date, _fetch)
+            return self.cache.get_or_fetch("web", key, date, _fetch)
         return _fetch()
     
     def fetch_measurements_for_date(self, device_requests: List[Dict[str, Any]], target_date: str) -> Dict[str, Any]:
