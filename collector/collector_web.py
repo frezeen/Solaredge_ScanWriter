@@ -70,6 +70,14 @@ class CollectorWeb(CollectorWebInterface):
     def set_cache(self, cache: CacheManager) -> None:
         """Imposta cache manager."""
         self.cache = cache
+    
+    def set_target_date(self, target_date: str = None) -> None:
+        """Imposta data target per le richieste web.
+        
+        Args:
+            target_date: Data in formato YYYY-MM-DD, se None usa oggi
+        """
+        self._target_date = target_date
 
     # ========== Session Management ==========
     
@@ -404,10 +412,28 @@ class CollectorWeb(CollectorWebInterface):
             return self._fetch_all_measurements(device_requests)
         
         if self.cache:
-            date = datetime.now().strftime("%Y-%m-%d")
+            # Usa target_date se impostata, altrimenti oggi
+            date = getattr(self, '_target_date', None) or datetime.now().strftime("%Y-%m-%d")
             key = self._generate_cache_key(device_requests, date)
             return self.cache.get_or_fetch("web", key, date, _fetch)
         return _fetch()
+    
+    def fetch_measurements_for_date(self, device_requests: List[Dict[str, Any]], target_date: str) -> Dict[str, Any]:
+        """Recupera measurements per una data specifica.
+        
+        Args:
+            device_requests: Lista delle richieste dispositivi
+            target_date: Data in formato YYYY-MM-DD
+        """
+        # Imposta temporaneamente la data target
+        old_date = getattr(self, '_target_date', None)
+        self.set_target_date(target_date)
+        
+        try:
+            return self.fetch_measurements(device_requests)
+        finally:
+            # Ripristina la data precedente
+            self.set_target_date(old_date)
     
     def _fetch_all_measurements(self, requests: List[Dict[str, Any]]) -> Dict[str, Any]:
         """Recupera tutti i measurements."""
@@ -444,7 +470,7 @@ class CollectorWeb(CollectorWebInterface):
         
         def _http_call():
             url = f"{self._base_url}/services/charts/site/{self._site_id}/devices-measurements"
-            params = self._get_date_params()
+            params = self._get_date_params(getattr(self, '_target_date', None))
             headers = self._build_headers(json_content=True)
             
             session = self._create_session()
@@ -502,8 +528,17 @@ class CollectorWeb(CollectorWebInterface):
         
         return session
     
-    def _get_date_params(self) -> Dict[str, str]:
-        """Parametri data per oggi."""
+    def _get_date_params(self, target_date: str = None) -> Dict[str, str]:
+        """Parametri data per oggi o data specifica.
+        
+        Args:
+            target_date: Data specifica in formato YYYY-MM-DD, se None usa oggi
+        """
+        if target_date:
+            # Usa la data specifica fornita
+            return {"start-date": target_date, "end-date": target_date}
+        
+        # Comportamento originale per oggi
         try:
             from zoneinfo import ZoneInfo
             tz = os.environ.get('TIMEZONE', os.environ.get('TZ', 'Europe/Rome'))
