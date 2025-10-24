@@ -24,12 +24,11 @@ echo "║              github.com/frezeen/Solaredge_ScanWriter         ║"
 echo "╚══════════════════════════════════════════════════════════════╝"
 echo -e "${NC}"
 
-# Check if running as root
-if [[ $EUID -eq 0 ]]; then
-    warn "Running as root - this is acceptable in containers but not recommended on host systems."
-    SUDO_CMD=""
-else
-    SUDO_CMD="sudo"
+# Require root
+if [[ $EUID -ne 0 ]]; then
+    error "This script must be run as root"
+    echo "Please run: sudo $0"
+    exit 1
 fi
 
 # Check if running on Debian/Ubuntu
@@ -41,23 +40,23 @@ log "🚀 Starting SolarEdge Data Collector installation..."
 
 # Install basic dependencies
 log "📦 Installing basic dependencies..."
-${SUDO_CMD} apt-get update -qq
+apt-get update -qq
 
 # Install packages in groups to handle potential failures
 log "Installing core packages..."
-${SUDO_CMD} apt-get install -y -qq curl wget git unzip
+apt-get install -y -qq curl wget git unzip
 
 log "Installing Python packages..."
-${SUDO_CMD} apt-get install -y -qq python3 python3-pip python3-venv python3-dev
+apt-get install -y -qq python3 python3-pip python3-dev
 
 log "Installing build tools..."
-${SUDO_CMD} apt-get install -y -qq build-essential
+apt-get install -y -qq build-essential
 
 log "Installing system utilities..."
-${SUDO_CMD} apt-get install -y -qq nano htop systemd cron
+apt-get install -y -qq nano htop systemd cron
 
 log "Installing repository tools..."
-${SUDO_CMD} apt-get install -y -qq apt-transport-https gnupg ca-certificates
+apt-get install -y -qq apt-transport-https gnupg ca-certificates
 
 # Download and extract project
 TEMP_DIR="/tmp/solaredge-installer"
@@ -78,39 +77,20 @@ if curl -sSL "https://github.com/frezeen/Solaredge_ScanWriter/archive/main.zip" 
         # Create application directory
         APP_DIR="/opt/Solaredge_ScanWriter"
         log "📁 Creating application directory: $APP_DIR"
-        ${SUDO_CMD} mkdir -p "$APP_DIR"
+        mkdir -p "$APP_DIR"
         
         # Copy project files
         log "📋 Copying project files..."
-        ${SUDO_CMD} cp -r "$PROJECT_DIR"/* "$APP_DIR/"
+        cp -r "$PROJECT_DIR"/* "$APP_DIR/"
         
-        # Create application user
-        log "👤 Creating application user..."
-        if ! id "solaredge" &>/dev/null; then
-            ${SUDO_CMD} useradd --create-home --shell /bin/bash --groups sudo solaredge
-        fi
-        ${SUDO_CMD} chown -R solaredge:solaredge "$APP_DIR"
-        
-        # Create Python virtual environment
-        log "🐍 Setting up Python environment..."
-        if [[ $EUID -eq 0 ]]; then
-            su solaredge -c "python3 -m venv $APP_DIR/venv" >/dev/null 2>&1
-        else
-            sudo -u solaredge python3 -m venv "$APP_DIR/venv" >/dev/null 2>&1
-        fi
-        
-        # Install Python dependencies
-        log "📦 Installing Python dependencies..."
-        if [[ $EUID -eq 0 ]]; then
-            su solaredge -c "$APP_DIR/venv/bin/pip install --upgrade pip" >/dev/null 2>&1
-        else
-            sudo -u solaredge "$APP_DIR/venv/bin/pip" install --upgrade pip >/dev/null 2>&1
-        fi
+        # Create required directories
+        log "📂 Creating required directories..."
+        mkdir -p "$APP_DIR"/{logs,cache,cookies,config,systemd,scripts,grafana}
         
         # Create requirements.txt if not exists
         if [[ ! -f "$APP_DIR/requirements.txt" ]]; then
             log "📝 Creating requirements.txt..."
-            ${SUDO_CMD} tee "$APP_DIR/requirements.txt" > /dev/null << 'REQS'
+            tee "$APP_DIR/requirements.txt" > /dev/null << 'REQS'
 aiohttp>=3.8.0
 influxdb-client>=1.36.0
 PyYAML>=6.0
@@ -124,41 +104,29 @@ jinja2>=3.1.0
 aiohttp-jinja2>=1.5.0
 pytz>=2023.3
 REQS
-            ${SUDO_CMD} chown solaredge:solaredge "$APP_DIR/requirements.txt"
         fi
         
-        # Install Python dependencies with proper versions
-        if [[ $EUID -eq 0 ]]; then
-            su solaredge -c "$APP_DIR/venv/bin/pip install -r $APP_DIR/requirements.txt" >/dev/null 2>&1
-        else
-            sudo -u solaredge "$APP_DIR/venv/bin/pip" install -r "$APP_DIR/requirements.txt" >/dev/null 2>&1
-        fi
-        
-        # Create directories
-        log "📁 Creating directories..."
-        if [[ $EUID -eq 0 ]]; then
-            su solaredge -c "mkdir -p $APP_DIR/{logs,cache,cookies,config,systemd,scripts,grafana}" >/dev/null 2>&1
-        else
-            sudo -u solaredge mkdir -p "$APP_DIR"/{logs,cache,cookies,config,systemd,scripts,grafana} >/dev/null 2>&1
-        fi
+        # Install Python dependencies system-wide
+        log "🐍 Installing Python dependencies..."
+        pip3 install -r "$APP_DIR/requirements.txt" >/dev/null 2>&1
         
         # Install InfluxDB
         log "🗄️ Installing InfluxDB..."
-        curl -s https://repos.influxdata.com/influxdata-archive_compat.key | ${SUDO_CMD} gpg --dearmor -o /usr/share/keyrings/influxdata-archive-keyring.gpg 2>/dev/null
-        echo "deb [signed-by=/usr/share/keyrings/influxdata-archive-keyring.gpg] https://repos.influxdata.com/debian stable main" | ${SUDO_CMD} tee /etc/apt/sources.list.d/influxdb.list >/dev/null
+        curl -s https://repos.influxdata.com/influxdata-archive_compat.key | gpg --dearmor -o /usr/share/keyrings/influxdata-archive-keyring.gpg 2>/dev/null
+        echo "deb [signed-by=/usr/share/keyrings/influxdata-archive-keyring.gpg] https://repos.influxdata.com/debian stable main" | tee /etc/apt/sources.list.d/influxdb.list >/dev/null
         
-        ${SUDO_CMD} apt-get update -qq
-        if ! ${SUDO_CMD} apt-get install -y -qq influxdb2; then
+        apt-get update -qq
+        if ! apt-get install -y -qq influxdb2; then
             warn "Failed to install InfluxDB from repository, trying direct download..."
             INFLUX_VERSION="2.7.4"
             ARCH=$(dpkg --print-architecture)
             curl -LO "https://dl.influxdata.com/influxdb/releases/influxdb2_${INFLUX_VERSION}-1_${ARCH}.deb" >/dev/null 2>&1
-            ${SUDO_CMD} dpkg -i "influxdb2_${INFLUX_VERSION}-1_${ARCH}.deb" >/dev/null 2>&1 || ${SUDO_CMD} apt-get install -f -y -qq
+            dpkg -i "influxdb2_${INFLUX_VERSION}-1_${ARCH}.deb" >/dev/null 2>&1 || apt-get install -f -y -qq
             rm -f "influxdb2_${INFLUX_VERSION}-1_${ARCH}.deb"
         fi
         
-        ${SUDO_CMD} systemctl enable influxdb >/dev/null 2>&1
-        ${SUDO_CMD} systemctl start influxdb >/dev/null 2>&1
+        systemctl enable influxdb >/dev/null 2>&1
+        systemctl start influxdb >/dev/null 2>&1
         sleep 10
         
         # Configure InfluxDB
@@ -182,7 +150,7 @@ REQS
         done
         
         # Install jq for JSON parsing
-        ${SUDO_CMD} apt-get install -y -qq jq
+        apt-get install -y -qq jq
         
         # Check if InfluxDB needs setup
         SETUP_STATUS=$(curl -s http://localhost:8086/api/v2/setup 2>/dev/null)
@@ -258,26 +226,26 @@ REQS
         
         # Install Grafana
         log "📊 Installing Grafana..."
-        curl -s https://packages.grafana.com/gpg.key | ${SUDO_CMD} gpg --dearmor -o /usr/share/keyrings/grafana-archive-keyring.gpg 2>/dev/null
-        echo "deb [signed-by=/usr/share/keyrings/grafana-archive-keyring.gpg] https://packages.grafana.com/oss/deb stable main" | ${SUDO_CMD} tee /etc/apt/sources.list.d/grafana.list >/dev/null
+        curl -s https://packages.grafana.com/gpg.key | gpg --dearmor -o /usr/share/keyrings/grafana-archive-keyring.gpg 2>/dev/null
+        echo "deb [signed-by=/usr/share/keyrings/grafana-archive-keyring.gpg] https://packages.grafana.com/oss/deb stable main" | tee /etc/apt/sources.list.d/grafana.list >/dev/null
         
-        ${SUDO_CMD} apt-get update -qq
-        if ! ${SUDO_CMD} apt-get install -y -qq grafana; then
+        apt-get update -qq
+        if ! apt-get install -y -qq grafana; then
             warn "Failed to install Grafana from repository, trying direct download..."
             GRAFANA_VERSION="10.2.3"
             ARCH=$(dpkg --print-architecture)
             curl -LO "https://dl.grafana.com/oss/release/grafana_${GRAFANA_VERSION}_${ARCH}.deb" >/dev/null 2>&1
-            ${SUDO_CMD} dpkg -i "grafana_${GRAFANA_VERSION}_${ARCH}.deb" >/dev/null 2>&1 || ${SUDO_CMD} apt-get install -f -y -qq
+            dpkg -i "grafana_${GRAFANA_VERSION}_${ARCH}.deb" >/dev/null 2>&1 || apt-get install -f -y -qq
             rm -f "grafana_${GRAFANA_VERSION}_${ARCH}.deb"
         fi
         
         # Install Grafana plugins
         log "🔌 Installing Grafana plugins..."
-        ${SUDO_CMD} grafana-cli plugins install fetzerch-sunandmoon-datasource >/dev/null 2>&1 || warn "Failed to install sun-and-moon plugin"
-        ${SUDO_CMD} grafana-cli plugins install grafana-clock-panel >/dev/null 2>&1 || warn "Failed to install clock plugin"
+        grafana-cli plugins install fetzerch-sunandmoon-datasource >/dev/null 2>&1 || warn "Failed to install sun-and-moon plugin"
+        grafana-cli plugins install grafana-clock-panel >/dev/null 2>&1 || warn "Failed to install clock plugin"
         
-        ${SUDO_CMD} systemctl enable grafana-server >/dev/null 2>&1
-        ${SUDO_CMD} systemctl start grafana-server >/dev/null 2>&1
+        systemctl enable grafana-server >/dev/null 2>&1
+        systemctl start grafana-server >/dev/null 2>&1
         
         # Wait for Grafana to be ready
         log "Waiting for Grafana to be ready..."
@@ -403,7 +371,7 @@ REQS
         # Create .env file
         log "📝 Creating configuration file..."
         if [[ ! -f "$APP_DIR/.env" ]]; then
-            ${SUDO_CMD} tee "$APP_DIR/.env" > /dev/null << ENV
+            tee "$APP_DIR/.env" > /dev/null << ENV
 # SolarEdge ScanWriter - Environment Variables
 # Generated by installation script
 
@@ -478,38 +446,12 @@ SOLAREDGE_WEB_BASE_URL=https://monitoring.solaredge.com
 SOLAREDGE_COOKIE_FILE=cookies/web_cookies.json
 SOLAREDGE_SESSION_TIMEOUT_SECONDS=3600
 ENV
-            ${SUDO_CMD} chown solaredge:solaredge "$APP_DIR/.env"
+            # chown removed (running as root) "$APP_DIR/.env"
         fi
         
-        # Create activation script for better venv management
-        log "📝 Creating Python virtual environment activation script..."
-        ${SUDO_CMD} tee "$APP_DIR/activate-and-run.sh" > /dev/null << 'ACTIVATE_SCRIPT'
-#!/bin/bash
-# SolarEdge Data Collector - Virtual Environment Activation Script
-
-# Set working directory
-cd /opt/Solaredge_ScanWriter
-
-# Activate virtual environment
-source /opt/Solaredge_ScanWriter/venv/bin/activate
-
-# Verify Python environment
-echo "Using Python: $(which python)"
-echo "Python version: $(python --version)"
-echo "Virtual environment: $VIRTUAL_ENV"
-
-# Run the main application
-exec python main.py "$@"
-ACTIVATE_SCRIPT
-        
-        ${SUDO_CMD} chmod +x "$APP_DIR/activate-and-run.sh"
-        ${SUDO_CMD} chown solaredge:solaredge "$APP_DIR/activate-and-run.sh"
-        
-
-        
-        # Create systemd service with improved venv handling
+        # Create systemd service
         log "🔧 Creating systemd service..."
-        ${SUDO_CMD} tee /etc/systemd/system/solaredge-scanwriter.service > /dev/null << 'SERVICE'
+        tee /etc/systemd/system/solaredge-scanwriter.service > /dev/null << 'SERVICE'
 [Unit]
 Description=Solaredge_ScanWriter (GUI + Loop 24/7)
 After=network.target influxdb.service
@@ -518,17 +460,13 @@ Requires=influxdb.service
 
 [Service]
 Type=simple
-User=solaredge
-Group=solaredge
+User=root
+Group=root
 WorkingDirectory=/opt/Solaredge_ScanWriter
-
-# Environment variables for Python virtual environment
-Environment=PATH=/opt/Solaredge_ScanWriter/venv/bin:/usr/local/bin:/usr/bin:/bin
-Environment=VIRTUAL_ENV=/opt/Solaredge_ScanWriter/venv
 Environment=PYTHONPATH=/opt/Solaredge_ScanWriter
 
-# Use the activation script for proper venv setup
-ExecStart=/opt/Solaredge_ScanWriter/activate-and-run.sh
+# Run with system Python
+ExecStart=/usr/bin/python3 /opt/Solaredge_ScanWriter/main.py
 
 # Restart configuration
 Restart=always
@@ -551,21 +489,21 @@ ReadWritePaths=/opt/Solaredge_ScanWriter
 WantedBy=multi-user.target
 SERVICE
         
-        ${SUDO_CMD} systemctl daemon-reload >/dev/null 2>&1
+        systemctl daemon-reload >/dev/null 2>&1
         
         # Configure log rotation
         log "🔄 Configuring log rotation..."
         if [[ -f "$APP_DIR/config/logrotate.conf" ]]; then
-            ${SUDO_CMD} cp "$APP_DIR/config/logrotate.conf" /etc/logrotate.d/solaredge-collector
-            ${SUDO_CMD} chown root:root /etc/logrotate.d/solaredge-collector
-            ${SUDO_CMD} chmod 644 /etc/logrotate.d/solaredge-collector
+            cp "$APP_DIR/config/logrotate.conf" /etc/logrotate.d/solaredge-collector
+            chown root:root /etc/logrotate.d/solaredge-collector
+            chmod 644 /etc/logrotate.d/solaredge-collector
             
             # Update paths in logrotate config to match actual installation
-            ${SUDO_CMD} sed -i "s|/opt/solaredge-collector|$APP_DIR|g" /etc/logrotate.d/solaredge-collector
+            sed -i "s|/opt/solaredge-collector|$APP_DIR|g" /etc/logrotate.d/solaredge-collector
             
             # Update service names to match actual systemd service
-            ${SUDO_CMD} sed -i "s|solaredge-collector|solaredge-scanwriter|g" /etc/logrotate.d/solaredge-collector
-            ${SUDO_CMD} sed -i "s|solaredge-gui|solaredge-scanwriter|g" /etc/logrotate.d/solaredge-collector
+            sed -i "s|solaredge-collector|solaredge-scanwriter|g" /etc/logrotate.d/solaredge-collector
+            sed -i "s|solaredge-gui|solaredge-scanwriter|g" /etc/logrotate.d/solaredge-collector
             
             log "✅ Log rotation configured - logs will be rotated daily and kept for 7 days"
         else
@@ -576,10 +514,10 @@ SERVICE
         log "📰 Configuring systemd journal retention..."
         
         # Create journald configuration directory if not exists
-        ${SUDO_CMD} mkdir -p /etc/systemd/journald.conf.d
+        mkdir -p /etc/systemd/journald.conf.d
         
         # Configure journal retention for our service specifically
-        ${SUDO_CMD} tee /etc/systemd/journald.conf.d/solaredge-retention.conf > /dev/null << 'JOURNAL'
+        tee /etc/systemd/journald.conf.d/solaredge-retention.conf > /dev/null << 'JOURNAL'
 # SolarEdge Data Collector - Journal Retention Configuration
 # Keep journal logs for maximum 48 hours to prevent disk space issues
 
@@ -604,12 +542,12 @@ ForwardToSyslog=no
 JOURNAL
         
         # Apply journal configuration
-        ${SUDO_CMD} systemctl restart systemd-journald >/dev/null 2>&1 || warn "Could not restart journald service"
+        systemctl restart systemd-journald >/dev/null 2>&1 || warn "Could not restart journald service"
         
         # Configure journal vacuum for immediate cleanup of old logs
         log "🧹 Cleaning up old journal logs..."
-        ${SUDO_CMD} journalctl --vacuum-time=48h >/dev/null 2>&1 || warn "Could not vacuum old journal logs"
-        ${SUDO_CMD} journalctl --vacuum-size=100M >/dev/null 2>&1 || warn "Could not vacuum journal by size"
+        journalctl --vacuum-time=48h >/dev/null 2>&1 || warn "Could not vacuum old journal logs"
+        journalctl --vacuum-size=100M >/dev/null 2>&1 || warn "Could not vacuum journal by size"
         
         log "✅ Journal retention configured - systemd logs kept for max 48 hours (100MB limit)"
         
@@ -618,8 +556,8 @@ JOURNAL
         CRON_JOB="0 3 * * * /usr/bin/journalctl --vacuum-time=48h --vacuum-size=100M >/dev/null 2>&1"
         
         # Add cron job for root user (journalctl requires root privileges)
-        if ! ${SUDO_CMD} crontab -l 2>/dev/null | grep -q "journalctl --vacuum"; then
-            (${SUDO_CMD} crontab -l 2>/dev/null; echo "$CRON_JOB") | ${SUDO_CMD} crontab -
+        if ! crontab -l 2>/dev/null | grep -q "journalctl --vacuum"; then
+            (crontab -l 2>/dev/null; echo "$CRON_JOB") | crontab -
             log "✅ Daily journal cleanup scheduled at 3:00 AM"
         else
             log "ℹ️ Journal cleanup cron job already exists"
@@ -627,7 +565,7 @@ JOURNAL
         
         # Create helper scripts
         log "📝 Creating helper scripts..."
-        ${SUDO_CMD} tee "$APP_DIR/test.sh" > /dev/null << 'TEST'
+        tee "$APP_DIR/test.sh" > /dev/null << 'TEST'
 #!/bin/bash
 # SolarEdge Installation Test Script
 
@@ -636,25 +574,25 @@ cd /opt/Solaredge_ScanWriter
 echo "=== SolarEdge Installation Test ==="
 echo ""
 
-# Test virtual environment
-echo "🐍 Python Virtual Environment:"
+# Test System Python
+echo "🐍 Python System Python:"
 if [[ -f venv/bin/activate ]]; then
-    echo "✅ Virtual environment exists"
-    source venv/bin/activate
+    echo "✅ System Python exists"
+    # Using system Python
     echo "  Python path: $(which python)"
     echo "  Python version: $(python --version)"
     echo "  Virtual env: $VIRTUAL_ENV"
 else
-    echo "❌ Virtual environment not found"
+    echo "❌ System Python not found"
 fi
 echo ""
 
 # Test installed packages
 echo "📦 Installed Python packages:"
-if [[ -f venv/bin/pip ]]; then
-    ./venv/bin/pip list | grep -E "(aiohttp|influxdb|yaml|pymodbus|requests|solaredge)" | head -10
+if [[ -f pip3 ]]; then
+    ./pip3 list | grep -E "(aiohttp|influxdb|yaml|pymodbus|requests|solaredge)" | head -10
 else
-    echo "❌ pip not found in virtual environment"
+    echo "❌ pip not found in System Python"
 fi
 echo ""
 
@@ -685,7 +623,7 @@ echo ""
 echo "🧪 Application test:"
 if [[ -f main.py ]]; then
     echo "✅ main.py exists"
-    if source venv/bin/activate && python -c "import main" 2>/dev/null; then
+    if # Using system Python && python -c "import main" 2>/dev/null; then
         echo "✅ Main module imports successfully"
     else
         echo "⚠️ Main module has import issues (check dependencies)"
@@ -698,7 +636,7 @@ echo ""
 echo "=== Test Complete ==="
 TEST
         
-        ${SUDO_CMD} tee "$APP_DIR/status.sh" > /dev/null << 'STATUS'
+        tee "$APP_DIR/status.sh" > /dev/null << 'STATUS'
 #!/bin/bash
 # SolarEdge Service Status Script
 
@@ -720,13 +658,13 @@ else
 fi
 echo ""
 
-# Virtual environment check
-echo "🐍 Virtual Environment:"
+# System Python check
+echo "🐍 System Python:"
 if [[ -d /opt/Solaredge_ScanWriter/venv ]]; then
-    echo "✅ Virtual environment exists"
-    echo "  Python: $(/opt/Solaredge_ScanWriter/venv/bin/python --version)"
+    echo "✅ System Python exists"
+    echo "  Python: $(/usr/bin/python3 --version)"
 else
-    echo "❌ Virtual environment not found"
+    echo "❌ System Python not found"
 fi
 echo ""
 
@@ -749,7 +687,7 @@ fi
 STATUS
 
         # Create manual run script for testing
-        ${SUDO_CMD} tee "$APP_DIR/run-manual.sh" > /dev/null << 'MANUAL'
+        tee "$APP_DIR/run-manual.sh" > /dev/null << 'MANUAL'
 #!/bin/bash
 # Manual run script for testing SolarEdge application
 
@@ -767,15 +705,15 @@ if [[ "$(whoami)" != "solaredge" ]]; then
     echo ""
 fi
 
-# Activate virtual environment
-echo "🐍 Activating virtual environment..."
+# Activate System Python
+echo "🐍 Activating System Python..."
 if [[ -f venv/bin/activate ]]; then
-    source venv/bin/activate
-    echo "✅ Virtual environment activated"
+    # Using system Python
+    echo "✅ System Python activated"
     echo "  Python: $(which python)"
     echo "  Virtual env: $VIRTUAL_ENV"
 else
-    echo "❌ Virtual environment not found!"
+    echo "❌ System Python not found!"
     exit 1
 fi
 echo ""
@@ -814,7 +752,7 @@ esac
 MANUAL
 
         # Create bucket verification script
-        ${SUDO_CMD} tee "$APP_DIR/check-buckets.sh" > /dev/null << 'BUCKETS'
+        tee "$APP_DIR/check-buckets.sh" > /dev/null << 'BUCKETS'
 #!/bin/bash
 # Script per verificare configurazione bucket InfluxDB
 
@@ -860,7 +798,7 @@ echo "💡 I bucket vengono creati automaticamente durante l'installazione"
 BUCKETS
 
         # Create logrotate verification script
-        ${SUDO_CMD} tee "$APP_DIR/check-logrotate.sh" > /dev/null << 'LOGROTATE'
+        tee "$APP_DIR/check-logrotate.sh" > /dev/null << 'LOGROTATE'
 #!/bin/bash
 # Script per verificare configurazione logrotate
 
@@ -909,7 +847,7 @@ echo "💡 Per forzare una rotazione manuale: sudo logrotate -f /etc/logrotate.d
 LOGROTATE
 
         # Create journal management script
-        ${SUDO_CMD} tee "$APP_DIR/manage-journal.sh" > /dev/null << 'JOURNAL_SCRIPT'
+        tee "$APP_DIR/manage-journal.sh" > /dev/null << 'JOURNAL_SCRIPT'
 #!/bin/bash
 # Script per gestire i log systemd journal
 
@@ -1004,8 +942,8 @@ case "${1:-status}" in
 esac
 JOURNAL_SCRIPT
         
-        ${SUDO_CMD} chmod +x "$APP_DIR"/{test.sh,status.sh,check-buckets.sh,check-logrotate.sh,manage-journal.sh}
-        ${SUDO_CMD} chown solaredge:solaredge "$APP_DIR"/{test.sh,status.sh,check-buckets.sh,check-logrotate.sh,manage-journal.sh,activate-and-run.sh,run-manual.sh,venv.sh}
+        chmod +x "$APP_DIR"/{test.sh,status.sh,check-buckets.sh,check-logrotate.sh,manage-journal.sh}
+        # chown removed (running as root) "$APP_DIR"/{test.sh,status.sh,check-buckets.sh,check-logrotate.sh,manage-journal.sh,main.py,run-manual.sh,# venv.sh removed}
         
         # Configure executable permissions for all scripts
         log "🔧 Configuring script permissions..."
@@ -1020,23 +958,23 @@ JOURNAL_SCRIPT
             "check-buckets.sh"
             "check-logrotate.sh"
             "manage-journal.sh"
-            "activate-and-run.sh"
+            "main.py"
             "run-manual.sh"
-            "venv.sh"
+            "# venv.sh removed"
         )
         
         for file in "${EXECUTABLE_FILES[@]}"; do
             if [[ -f "$APP_DIR/$file" ]]; then
-                ${SUDO_CMD} chmod +x "$APP_DIR/$file"
-                ${SUDO_CMD} chown solaredge:solaredge "$APP_DIR/$file"
+                chmod +x "$APP_DIR/$file"
+                # chown removed (running as root) "$APP_DIR/$file"
             fi
         done
         
         # Configure directory and file permissions for config files
         log "🔧 Configuring config directory permissions..."
-        ${SUDO_CMD} chown -R solaredge:solaredge "$APP_DIR/config"
-        ${SUDO_CMD} chmod -R 755 "$APP_DIR/config"
-        ${SUDO_CMD} chmod -R 664 "$APP_DIR/config"/*.yaml "$APP_DIR/config"/*/*.yaml 2>/dev/null || true
+        chown -R solaredge:solaredge "$APP_DIR/config"
+        chmod -R 755 "$APP_DIR/config"
+        chmod -R 664 "$APP_DIR/config"/*.yaml "$APP_DIR/config"/*/*.yaml 2>/dev/null || true
         
         # Ensure specific directories have correct permissions
         CONFIG_DIRS=(
@@ -1050,9 +988,9 @@ JOURNAL_SCRIPT
         )
         
         for dir in "${CONFIG_DIRS[@]}"; do
-            if [[ -d "$APP_DIR/$dir" ]] || ${SUDO_CMD} mkdir -p "$APP_DIR/$dir"; then
-                ${SUDO_CMD} chown -R solaredge:solaredge "$APP_DIR/$dir"
-                ${SUDO_CMD} chmod -R 755 "$APP_DIR/$dir"
+            if [[ -d "$APP_DIR/$dir" ]] || mkdir -p "$APP_DIR/$dir"; then
+                chown -R solaredge:solaredge "$APP_DIR/$dir"
+                chmod -R 755 "$APP_DIR/$dir"
             fi
         done
         
@@ -1067,8 +1005,8 @@ JOURNAL_SCRIPT
         
         for file in "${CONFIG_FILES[@]}"; do
             if [[ -f "$APP_DIR/$file" ]]; then
-                ${SUDO_CMD} chown solaredge:solaredge "$APP_DIR/$file"
-                ${SUDO_CMD} chmod 664 "$APP_DIR/$file"
+                # chown removed (running as root) "$APP_DIR/$file"
+                chmod 664 "$APP_DIR/$file"
             fi
         done
         
@@ -1077,13 +1015,13 @@ JOURNAL_SCRIPT
             log "📁 Setting up Git hooks for automatic permissions..."
             
             # Create Git hooks directory if not exists
-            ${SUDO_CMD} mkdir -p "$APP_DIR/.git/hooks"
+            mkdir -p "$APP_DIR/.git/hooks"
             
             # Copy hooks from .githooks if they exist
             if [[ -d "$APP_DIR/.githooks" ]]; then
-                ${SUDO_CMD} cp "$APP_DIR/.githooks"/* "$APP_DIR/.git/hooks/" 2>/dev/null || true
-                ${SUDO_CMD} chmod +x "$APP_DIR/.git/hooks"/* 2>/dev/null || true
-                ${SUDO_CMD} chown -R solaredge:solaredge "$APP_DIR/.git/hooks" 2>/dev/null || true
+                cp "$APP_DIR/.githooks"/* "$APP_DIR/.git/hooks/" 2>/dev/null || true
+                chmod +x "$APP_DIR/.git/hooks"/* 2>/dev/null || true
+                chown -R solaredge:solaredge "$APP_DIR/.git/hooks" 2>/dev/null || true
             fi
             
             # Configure Git to preserve file permissions
@@ -1097,10 +1035,10 @@ JOURNAL_SCRIPT
         # Configure firewall
         if command -v ufw &> /dev/null; then
             log "🔥 Configuring firewall..."
-            ${SUDO_CMD} ufw --force enable >/dev/null 2>&1 || true
-            ${SUDO_CMD} ufw allow 8092/tcp comment "SolarEdge GUI" >/dev/null 2>&1 || true
-            ${SUDO_CMD} ufw allow 8086/tcp comment "InfluxDB" >/dev/null 2>&1 || true
-            ${SUDO_CMD} ufw allow 3000/tcp comment "Grafana" >/dev/null 2>&1 || true
+            ufw --force enable >/dev/null 2>&1 || true
+            ufw allow 8092/tcp comment "SolarEdge GUI" >/dev/null 2>&1 || true
+            ufw allow 8086/tcp comment "InfluxDB" >/dev/null 2>&1 || true
+            ufw allow 3000/tcp comment "Grafana" >/dev/null 2>&1 || true
         fi
         
         # Cleanup
@@ -1127,7 +1065,7 @@ JOURNAL_SCRIPT
         echo "• ✅ Automatic permission management"
         echo "• ✅ Log rotation (daily, 7-day retention for main logs, 3-day for debug)"
         echo "• ✅ Journal retention (systemd logs kept for max 48 hours, 100MB limit)"
-        echo "• ✅ Python virtual environment (isolated dependencies with activation scripts)"
+        echo "• ✅ Python System Python (isolated dependencies with activation scripts)"
         echo ""
         echo "Access URLs:"
         echo "• SolarEdge GUI: http://$(hostname -I | awk '{print $1}'):8092"
@@ -1141,7 +1079,7 @@ JOURNAL_SCRIPT
         echo "• ./check-logrotate.sh - Verify log rotation configuration"
         echo "• ./manage-journal.sh - Manage systemd journal logs (status/clean/logs/follow)"
         echo "• ./run-manual.sh - Run application manually for testing (with venv activated)"
-        echo "• ./venv.sh - Activate Python virtual environment (interactive shell)"
+        echo "• ./# venv.sh removed - Activate Python System Python (interactive shell)"
         echo "• ./update.sh - Update system (configurations auto-preserved)"
         echo ""
         echo "Don't forget to configure your .env file with SolarEdge credentials!"
@@ -1154,3 +1092,5 @@ else
     error "Failed to download project from GitHub"
     exit 1
 fi
+
+
