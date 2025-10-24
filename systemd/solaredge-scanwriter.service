@@ -7,13 +7,12 @@ Requires=network.target
 
 [Service]
 Type=simple
-User=solaredge
-Group=solaredge
+User=root
+Group=root
 WorkingDirectory=/opt/Solaredge_ScanWriter
-Environment=PATH=/opt/Solaredge_ScanWriter/venv/bin
 Environment=PYTHONPATH=/opt/Solaredge_ScanWriter
 Environment=PYTHONUNBUFFERED=1
-ExecStart=/opt/Solaredge_ScanWriter/venv/bin/python main.py
+ExecStart=/usr/bin/python3 /opt/Solaredge_ScanWriter/main.py
 ExecReload=/bin/kill -HUP $MAINPID
 KillMode=mixed
 KillSignal=SIGTERM
