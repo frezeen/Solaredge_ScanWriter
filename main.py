@@ -14,6 +14,7 @@ from app_logging import configure_logging, get_logger
 from cache.cache_manager import CacheManager
 from config.config_manager import get_config_manager
 from scheduler.scheduler_loop import SchedulerLoop, SchedulerConfig, SourceType
+from utils.color_logger import color
 
 load_env()
 
@@ -260,40 +261,40 @@ def run_web_flow(log, cache, start_date=None, end_date=None) -> int:
             dates_to_process.append(current.strftime('%Y-%m-%d'))
             current += timedelta(days=1)
         
-        log.info(f"🔄 Web scraping per {len(dates_to_process)} giorni: {start_date} → {end_date}")
+        log.info(color.info(f"🔄 Web scraping per {len(dates_to_process)} giorni: {start_date} → {end_date}"))
     else:
         # Modalità normale: solo oggi
         today = datetime.now().strftime('%Y-%m-%d')
         dates_to_process = [today]
-        log.info(f"🔄 Web scraping per oggi: {today}")
+        log.info(color.info(f"🔄 Web scraping per oggi: {today}"))
     
     # Raccolta dati per ogni giorno
     all_influx_points = []
     
     try:
         for date in dates_to_process:
-            log.info(f"📅 Raccogliendo dati web per {date}")
+            log.info(color.dim(f"   📅 Raccogliendo dati web per {date}"))
             
             # Raccolta dati per questa data specifica
             measurements_raw = collector.fetch_measurements_for_date(device_reqs, date)
             
             # Parsing + Filtro + Conversione -> InfluxDB Points pronti (con config)
             influx_points = parse_web(measurements_raw, config)
-            log.info(f"Parser web generato {len(influx_points)} InfluxDB Points per {date}")
+            log.info(color.dim(f"   Parser web generato {len(influx_points)} InfluxDB Points per {date}"))
             
             all_influx_points.extend(influx_points)
             
     except KeyboardInterrupt:
-        log.info("🛑 Interruzione durante raccolta web")
+        log.info(color.warning("🛑 Interruzione durante raccolta web"))
         raise  # Propaga l'interruzione
     
     # Storage di tutti i punti raccolti
     if all_influx_points:
         with InfluxWriter() as writer:
             writer.write_points(all_influx_points, measurement_type="web")
-            log.info(f"✅ Pipeline web completata - {len(all_influx_points)} punti scritti")
+            log.info(color.success(f"✅ Pipeline web completata - {len(all_influx_points)} punti scritti"))
     else:
-        log.warning("Nessun punto da scrivere")
+        log.warning(color.warning("Nessun punto da scrivere"))
     
     return 0
 
@@ -328,33 +329,33 @@ def run_api_flow(log, cache, config, start_date=None, end_date=None) -> int:
         log.info("🛑 Interruzione durante raccolta dati")
         raise  # Propaga l'interruzione
     
-    log.info(f"Raccolti dati da {len(raw_data)} endpoint")
+    log.info(color.dim(f"   Raccolti dati da {len(raw_data)} endpoint"))
     
     # Log dettagliato per debugging cache hits
     for endpoint, data in raw_data.items():
         if data:
-            log.info(f"📊 Endpoint {endpoint}: {len(str(data))} caratteri di dati raccolti")
+            log.info(color.dim(f"   📊 Endpoint {endpoint}: {len(str(data))} caratteri di dati raccolti"))
         else:
-            log.warning(f"⚠️ Endpoint {endpoint}: nessun dato raccolto")
+            log.warning(color.warning(f"   ⚠️ Endpoint {endpoint}: nessun dato raccolto"))
     
     # Parsing + Filtro + Conversione -> InfluxDB Points pronti
     parser = create_parser()
     influx_points = parser.parse(raw_data, collector.site_id)
-    log.info(f"Parser API generato {len(influx_points)} InfluxDB Points pronti")
+    log.info(color.dim(f"   Parser API generato {len(influx_points)} InfluxDB Points pronti"))
     
     # Log per verificare se i punti vengono generati anche da cache
     if influx_points:
-        log.info(f"🔄 Processando {len(influx_points)} punti (da API o cache) per scrittura DB")
+        log.info(color.dim(f"   🔄 Processando {len(influx_points)} punti (da API o cache) per scrittura DB"))
     else:
-        log.warning("⚠️ Nessun punto generato dal parser - possibile problema con dati da cache")
+        log.warning(color.warning("   ⚠️ Nessun punto generato dal parser - possibile problema con dati da cache"))
     
     # Storage diretto - nessuna elaborazione nel writer
     if influx_points:
         with InfluxWriter() as writer:
             writer.write_points(influx_points, measurement_type="api")
-            log.info("✅ Pipeline API completata")
+            log.info(color.success("   ✅ Pipeline API completata"))
     else:
-        log.warning("Nessun punto da scrivere")
+        log.warning(color.warning("   Nessun punto da scrivere"))
     
     return 0
 
@@ -366,7 +367,7 @@ def run_realtime_flow(log, cache, config) -> int:
     from filtro.regole_filtraggio import filter_structured_points
     from storage.writer_influx import InfluxWriter
     
-    log.info("🚀 Avvio flusso realtime")
+    log.info(color.bold("🚀 Avvio flusso realtime"))
     
     try:
         # Step 1: Collector - raccolta dati (output formattato come example.py)
@@ -506,24 +507,24 @@ def run_history_mode(log, cache, config) -> int:
     from datetime import datetime
     import calendar
     
-    log.info("📜 Avvio modalità History - Scaricamento storico completo")
-    log.info("✅ ABILITANDO CACHE per history mode - skip mesi già scaricati")
+    log.info(color.bold("📜 Avvio modalità History - Scaricamento storico completo"))
+    log.info(color.success("✅ ABILITANDO CACHE per history mode - skip mesi già scaricati"))
     
     # Inizializza collector CON cache per evitare chiamate API duplicate
     collector = CollectorAPI(cache=cache, scheduler=None)
     
     # Ottieni range temporale dall'API dataPeriod
-    log.info("🔍 Recupero range temporale da API dataPeriod...")
+    log.info(color.info("🔍 Recupero range temporale da API dataPeriod..."))
     date_range = collector.get_production_date_range()
     
     if not date_range:
-        log.error("❌ Impossibile recuperare range temporale")
+        log.error(color.error("❌ Impossibile recuperare range temporale"))
         return 1
     
     start_date = date_range['start']
     end_date = date_range['end']
     
-    log.info(f"📅 Range temporale: {start_date} → {end_date}")
+    log.info(color.highlight(f"📅 Range temporale: {start_date} → {end_date}"))
     
     # Genera lista di mesi da processare
     months = []
@@ -557,7 +558,7 @@ def run_history_mode(log, cache, config) -> int:
         else:
             current = datetime(year, month + 1, 1)
     
-    log.info(f"📊 Totale mesi da processare: {len(months)}")
+    log.info(color.highlight(f"📊 Totale mesi da processare: {len(months)}"))
     
     # Processa ogni mese con gestione interruzione pulita
     success_count = 0
@@ -568,11 +569,11 @@ def run_history_mode(log, cache, config) -> int:
     try:
         # Processa tutti i mesi
         for idx, month_data in enumerate(months, 1):
-            log.info(f"🔄 [{idx}/{len(months)}] Processando {month_data['label']}: {month_data['start']} → {month_data['end']}")
+            log.info(color.info(f"🔄 [{idx}/{len(months)}] Processando {month_data['label']}: {month_data['start']} → {month_data['end']}"))
             
             try:
                 # 1. API Flow con date personalizzate (sempre) - CON CACHE
-                log.info(f"🔄 API flow per {month_data['label']} (CON CACHE)")
+                log.info(color.dim(f"   🔄 API flow per {month_data['label']} (CON CACHE)"))
                 api_result = run_api_flow(log, cache, config, 
                                          start_date=month_data['start'], 
                                          end_date=month_data['end'])
@@ -588,7 +589,7 @@ def run_history_mode(log, cache, config) -> int:
                     web_start = start_dt.strftime('%Y-%m-%d')
                     web_end = end_dt.strftime('%Y-%m-%d')
                     
-                    log.info(f"🔄 Web flow per ultimi 7 giorni: {web_start} → {web_end}")
+                    log.info(color.dim(f"   🔄 Web flow per ultimi 7 giorni: {web_start} → {web_end}"))
                     web_result = run_web_flow(log, cache, start_date=web_start, end_date=web_end)
                     web_executed = True
                 
@@ -596,46 +597,46 @@ def run_history_mode(log, cache, config) -> int:
                 if api_result == 0:
                     success_count += 1
                     if web_executed and web_result == 0:
-                        log.info(f"✅ {month_data['label']} completato (API + Web)")
+                        log.info(color.success(f"   ✅ {month_data['label']} completato (API + Web)"))
                     elif web_executed:
-                        log.info(f"✅ {month_data['label']} completato (API ok, Web warning)")
+                        log.info(color.warning(f"   ✅ {month_data['label']} completato (API ok, Web warning)"))
                     else:
-                        log.info(f"✅ {month_data['label']} completato (API)")
+                        log.info(color.success(f"   ✅ {month_data['label']} completato (API)"))
                 else:
                     failed_count += 1
-                    log.error(f"❌ {month_data['label']} fallito (API: {api_result})")
+                    log.error(color.error(f"   ❌ {month_data['label']} fallito (API: {api_result})"))
                     
             except KeyboardInterrupt:
                 # Propaga l'interruzione al livello superiore
                 raise
             except Exception as e:
                 failed_count += 1
-                log.error(f"❌ Errore processando {month_data['label']}: {e}")
+                log.error(color.error(f"   ❌ Errore processando {month_data['label']}: {e}"))
                 
     except KeyboardInterrupt:
         interrupted = True
-        log.info("🛑 Interruzione richiesta dall'utente (Ctrl+C)")
-        log.info(f"📊 Processati {success_count + failed_count}/{len(months)} mesi prima dell'interruzione")
+        log.info(color.warning("🛑 Interruzione richiesta dall'utente (Ctrl+C)"))
+        log.info(color.dim(f"📊 Processati {success_count + failed_count}/{len(months)} mesi prima dell'interruzione"))
     
     # Statistiche finali
-    log.info("=" * 60)
+    log.info(color.bold("=" * 60))
     if interrupted:
-        log.info(f"📈 History Mode Interrotto")
-        log.info(f"✅ API: {success_count}/{len(months)} mesi")
+        log.info(color.warning("📈 History Mode Interrotto"))
+        log.info(color.success(f"✅ API: {success_count}/{len(months)} mesi"))
         if failed_count > 0:
-            log.info(f"❌ Fallimenti API: {failed_count}/{len(months)}")
-        log.info(f"⏸️ Rimanenti: {len(months) - success_count - failed_count}/{len(months)}")
+            log.info(color.error(f"❌ Fallimenti API: {failed_count}/{len(months)}"))
+        log.info(color.dim(f"⏸️ Rimanenti: {len(months) - success_count - failed_count}/{len(months)}"))
         if web_executed:
-            log.info(f"🌐 Web: 7/7 giorni")
-        log.info("💡 Riavvia con --history per continuare dal punto di interruzione")
+            log.info(color.info(f"🌐 Web: 7/7 giorni"))
+        log.info(color.highlight("💡 Riavvia con --history per continuare dal punto di interruzione"))
     else:
-        log.info(f"📈 History Mode Completato")
-        log.info(f"✅ API: {success_count}/{len(months)} mesi")
+        log.info(color.success("📈 History Mode Completato"))
+        log.info(color.success(f"✅ API: {success_count}/{len(months)} mesi"))
         if failed_count > 0:
-            log.info(f"❌ Fallimenti API: {failed_count}/{len(months)}")
+            log.info(color.error(f"❌ Fallimenti API: {failed_count}/{len(months)}"))
         if web_executed:
-            log.info(f"🌐 Web: 7/7 giorni")
-    log.info("=" * 60)
+            log.info(color.info(f"🌐 Web: 7/7 giorni"))
+    log.info(color.bold("=" * 60))
     
     # Ritorna 0 se interrotto pulitamente o completato con successo
     if interrupted:
@@ -868,7 +869,7 @@ def main() -> int:
     
     # Cache centralizzata
     cache = CacheManager()
-    log.info("✅ Cache centralizzata inizializzata")
+    log.info(color.success("✅ Cache centralizzata inizializzata"))
     
     # Se nessun argomento specificato, avvia GUI con loop in stop
     if not any([args.web, args.api, args.realtime, args.scan, args.history]):
@@ -887,10 +888,10 @@ def main() -> int:
         elif args.history:
             return run_history_mode(log, cache, config)
     except KeyboardInterrupt:
-        log.info("👋 Uscita pulita richiesta dall'utente")
+        log.info(color.warning("👋 Uscita pulita richiesta dall'utente"))
         return 0
     except Exception as e:
-        log.error(f"Errore esecuzione: {e}")
+        log.error(color.error(f"Errore esecuzione: {e}"))
         return 1
     
     return 0

@@ -33,5 +33,8 @@ aiohttp-jinja2>=1.5.0
 # Timezone support
 pytz>=2023.3
 
+# Terminal colors (cross-platform)
+colorama>=0.4.6
+
 # Optional: Monitoring and metrics
 prometheus-client>=0.15.0
