@@ -20,9 +20,10 @@ class CollectorAPI:
     
 
 
-    def __init__(self, config_path: str = "config/main.yaml", cache=None, scheduler: Optional[SchedulerLoop] = None):
+    def __init__(self, config_path: str = "config/main.yaml", cache=None, scheduler: Optional[SchedulerLoop] = None, force_db_check: bool = False):
         self.cache = cache
         self.scheduler = scheduler
+        self.force_db_check = force_db_check
         self._config_manager = get_config_manager(config_path)
         self._api_config = self._config_manager.get_solaredge_api_config()
         self._global_config = self._config_manager.get_global_config()
@@ -239,19 +240,36 @@ class CollectorAPI:
                     if endpoint_name in ['equipment_change_log', 'equipment_data', 'site_storage_data']:
                         # Endpoint equipment - usano logiche speciali ma con cache
                         if endpoint_name == 'equipment_data':
-                            cached_data = self.cache.get_or_fetch(
-                                'api_ufficiali', endpoint_name, start_date,
-                                lambda: self._collect_equipment_endpoint_with_dates(
-                                    endpoint_name, endpoint_config, 
-                                    f"{start_date} 00:00:00", f"{end_date} 23:59:59"
+                            if self.force_db_check:
+                                cached_data = self.cache.get_or_fetch_with_db_check(
+                                    'api_ufficiali', endpoint_name, start_date,
+                                    lambda: self._collect_equipment_endpoint_with_dates(
+                                        endpoint_name, endpoint_config, 
+                                        f"{start_date} 00:00:00", f"{end_date} 23:59:59"
+                                    ),
+                                    force_db_check=True
                                 )
-                            )
+                            else:
+                                cached_data = self.cache.get_or_fetch(
+                                    'api_ufficiali', endpoint_name, start_date,
+                                    lambda: self._collect_equipment_endpoint_with_dates(
+                                        endpoint_name, endpoint_config, 
+                                        f"{start_date} 00:00:00", f"{end_date} 23:59:59"
+                                    )
+                                )
                         else:
                             # Altri endpoint equipment (change_log, storage_data)
-                            cached_data = self.cache.get_or_fetch(
-                                'api_ufficiali', endpoint_name, start_date,
-                                lambda: self._collect_equipment_endpoint(endpoint_name, endpoint_config)
-                            )
+                            if self.force_db_check:
+                                cached_data = self.cache.get_or_fetch_with_db_check(
+                                    'api_ufficiali', endpoint_name, start_date,
+                                    lambda: self._collect_equipment_endpoint(endpoint_name, endpoint_config),
+                                    force_db_check=True
+                                )
+                            else:
+                                cached_data = self.cache.get_or_fetch(
+                                    'api_ufficiali', endpoint_name, start_date,
+                                    lambda: self._collect_equipment_endpoint(endpoint_name, endpoint_config)
+                                )
                         use_cache = True
                         logger.info(f"✅ Cache per endpoint equipment {endpoint_name}")
                     else:
@@ -261,10 +279,17 @@ class CollectorAPI:
                                                              f"{start_date} 00:00:00", 
                                                              f"{end_date} 23:59:59")
                         
-                        cached_data = self.cache.get_or_fetch(
-                            'api_ufficiali', endpoint_name, start_date,
-                            lambda: self._call_api(url, params)
-                        )
+                        if self.force_db_check:
+                            cached_data = self.cache.get_or_fetch_with_db_check(
+                                'api_ufficiali', endpoint_name, start_date,
+                                lambda: self._call_api(url, params),
+                                force_db_check=True
+                            )
+                        else:
+                            cached_data = self.cache.get_or_fetch(
+                                'api_ufficiali', endpoint_name, start_date,
+                                lambda: self._call_api(url, params)
+                            )
                         use_cache = True
                         logger.info(f"✅ Cache diretta per {endpoint_name} (come API mode)")
                 else:
