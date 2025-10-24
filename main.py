@@ -563,6 +563,8 @@ def run_history_mode(log, cache, config) -> int:
     # Processa ogni mese con gestione interruzione pulita
     success_count = 0
     failed_count = 0
+    web_success = False
+    web_failed = False
     interrupted = False
     web_executed = False
     
@@ -590,8 +592,18 @@ def run_history_mode(log, cache, config) -> int:
                     web_end = end_dt.strftime('%Y-%m-%d')
                     
                     log.info(color.dim(f"   🔄 Web flow per ultimi 7 giorni: {web_start} → {web_end}"))
-                    web_result = run_web_flow(log, cache, start_date=web_start, end_date=web_end)
-                    web_executed = True
+                    try:
+                        web_result = run_web_flow(log, cache, start_date=web_start, end_date=web_end)
+                        web_executed = True
+                        if web_result == 0:
+                            web_success = True
+                        else:
+                            web_failed = True
+                    except Exception as web_error:
+                        log.error(color.error(f"   ❌ Web flow fallito: {web_error}"))
+                        web_executed = True
+                        web_failed = True
+                        web_result = 1
                 
                 # Considera successo se API è ok (web è opzionale)
                 if api_result == 0:
@@ -627,7 +639,10 @@ def run_history_mode(log, cache, config) -> int:
             log.info(color.error(f"❌ Fallimenti API: {failed_count}/{len(months)}"))
         log.info(color.dim(f"⏸️ Rimanenti: {len(months) - success_count - failed_count}/{len(months)}"))
         if web_executed:
-            log.info(color.info(f"🌐 Web: 7/7 giorni"))
+            if web_success:
+                log.info(color.success(f"✅ Web: 7/7 giorni"))
+            elif web_failed:
+                log.info(color.error(f"❌ Web: 0/7 giorni (fallito)"))
         log.info(color.highlight("💡 Riavvia con --history per continuare dal punto di interruzione"))
     else:
         log.info(color.success("📈 History Mode Completato"))
@@ -635,7 +650,10 @@ def run_history_mode(log, cache, config) -> int:
         if failed_count > 0:
             log.info(color.error(f"❌ Fallimenti API: {failed_count}/{len(months)}"))
         if web_executed:
-            log.info(color.info(f"🌐 Web: 7/7 giorni"))
+            if web_success:
+                log.info(color.success(f"✅ Web: 7/7 giorni"))
+            elif web_failed:
+                log.info(color.error(f"❌ Web: 0/7 giorni (fallito)"))
     log.info(color.bold("=" * 60))
     
     # Ritorna 0 se interrotto pulitamente o completato con successo
