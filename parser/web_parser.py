@@ -148,7 +148,7 @@ def _convert_raw_point_to_influx_point(raw_point: Dict[str, Any]) -> Point | Non
 
 def _get_category_from_config(measurement_type: str, device_id: str, config: Dict[str, Any]) -> str:
     """Estrae category dal YAML config basata su measurement_type e device_id."""
-    # Prima cerca nella sezione web_scraping usando device_id
+    # Cerca nella sezione web_scraping usando device_id
     web_endpoints = config.get('sources', {}).get('web_scraping', {}).get('endpoints', {})
     
     # Cerca il device specifico nella configurazione web_scraping
@@ -158,9 +158,7 @@ def _get_category_from_config(measurement_type: str, device_id: str, config: Dic
             if endpoint_device_id == device_id:
                 return endpoint_config.get('category', 'Info')
     
-    # Il parser web deve gestire solo dati web, nessun fallback alle API ufficiali
-    
-    return 'Info'  # Default fallback
+    return 'Info'  # Default fallback se device non trovato
 
 
 def parse_web(measurements_raw: Dict[str, Any], config: Dict[str, Any] = None) -> List[Union[Point, Dict[str, Any]]]:
