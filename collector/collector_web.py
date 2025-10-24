@@ -164,25 +164,20 @@ class CollectorWeb(CollectorWebInterface):
         if not cookie or '=' not in cookie:
             return False
         
-        # Verifica età
         age = time.time() - (candidate.get('ts') or time.time())
         if age > SESSION_MAX_AGE * 1.5:
             return False
         
-        # Salva stato corrente per rollback
         old_state = (self._cookie, self._csrf_token, self._last_login_ts)
         
-        # Applica candidato
         self._cookie = self._normalize_cookie(cookie)
         self._csrf_token = candidate.get('csrf_token')
         self._last_login_ts = candidate.get('ts') or time.time()
         
-        # Valida
         if self._validate_session():
             self._persist_cookie()
             return True
         
-        # Rollback su fallimento
         self._cookie, self._csrf_token, self._last_login_ts = old_state
         return False
     
@@ -202,7 +197,6 @@ class CollectorWeb(CollectorWebInterface):
                 if resp.status != 200:
                     return False
                     
-                # Verifica non sia pagina login
                 content_type = resp.headers.get('content-type', '')
                 if 'html' in content_type.lower():
                     body = resp.read(2048).decode('utf-8', errors='ignore').lower()
@@ -250,14 +244,12 @@ class CollectorWeb(CollectorWebInterface):
         if resp.status_code != 200:
             raise RuntimeError(f"Login fallito: HTTP {resp.status_code}")
         
-        # Estrai cookie e CSRF
         self._extract_session_data(session, resp)
         self._persist_cookie()
         self._log.info("Login completato%s", " (con CSRF)" if self._csrf_token else "")
     
     def _extract_session_data(self, session: requests.Session, response: requests.Response) -> None:
         """Estrae cookie e CSRF dalla sessione."""
-        # Cookie
         cookies = []
         for cookie in session.cookies:
             if cookie.name and cookie.value:
@@ -268,7 +260,6 @@ class CollectorWeb(CollectorWebInterface):
         self._cookie = "; ".join(cookies)
         self._last_login_ts = time.time()
         
-        # CSRF da HTML se non già estratto
         if not self._csrf_token:
             self._extract_csrf_from_html(response.text)
     
@@ -307,7 +298,6 @@ class CollectorWeb(CollectorWebInterface):
     def _parse_cookie_data(self, data: Any) -> Dict[str, Any] | None:
         """Parsa dati cookie da vari formati."""
         if isinstance(data, dict):
-            # Formato standard
             if cookie := data.get('cookie'):
                 return {
                     'cookie': cookie,
@@ -315,7 +305,6 @@ class CollectorWeb(CollectorWebInterface):
                     'ts': data.get('last_login_ts')
                 }
             
-            # Formato con lista cookies
             if cookies := data.get('cookies'):
                 if cookie_str := self._build_cookie_string(cookies):
                     return {
@@ -325,7 +314,6 @@ class CollectorWeb(CollectorWebInterface):
                     }
         
         elif isinstance(data, list):
-            # Lista pura di cookie
             if cookie_str := self._build_cookie_string(data):
                 return {'cookie': cookie_str, 'csrf_token': None, 'ts': None}
         
@@ -412,7 +400,6 @@ class CollectorWeb(CollectorWebInterface):
             return self._fetch_all_measurements(device_requests)
         
         if self.cache:
-            # Usa target_date se impostata, altrimenti oggi
             date = getattr(self, '_target_date', None) or datetime.now().strftime("%Y-%m-%d")
             key = self._generate_cache_key(device_requests, date)
             return self.cache.get_or_fetch("web", key, date, _fetch)
@@ -425,27 +412,21 @@ class CollectorWeb(CollectorWebInterface):
             device_requests: Lista delle richieste dispositivi
             target_date: Data in formato YYYY-MM-DD
         """
-        # Imposta temporaneamente la data target
         old_date = getattr(self, '_target_date', None)
         self.set_target_date(target_date)
         
         try:
             return self.fetch_measurements(device_requests)
         finally:
-            # Ripristina la data precedente
             self.set_target_date(old_date)
     
     def _fetch_all_measurements(self, requests: List[Dict[str, Any]]) -> Dict[str, Any]:
         """Recupera tutti i measurements."""
-        # Raggruppa per tipo
         grouped = defaultdict(list)
         for req in requests:
             device_type = req.get('device', {}).get('itemType', 'GENERIC')
             grouped[device_type].append(req)
         
-        self._log.info(f"Grouped into {len(grouped)} types: {list(grouped.keys())}")
-        
-        # Fetch per gruppo
         results = []
         for device_type, group in grouped.items():
             if device_type == 'OPTIMIZER' and len(group) > OPTIMIZER_BATCH_SIZE:
@@ -460,14 +441,11 @@ class CollectorWeb(CollectorWebInterface):
         results = []
         for i in range(0, len(requests), OPTIMIZER_BATCH_SIZE):
             batch = requests[i:i + OPTIMIZER_BATCH_SIZE]
-            self._log.info(f"OPTIMIZER batch {i//OPTIMIZER_BATCH_SIZE + 1}: {len(batch)} devices")
             results.extend(self._fetch_batch('OPTIMIZER', batch))
         return results
     
     def _fetch_batch(self, device_type: str, batch: List[Dict[str, Any]]) -> List:
         """Fetch singolo batch con scheduler timing."""
-        self._log.info(f"Fetching {len(batch)} {device_type} devices...")
-        
         def _http_call():
             url = f"{self._base_url}/services/charts/site/{self._site_id}/devices-measurements"
             params = self._get_date_params(getattr(self, '_target_date', None))
@@ -484,14 +462,12 @@ class CollectorWeb(CollectorWebInterface):
                 data = resp.json()
                 results = data if isinstance(data, list) else data.get('list', [data])
                 
-                self._log.info(f"Success for {device_type}: {len(results)} items")
                 return results
                 
             except Exception as e:
-                self._log.error(f"Failed for {device_type}: {e}")
+                self._log.error(f"Request failed for {device_type}: {e}")
                 raise RuntimeError(f"Request failed for {device_type}") from e
         
-        # Usa scheduler se disponibile, altrimenti chiamata diretta
         if self.scheduler:
             return self.scheduler.execute_with_timing(SourceType.WEB, _http_call, cache_hit=False)
         else:
@@ -535,10 +511,8 @@ class CollectorWeb(CollectorWebInterface):
             target_date: Data specifica in formato YYYY-MM-DD, se None usa oggi
         """
         if target_date:
-            # Usa la data specifica fornita
             return {"start-date": target_date, "end-date": target_date}
         
-        # Comportamento originale per oggi
         try:
             from zoneinfo import ZoneInfo
             tz = os.environ.get('TIMEZONE', os.environ.get('TZ', 'Europe/Rome'))
@@ -590,19 +564,17 @@ class CollectorWeb(CollectorWebInterface):
         """Costruisce singola richiesta."""
         device_type = config.get('device_type', 'GENERIC').upper()
         
-        # Device payload
         device = {"itemType": device_type}
         
         if device_type != 'WEATHER':
             real_id = config.get('device_id', device_id)
-            real_id_str = str(real_id)  # Converti sempre in stringa
+            real_id_str = str(real_id)
             device.update({
                 "id": real_id,
                 "originalSerial": real_id,
                 "identifier": real_id_str.split("-")[0] if "-" in real_id_str else real_id_str
             })
             
-            # Aggiungi inverter per STRING
             if device_type == 'STRING' and (inv := config.get('inverter')):
                 device["connectedToInverter"] = inv
         
