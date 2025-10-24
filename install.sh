@@ -486,7 +486,6 @@ SOLAREDGE_WEB_BASE_URL=https://monitoring.solaredge.com
 SOLAREDGE_COOKIE_FILE=cookies/web_cookies.json
 SOLAREDGE_SESSION_TIMEOUT_SECONDS=3600
 ENV
-            # chown removed (running as root) "$APP_DIR/.env"
         fi
         
         # Create systemd service
@@ -983,7 +982,6 @@ esac
 JOURNAL_SCRIPT
         
         chmod +x "$APP_DIR"/{test.sh,status.sh,check-buckets.sh,check-logrotate.sh,manage-journal.sh}
-        # chown removed (running as root) "$APP_DIR"/{test.sh,status.sh,check-buckets.sh,check-logrotate.sh,manage-journal.sh,main.py,run-manual.sh,# venv.sh removed}
         
         # Configure executable permissions for all scripts
         log "🔧 Configuring script permissions..."
@@ -1006,13 +1004,11 @@ JOURNAL_SCRIPT
         for file in "${EXECUTABLE_FILES[@]}"; do
             if [[ -f "$APP_DIR/$file" ]]; then
                 chmod +x "$APP_DIR/$file"
-                # chown removed (running as root) "$APP_DIR/$file"
             fi
         done
         
         # Configure directory and file permissions for config files
         log "🔧 Configuring config directory permissions..."
-        chown -R solaredge:solaredge "$APP_DIR/config"
         chmod -R 755 "$APP_DIR/config"
         chmod -R 664 "$APP_DIR/config"/*.yaml "$APP_DIR/config"/*/*.yaml 2>/dev/null || true
         
@@ -1029,7 +1025,6 @@ JOURNAL_SCRIPT
         
         for dir in "${CONFIG_DIRS[@]}"; do
             if [[ -d "$APP_DIR/$dir" ]] || mkdir -p "$APP_DIR/$dir"; then
-                chown -R solaredge:solaredge "$APP_DIR/$dir"
                 chmod -R 755 "$APP_DIR/$dir"
             fi
         done
@@ -1045,7 +1040,6 @@ JOURNAL_SCRIPT
         
         for file in "${CONFIG_FILES[@]}"; do
             if [[ -f "$APP_DIR/$file" ]]; then
-                # chown removed (running as root) "$APP_DIR/$file"
                 chmod 664 "$APP_DIR/$file"
             fi
         done
@@ -1061,7 +1055,6 @@ JOURNAL_SCRIPT
             if [[ -d "$APP_DIR/.githooks" ]]; then
                 cp "$APP_DIR/.githooks"/* "$APP_DIR/.git/hooks/" 2>/dev/null || true
                 chmod +x "$APP_DIR/.git/hooks"/* 2>/dev/null || true
-                chown -R solaredge:solaredge "$APP_DIR/.git/hooks" 2>/dev/null || true
             fi
             
             # Configure Git to preserve file permissions
@@ -1132,5 +1125,6 @@ else
     error "Failed to download project from GitHub"
     exit 1
 fi
+
 
 
