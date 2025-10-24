@@ -48,6 +48,8 @@ logs/*
 
 # Cache data (contains API responses with potentially sensitive data)
 cache/api_ufficiali/
+cache/web/
+cache/snapshots/
 cache/*.json
 cache/*.cache
 *.cache
