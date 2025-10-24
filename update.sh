@@ -2,8 +2,6 @@
 # SolarEdge Data Collector - Smart Update System
 # Sistema di aggiornamento robusto che preserva configurazioni e permessi
 
-set -e
-
 echo "🚀 SolarEdge Data Collector - Smart Update"
 echo "=========================================="
 
@@ -13,6 +11,16 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m'
+
+# Verifica se l'utente ha permessi per controllare il servizio
+if [[ "$(whoami)" == "solaredge" ]]; then
+    if ! systemctl stop solaredge-collector 2>/dev/null; then
+        echo -e "${YELLOW}⚠️  Nota: Per controllare il servizio senza sudo, installa la regola polkit:${NC}"
+        echo -e "${BLUE}   sudo cp systemd/solaredge-user-service.conf /etc/polkit-1/rules.d/10-solaredge-service.rules${NC}"
+        echo -e "${BLUE}   sudo systemctl restart polkit${NC}"
+        echo ""
+    fi
+fi
 
 log_info() {
     echo -e "${BLUE}ℹ️  $1${NC}"
@@ -42,10 +50,13 @@ if ! command -v python3 &> /dev/null; then
     exit 1
 fi
 
-# Rendi eseguibile lo script smart update se necessario
+# Rendi eseguibile lo script smart update se necessario (ignora errori di permessi)
 if [ -f "scripts/smart_update.py" ]; then
-    chmod +x scripts/smart_update.py
+    chmod +x scripts/smart_update.py 2>/dev/null || true
 fi
+
+# Abilita exit on error dopo i check iniziali
+set -e
 
 # Controlla se ci sono aggiornamenti disponibili
 log_info "Controllo aggiornamenti disponibili..."
