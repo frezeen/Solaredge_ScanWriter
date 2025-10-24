@@ -21,7 +21,7 @@ api_ufficiali:
       data_type: metadata
       description: Versione corrente dell'API SolarEdge in uso. Utile per verificare
         la versione attiva e pianificare aggiornamenti delle integrazioni.
-      enabled: true
+      enabled: false
       endpoint: /version/current
       extraction:
         raw_json_field: raw_json
@@ -35,7 +35,7 @@ api_ufficiali:
       description: Informazioni sulle versioni dell'API SolarEdge disponibili. Include
         versione corrente e versioni supportate per garantire compatibilit├á e accesso
         alle nuove funzionalit├á.
-      enabled: true
+      enabled: false
       endpoint: /version/supported
       extraction:
         raw_json_field: raw_json
@@ -49,7 +49,7 @@ api_ufficiali:
       description: Registro storico delle sostituzioni e cambi di attrezzatura. Traccia
         tutte le modifiche hardware ordinate per data, utile per manutenzione e analisi
         dell'evoluzione del sistema.
-      enabled: true
+      enabled: false
       endpoint: /equipment/{siteId}/{serialNumber}/changeLog
       extraction:
         raw_json_field: raw_json
@@ -95,7 +95,7 @@ api_ufficiali:
       description: Periodo temporale di produzione energetica del sito. Indica le
         date di inizio e fine della raccolta dati, utile per determinare la disponibilit├á
         storica dei dati e pianificare analisi temporali.
-      enabled: true
+      enabled: false
       endpoint: /site/{siteId}/dataPeriod
       extraction:
         raw_json_field: raw_json
@@ -167,7 +167,7 @@ api_ufficiali:
         analisi di produzione giornaliera con dettaglio sufficiente per identificare
         variazioni orarie dovute a condizioni meteorologiche o configurazione impianto.
         Limitato a un mese di dati.
-      enabled: true
+      enabled: false
       endpoint: /site/{siteId}/energy
       extraction:
         time_field: date
@@ -189,7 +189,7 @@ api_ufficiali:
         Dashboard. Ideale per analisi dettagliate di produzione energetica, monitoraggio
         prestazioni impianto e identificazione picchi di produzione. Limitato a un
         mese di dati.
-      enabled: true
+      enabled: false
       endpoint: /site/{siteId}/energy
       extraction:
         time_field: date
@@ -224,7 +224,7 @@ api_ufficiali:
         dettagli su inverter, batterie, contatori, gateway, sensori con numeri seriali,
         modelli, versioni firmware e connessioni. Database completo dell'hardware
         del sito.
-      enabled: true
+      enabled: false
       endpoint: /site/{siteId}/inventory
       extraction:
         raw_json_field: raw_json
@@ -240,7 +240,7 @@ api_ufficiali:
         seriale, modello, dispositivo connesso, tipo contatore) e valori di energia
         lifetime. Perfetto per analisi metadata e integrazione con Grafana per parsing
         JSON avanzato.
-      enabled: true
+      enabled: false
       endpoint: /site/{siteId}/meters
       extraction:
         raw_json_field: raw_json
@@ -288,7 +288,7 @@ api_ufficiali:
       description: Site current power flow (grid, load, PV, storage). Uses the official
         currentPowerFlow endpoint which may return complex JSON describing connections
         and elements.
-      enabled: true
+      enabled: false
       endpoint: /site/{siteId}/currentPowerFlow
       extraction:
         raw_json_field: siteCurrentPowerFlow
@@ -302,7 +302,7 @@ api_ufficiali:
       description: Lista completa dei sensori installati nel sito. Include sensori
         di irradianza, temperatura, vento con dettagli su posizione, tipo e dispositivi
         collegati. Inventario completo dell'infrastruttura di monitoraggio ambientale.
-      enabled: true
+      enabled: false
       endpoint: /equipment/{siteId}/sensors
       extraction:
         raw_json_field: raw_json
@@ -319,7 +319,7 @@ api_ufficiali:
         thermal management, enabled, fault), energia caricata/scaricata lifetime e
         telemetrie di potenza (positiva per carica, negativa per scarica). Applicabile
         solo a sistemi con batterie.
-      enabled: true
+      enabled: false
       endpoint: /site/{siteId}/storageData
       extraction:
         time_field: date
@@ -358,7 +358,7 @@ api_ufficiali:
       description: Lista completa di tutti i siti associati all'account API. Include
         informazioni su nome, posizione, stato, configurazione e dettagli tecnici
         di ogni sito. Essenziale per gestione multi-sito e monitoraggio di pi├╣ impianti.
-      enabled: true
+      enabled: false
       endpoint: /sites/list
       extraction:
         raw_json_field: raw_json
