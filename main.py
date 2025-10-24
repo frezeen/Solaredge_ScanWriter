@@ -215,11 +215,20 @@ def run_gui_mode(log, cache, config) -> int:
     return 0
 
 
-def run_web_flow(log, cache) -> int:
-    """Pipeline web scraping semplificata"""
+def run_web_flow(log, cache, start_date=None, end_date=None) -> int:
+    """Pipeline web scraping con supporto date storiche
+    
+    Args:
+        start_date: Data inizio per history mode (formato YYYY-MM-DD)
+        end_date: Data fine per history mode (formato YYYY-MM-DD)
+        
+    Se start_date/end_date sono fornite, raccoglie dati giorno per giorno.
+    Altrimenti raccoglie solo i dati di oggi.
+    """
     from collector.collector_web import CollectorWeb
     from parser.web_parser import parse_web
     from storage.writer_influx import InfluxWriter
+    from datetime import datetime, timedelta
     import yaml
     from pathlib import Path
     
@@ -239,18 +248,49 @@ def run_web_flow(log, cache) -> int:
         log.info("Nessun dispositivo abilitato - chiusura")
         return 0
     
-    # Raccolta dati (scheduler gestito internamente dal collector)
-    measurements_raw = collector.fetch_measurements(device_reqs)
+    # Determina le date da processare
+    if start_date and end_date:
+        # History mode: processa giorno per giorno
+        current = datetime.strptime(start_date, '%Y-%m-%d')
+        end = datetime.strptime(end_date, '%Y-%m-%d')
+        dates_to_process = []
+        
+        while current <= end:
+            dates_to_process.append(current.strftime('%Y-%m-%d'))
+            current += timedelta(days=1)
+        
+        log.info(f"🔄 Web scraping per {len(dates_to_process)} giorni: {start_date} → {end_date}")
+    else:
+        # Modalità normale: solo oggi
+        today = datetime.now().strftime('%Y-%m-%d')
+        dates_to_process = [today]
+        log.info(f"🔄 Web scraping per oggi: {today}")
     
-    # Parsing + Filtro + Conversione -> InfluxDB Points pronti (con config)
-    influx_points = parse_web(measurements_raw, config)
-    log.info(f"Parser web generato {len(influx_points)} InfluxDB Points pronti")
+    # Raccolta dati per ogni giorno
+    all_influx_points = []
     
-    # Storage diretto - nessuna elaborazione nel writer
-    if influx_points:
+    try:
+        for date in dates_to_process:
+            log.info(f"📅 Raccogliendo dati web per {date}")
+            
+            # Raccolta dati per questa data specifica
+            measurements_raw = collector.fetch_measurements_for_date(device_reqs, date)
+            
+            # Parsing + Filtro + Conversione -> InfluxDB Points pronti (con config)
+            influx_points = parse_web(measurements_raw, config)
+            log.info(f"Parser web generato {len(influx_points)} InfluxDB Points per {date}")
+            
+            all_influx_points.extend(influx_points)
+            
+    except KeyboardInterrupt:
+        log.info("🛑 Interruzione durante raccolta web")
+        raise  # Propaga l'interruzione
+    
+    # Storage di tutti i punti raccolti
+    if all_influx_points:
         with InfluxWriter() as writer:
-            writer.write_points(influx_points, measurement_type="web")
-            log.info("✅ Pipeline web completata")
+            writer.write_points(all_influx_points, measurement_type="web")
+            log.info(f"✅ Pipeline web completata - {len(all_influx_points)} punti scritti")
     else:
         log.warning("Nessun punto da scrivere")
     
@@ -521,23 +561,46 @@ def run_history_mode(log, cache, config) -> int:
     success_count = 0
     failed_count = 0
     interrupted = False
+    web_executed = False
     
     try:
         for idx, month_data in enumerate(months, 1):
             log.info(f"🔄 [{idx}/{len(months)}] Processando {month_data['label']}: {month_data['start']} → {month_data['end']}")
             
             try:
-                # Usa il flow API normale con date personalizzate
-                result = run_api_flow(log, cache, config, 
-                                     start_date=month_data['start'], 
-                                     end_date=month_data['end'])
+                # 1. API Flow con date personalizzate (sempre)
+                log.info(f"🔄 API flow per {month_data['label']}")
+                api_result = run_api_flow(log, cache, config, 
+                                         start_date=month_data['start'], 
+                                         end_date=month_data['end'])
                 
-                if result == 0:
+                # 2. Web Flow solo per gli ultimi 7 giorni (alla fine)
+                web_result = 0
+                if idx == len(months) and not web_executed:
+                    # Calcola gli ultimi 7 giorni dalla data di fine
+                    from datetime import datetime, timedelta
+                    end_dt = datetime.strptime(end_date, '%Y-%m-%d')
+                    start_dt = end_dt - timedelta(days=6)  # 7 giorni totali (incluso end_date)
+                    
+                    web_start = start_dt.strftime('%Y-%m-%d')
+                    web_end = end_dt.strftime('%Y-%m-%d')
+                    
+                    log.info(f"🔄 Web flow per ultimi 7 giorni: {web_start} → {web_end}")
+                    web_result = run_web_flow(log, cache, start_date=web_start, end_date=web_end)
+                    web_executed = True
+                
+                # Considera successo se API è ok (web è opzionale)
+                if api_result == 0:
                     success_count += 1
-                    log.info(f"✅ {month_data['label']} completato")
+                    if web_executed and web_result == 0:
+                        log.info(f"✅ {month_data['label']} completato (API + Web)")
+                    elif web_executed:
+                        log.info(f"✅ {month_data['label']} completato (API ok, Web warning)")
+                    else:
+                        log.info(f"✅ {month_data['label']} completato (API)")
                 else:
                     failed_count += 1
-                    log.error(f"❌ {month_data['label']} fallito")
+                    log.error(f"❌ {month_data['label']} fallito (API: {api_result})")
                     
             except KeyboardInterrupt:
                 # Propaga l'interruzione al livello superiore
@@ -555,14 +618,18 @@ def run_history_mode(log, cache, config) -> int:
     log.info("=" * 60)
     if interrupted:
         log.info(f"📈 History Mode Interrotto")
-        log.info(f"✅ Successi: {success_count}/{len(months)}")
-        log.info(f"❌ Fallimenti: {failed_count}/{len(months)}")
+        log.info(f"✅ Successi API: {success_count}/{len(months)}")
+        log.info(f"❌ Fallimenti API: {failed_count}/{len(months)}")
         log.info(f"⏸️ Rimanenti: {len(months) - success_count - failed_count}/{len(months)}")
+        if web_executed:
+            log.info(f"🌐 Web flow eseguito per dati real-time")
         log.info("💡 Riavvia con --history per continuare dal punto di interruzione")
     else:
         log.info(f"📈 History Mode Completato")
-        log.info(f"✅ Successi: {success_count}/{len(months)}")
-        log.info(f"❌ Fallimenti: {failed_count}/{len(months)}")
+        log.info(f"✅ Successi API: {success_count}/{len(months)}")
+        log.info(f"❌ Fallimenti API: {failed_count}/{len(months)}")
+        if web_executed:
+            log.info(f"🌐 Web flow eseguito per dati real-time")
     log.info("=" * 60)
     
     # Ritorna 0 se interrotto pulitamente o completato con successo
