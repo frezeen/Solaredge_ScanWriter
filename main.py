@@ -507,8 +507,9 @@ def run_history_mode(log, cache, config) -> int:
     import calendar
     
     log.info("📜 Avvio modalità History - Scaricamento storico completo")
+    log.info("✅ ABILITANDO CACHE per history mode - skip mesi già scaricati")
     
-    # Inizializza collector per ottenere date range
+    # Inizializza collector CON cache per evitare chiamate API duplicate
     collector = CollectorAPI(cache=cache, scheduler=None)
     
     # Ottieni range temporale dall'API dataPeriod
@@ -565,12 +566,13 @@ def run_history_mode(log, cache, config) -> int:
     web_executed = False
     
     try:
+        # Processa tutti i mesi
         for idx, month_data in enumerate(months, 1):
             log.info(f"🔄 [{idx}/{len(months)}] Processando {month_data['label']}: {month_data['start']} → {month_data['end']}")
             
             try:
-                # 1. API Flow con date personalizzate (sempre)
-                log.info(f"🔄 API flow per {month_data['label']}")
+                # 1. API Flow con date personalizzate (sempre) - CON CACHE
+                log.info(f"🔄 API flow per {month_data['label']} (CON CACHE)")
                 api_result = run_api_flow(log, cache, config, 
                                          start_date=month_data['start'], 
                                          end_date=month_data['end'])
