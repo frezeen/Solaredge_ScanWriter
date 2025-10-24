@@ -80,7 +80,6 @@ class SolarEdgeAPIParser:
 
         return {
             'source': 'api',
-            'device_id': site_id,
             'device_type': endpoint_name,
             'metric': extraction.get('metric', 'raw_data'),
             'timestamp': int(datetime.now(pytz.utc).timestamp() * 1_000_000_000),
@@ -181,6 +180,8 @@ class SolarEdgeAPIParser:
             point.tag("endpoint", device_type)
             if unit:
                 point.tag("unit", unit)
+            
+
             
             # Fields con categoria
             if 'json_data' in raw_point:

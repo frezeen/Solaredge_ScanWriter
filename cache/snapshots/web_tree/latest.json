@@ -1,0 +1,455 @@
+{
+  "siteStructure": {
+    "itemId": {
+      "itemType": "SITE",
+      "id": "2489781"
+    },
+    "name": "Sorrentino Carlo",
+    "uuid": "a0000000-0000-0000-0000-000002489781",
+    "parameters": [
+      "PRODUCTION_POWER",
+      "PRODUCTION_ENERGY",
+      "KWH_KWP_RATIO",
+      "IMPORT_ENERGY",
+      "IMPORT_POWER",
+      "EXPORT_ENERGY",
+      "EXPORT_POWER"
+    ],
+    "children": [
+      {
+        "itemId": {
+          "itemType": "INVERTER",
+          "id": "7403D7C5-13",
+          "identifier": "7403D7C5"
+        },
+        "name": "Inverter 1",
+        "uuid": "7795884a-8141-4cdb-8b6d-ba60c10fa1a3",
+        "order": 1,
+        "parameters": [
+          "AC_PRODUCTION_ENERGY",
+          "AC_PRODUCTION_POWER",
+          "AC_CONSUMPTION_ENERGY",
+          "AC_CONSUMPTION_POWER",
+          "KWH_KWP_RATIO",
+          "DC_VOLTAGE",
+          "AC_VOLTAGE",
+          "AC_CURRENT",
+          "AC_FREQUENCY"
+        ],
+        "children": [
+          {
+            "itemId": {
+              "itemType": "STRING",
+              "id": "0",
+              "identifier": "7403D7C5_30",
+              "connectedToInverter": "7403D7C5-13"
+            },
+            "name": "String 1.0",
+            "uuid": "97cc3815-5dea-4579-adfe-57167a135e96",
+            "order": 0,
+            "parameters": [
+              "PRODUCTION_ENERGY",
+              "PRODUCTION_POWER"
+            ],
+            "children": [
+              {
+                "itemId": {
+                  "itemType": "OPTIMIZER",
+                  "id": "218315ED-A6",
+                  "originalSerial": "218315ED-A6",
+                  "identifier": "218315ED",
+                  "connectedToInverter": "7403D7C5-13"
+                },
+                "name": "Optimizer 1.0.1",
+                "uuid": "abd62511-d449-4cf7-8a91-fc1f89a89cfe",
+                "order": 1,
+                "parameters": [
+                  "PRODUCTION_ENERGY",
+                  "PRODUCTION_POWER",
+                  "OPTIMIZER_OUTPUT_VOLTAGE",
+                  "MODULE_OUTPUT_VOLTAGE",
+                  "MODULE_CURRENT"
+                ],
+                "children": null,
+                "isContainChildren": false,
+                "status": "ACTIVE"
+              },
+              {
+                "itemId": {
+                  "itemType": "OPTIMIZER",
+                  "id": "218317E0-9B",
+                  "originalSerial": "218317E0-9B",
+                  "identifier": "218317E0",
+                  "connectedToInverter": "7403D7C5-13"
+                },
+                "name": "Optimizer 1.0.2",
+                "uuid": "d8ce09b2-d97b-4819-873d-d1fb57afc3d9",
+                "order": 2,
+                "parameters": [
+                  "PRODUCTION_ENERGY",
+                  "PRODUCTION_POWER",
+                  "OPTIMIZER_OUTPUT_VOLTAGE",
+                  "MODULE_OUTPUT_VOLTAGE",
+                  "MODULE_CURRENT"
+                ],
+                "children": null,
+                "isContainChildren": false,
+                "status": "ACTIVE"
+              },
+              {
+                "itemId": {
+                  "itemType": "OPTIMIZER",
+                  "id": "218317DC-97",
+                  "originalSerial": "218317DC-97",
+                  "identifier": "218317DC",
+                  "connectedToInverter": "7403D7C5-13"
+                },
+                "name": "Optimizer 1.0.3",
+                "uuid": "847b675b-29c3-4b77-a2ad-9d83b86ab46d",
+                "order": 3,
+                "parameters": [
+                  "PRODUCTION_ENERGY",
+                  "PRODUCTION_POWER",
+                  "OPTIMIZER_OUTPUT_VOLTAGE",
+                  "MODULE_OUTPUT_VOLTAGE",
+                  "MODULE_CURRENT"
+                ],
+                "children": null,
+                "isContainChildren": false,
+                "status": "ACTIVE"
+              },
+              {
+                "itemId": {
+                  "itemType": "OPTIMIZER",
+                  "id": "218317DB-96",
+                  "originalSerial": "218317DB-96",
+                  "identifier": "218317DB",
+                  "connectedToInverter": "7403D7C5-13"
+                },
+                "name": "Optimizer 1.0.4",
+                "uuid": "9bbd4778-edeb-4f14-bd01-1ddc0eb747c7",
+                "order": 4,
+                "parameters": [
+                  "PRODUCTION_ENERGY",
+                  "PRODUCTION_POWER",
+                  "OPTIMIZER_OUTPUT_VOLTAGE",
+                  "MODULE_OUTPUT_VOLTAGE",
+                  "MODULE_CURRENT"
+                ],
+                "children": null,
+                "isContainChildren": false,
+                "status": "ACTIVE"
+              },
+              {
+                "itemId": {
+                  "itemType": "OPTIMIZER",
+                  "id": "21831863-1F",
+                  "originalSerial": "21831863-1F",
+                  "identifier": "21831863",
+                  "connectedToInverter": "7403D7C5-13"
+                },
+                "name": "Optimizer 1.0.5",
+                "uuid": "47229a95-a2b0-4cba-acaf-a6ab2cc91cdf",
+                "order": 5,
+                "parameters": [
+                  "PRODUCTION_ENERGY",
+                  "PRODUCTION_POWER",
+                  "OPTIMIZER_OUTPUT_VOLTAGE",
+                  "MODULE_OUTPUT_VOLTAGE",
+                  "MODULE_CURRENT"
+                ],
+                "children": null,
+                "isContainChildren": false,
+                "status": "ACTIVE"
+              },
+              {
+                "itemId": {
+                  "itemType": "OPTIMIZER",
+                  "id": "21831860-1C",
+                  "originalSerial": "21831860-1C",
+                  "identifier": "21831860",
+                  "connectedToInverter": "7403D7C5-13"
+                },
+                "name": "Optimizer 1.0.6",
+                "uuid": "f4480bcb-6abc-415e-a01d-3f16e65d440b",
+                "order": 6,
+                "parameters": [
+                  "PRODUCTION_ENERGY",
+                  "PRODUCTION_POWER",
+                  "OPTIMIZER_OUTPUT_VOLTAGE",
+                  "MODULE_OUTPUT_VOLTAGE",
+                  "MODULE_CURRENT"
+                ],
+                "children": null,
+                "isContainChildren": false,
+                "status": "ACTIVE"
+              },
+              {
+                "itemId": {
+                  "itemType": "OPTIMIZER",
+                  "id": "21831861-1D",
+                  "originalSerial": "21831861-1D",
+                  "identifier": "21831861",
+                  "connectedToInverter": "7403D7C5-13"
+                },
+                "name": "Optimizer 1.0.7",
+                "uuid": "f89b056a-34e4-4fa9-a288-a5da75fc897c",
+                "order": 7,
+                "parameters": [
+                  "PRODUCTION_ENERGY",
+                  "PRODUCTION_POWER",
+                  "OPTIMIZER_OUTPUT_VOLTAGE",
+                  "MODULE_OUTPUT_VOLTAGE",
+                  "MODULE_CURRENT"
+                ],
+                "children": null,
+                "isContainChildren": false,
+                "status": "ACTIVE"
+              },
+              {
+                "itemId": {
+                  "itemType": "OPTIMIZER",
+                  "id": "21831750-0B",
+                  "originalSerial": "21831750-0B",
+                  "identifier": "21831750",
+                  "connectedToInverter": "7403D7C5-13"
+                },
+                "name": "Optimizer 1.0.8",
+                "uuid": "7760cf8f-4a91-4595-8cd9-d25e774b34a2",
+                "order": 8,
+                "parameters": [
+                  "PRODUCTION_ENERGY",
+                  "PRODUCTION_POWER",
+                  "OPTIMIZER_OUTPUT_VOLTAGE",
+                  "MODULE_OUTPUT_VOLTAGE",
+                  "MODULE_CURRENT"
+                ],
+                "children": null,
+                "isContainChildren": false,
+                "status": "ACTIVE"
+              },
+              {
+                "itemId": {
+                  "itemType": "OPTIMIZER",
+                  "id": "2183185A-16",
+                  "originalSerial": "2183185A-16",
+                  "identifier": "2183185A",
+                  "connectedToInverter": "7403D7C5-13"
+                },
+                "name": "Optimizer 1.0.9",
+                "uuid": "00039094-6220-468b-8e4b-165d0d4e78b4",
+                "order": 9,
+                "parameters": [
+                  "PRODUCTION_ENERGY",
+                  "PRODUCTION_POWER",
+                  "OPTIMIZER_OUTPUT_VOLTAGE",
+                  "MODULE_OUTPUT_VOLTAGE",
+                  "MODULE_CURRENT"
+                ],
+                "children": null,
+                "isContainChildren": false,
+                "status": "ACTIVE"
+              },
+              {
+                "itemId": {
+                  "itemType": "OPTIMIZER",
+                  "id": "2183174E-09",
+                  "originalSerial": "2183174E-09",
+                  "identifier": "2183174E",
+                  "connectedToInverter": "7403D7C5-13"
+                },
+                "name": "Optimizer 1.0.10",
+                "uuid": "ef7e551f-2cc3-4710-8527-3735411ce087",
+                "order": 10,
+                "parameters": [
+                  "PRODUCTION_ENERGY",
+                  "PRODUCTION_POWER",
+                  "OPTIMIZER_OUTPUT_VOLTAGE",
+                  "MODULE_OUTPUT_VOLTAGE",
+                  "MODULE_CURRENT"
+                ],
+                "children": null,
+                "isContainChildren": false,
+                "status": "ACTIVE"
+              },
+              {
+                "itemId": {
+                  "itemType": "OPTIMIZER",
+                  "id": "21830A42-F0",
+                  "originalSerial": "21830A42-F0",
+                  "identifier": "21830A42",
+                  "connectedToInverter": "7403D7C5-13"
+                },
+                "name": "Optimizer 1.0.11",
+                "uuid": "df503c6e-793a-4c0d-8b14-bd682524ec2c",
+                "order": 11,
+                "parameters": [
+                  "PRODUCTION_ENERGY",
+                  "PRODUCTION_POWER",
+                  "OPTIMIZER_OUTPUT_VOLTAGE",
+                  "MODULE_OUTPUT_VOLTAGE",
+                  "MODULE_CURRENT"
+                ],
+                "children": null,
+                "isContainChildren": false,
+                "status": "ACTIVE"
+              },
+              {
+                "itemId": {
+                  "itemType": "OPTIMIZER",
+                  "id": "2183185D-19",
+                  "originalSerial": "2183185D-19",
+                  "identifier": "2183185D",
+                  "connectedToInverter": "7403D7C5-13"
+                },
+                "name": "Optimizer 1.0.12",
+                "uuid": "c13f68b3-0bb8-420f-baa3-d630de14e912",
+                "order": 12,
+                "parameters": [
+                  "PRODUCTION_ENERGY",
+                  "PRODUCTION_POWER",
+                  "OPTIMIZER_OUTPUT_VOLTAGE",
+                  "MODULE_OUTPUT_VOLTAGE",
+                  "MODULE_CURRENT"
+                ],
+                "children": null,
+                "isContainChildren": false,
+                "status": "ACTIVE"
+              },
+              {
+                "itemId": {
+                  "itemType": "OPTIMIZER",
+                  "id": "21831859-15",
+                  "originalSerial": "21831859-15",
+                  "identifier": "21831859",
+                  "connectedToInverter": "7403D7C5-13"
+                },
+                "name": "Optimizer 1.0.13",
+                "uuid": "8da96dd4-cb2e-462d-a8f8-091cd7f59abf",
+                "order": 13,
+                "parameters": [
+                  "PRODUCTION_ENERGY",
+                  "PRODUCTION_POWER",
+                  "OPTIMIZER_OUTPUT_VOLTAGE",
+                  "MODULE_OUTPUT_VOLTAGE",
+                  "MODULE_CURRENT"
+                ],
+                "children": null,
+                "isContainChildren": false,
+                "status": "ACTIVE"
+              },
+              {
+                "itemId": {
+                  "itemType": "OPTIMIZER",
+                  "id": "2183174C-07",
+                  "originalSerial": "2183174C-07",
+                  "identifier": "2183174C",
+                  "connectedToInverter": "7403D7C5-13"
+                },
+                "name": "Optimizer 1.0.14",
+                "uuid": "a72472d8-e68e-443c-9260-0355e13ddcd8",
+                "order": 14,
+                "parameters": [
+                  "PRODUCTION_ENERGY",
+                  "PRODUCTION_POWER",
+                  "OPTIMIZER_OUTPUT_VOLTAGE",
+                  "MODULE_OUTPUT_VOLTAGE",
+                  "MODULE_CURRENT"
+                ],
+                "children": null,
+                "isContainChildren": false,
+                "status": "ACTIVE"
+              },
+              {
+                "itemId": {
+                  "itemType": "OPTIMIZER",
+                  "id": "21831855-11",
+                  "originalSerial": "21831855-11",
+                  "identifier": "21831855",
+                  "connectedToInverter": "7403D7C5-13"
+                },
+                "name": "Optimizer 1.0.15",
+                "uuid": "a9628637-5ffd-4388-b1f8-6ebee64e3bfa",
+                "order": 15,
+                "parameters": [
+                  "PRODUCTION_ENERGY",
+                  "PRODUCTION_POWER",
+                  "OPTIMIZER_OUTPUT_VOLTAGE",
+                  "MODULE_OUTPUT_VOLTAGE",
+                  "MODULE_CURRENT"
+                ],
+                "children": null,
+                "isContainChildren": false,
+                "status": "ACTIVE"
+              },
+              {
+                "itemId": {
+                  "itemType": "OPTIMIZER",
+                  "id": "2183101D-D1",
+                  "originalSerial": "2183101D-D1",
+                  "identifier": "2183101D",
+                  "connectedToInverter": "7403D7C5-13"
+                },
+                "name": "Optimizer 1.0.16",
+                "uuid": "e48da91c-5046-44f7-9654-da7e2d658604",
+                "order": 16,
+                "parameters": [
+                  "PRODUCTION_ENERGY",
+                  "PRODUCTION_POWER",
+                  "OPTIMIZER_OUTPUT_VOLTAGE",
+                  "MODULE_OUTPUT_VOLTAGE",
+                  "MODULE_CURRENT"
+                ],
+                "children": null,
+                "isContainChildren": false,
+                "status": "ACTIVE"
+              }
+            ],
+            "isContainChildren": true,
+            "status": "ACTIVE"
+          }
+        ],
+        "isContainChildren": true,
+        "status": "ACTIVE"
+      }
+    ]
+  },
+  "meters": [
+    {
+      "itemId": {
+        "itemType": "METER",
+        "id": "606483640",
+        "connectedToInverter": "7403D7C5-13"
+      },
+      "name": "Import/Export Meter",
+      "reporterId": null,
+      "uuid": "0e433816-541a-4aff-948f-3c95d04f788e",
+      "status": "ACTIVE",
+      "model": "SE-MTR-3Y-400V-A",
+      "manufacturer": "SolarEdge",
+      "parameters": [
+        "IMPORT_ENERGY",
+        "IMPORT_POWER",
+        "EXPORT_ENERGY",
+        "EXPORT_POWER"
+      ]
+    }
+  ],
+  "storage": null,
+  "evChargers": [],
+  "smartHome": [],
+  "gateways": [],
+  "environmental": {
+    "meteorologicalData": {
+      "itemId": {
+        "itemType": "WEATHER"
+      },
+      "parameters": [
+        "HUMIDITY",
+        "TEMPERATURE",
+        "WIND_SPEED"
+      ]
+    }
+  },
+  "installationDate": "2021-09-29T00:00:00+02:00"
+}
