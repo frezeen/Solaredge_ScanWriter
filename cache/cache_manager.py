@@ -398,3 +398,149 @@ class CacheManager:
         
         # Altrimenti verifica validità con TTL
         return self.is_cache_valid(cache_path, source)
+
+    def _check_database_data_exists(self, source: str, date: str) -> bool:
+        """Verifica se esistono dati nel database per una data specifica.
+        
+        Args:
+            source: Sorgente dati ('api_ufficiali', 'web', 'realtime')
+            date: Data in formato YYYY-MM-DD
+            
+        Returns:
+            True se esistono dati nel database per quella data
+        """
+        try:
+            from config.config_manager import get_config_manager
+            
+            config_manager = get_config_manager()
+            influx_config = config_manager.get_influxdb_config()
+            
+            # Skip verifica se in dry mode
+            if influx_config.dry_mode:
+                return True
+            
+            # Import InfluxDB client
+            try:
+                from influxdb_client import InfluxDBClient
+            except ImportError:
+                self._log.warning("InfluxDB client non disponibile per verifica database")
+                return True  # Assume che i dati ci siano se non possiamo verificare
+            
+            # Determina bucket e measurement basato sulla sorgente
+            if source == 'realtime':
+                bucket = influx_config.bucket_realtime
+                measurement = 'realtime'
+            elif source == 'web':
+                bucket = influx_config.bucket
+                measurement = 'web'
+            elif source == 'api_ufficiali':
+                bucket = influx_config.bucket
+                measurement = 'api'
+            else:
+                return True  # Sorgente sconosciuta, assume che i dati ci siano
+            
+            # Query per verificare esistenza dati
+            with InfluxDBClient(url=influx_config.url, token=influx_config.token, org=influx_config.org) as client:
+                query_api = client.query_api()
+                
+                # Query per contare i record per quella data
+                query = f'''
+                from(bucket: "{bucket}")
+                |> range(start: {date}T00:00:00Z, stop: {date}T23:59:59Z)
+                |> filter(fn: (r) => r._measurement == "{measurement}")
+                |> count()
+                |> yield(name: "count")
+                '''
+                
+                result = query_api.query(query)
+                
+                # Verifica se ci sono risultati
+                for table in result:
+                    for record in table.records:
+                        count = record.get_value()
+                        if count and count > 0:
+                            self._log.debug(f"Database check: {count} record trovati per {source} {date}")
+                            return True
+                
+                self._log.debug(f"Database check: nessun record trovato per {source} {date}")
+                return False
+                
+        except Exception as e:
+            self._log.warning(f"Errore verifica database per {source} {date}: {e}")
+            return True  # In caso di errore, assume che i dati ci siano per evitare loop infiniti
+
+    def get_or_fetch_with_db_check(self, source: str, endpoint: str, date: str, fetch_func: Callable, force_db_check: bool = False) -> Dict[str, Any]:
+        """Versione robusta di get_or_fetch che verifica anche il database.
+        
+        Args:
+            source: Sorgente dati
+            endpoint: Nome endpoint
+            date: Data in formato YYYY-MM-DD
+            fetch_func: Funzione per recuperare dati freschi
+            force_db_check: Se True, forza la verifica del database anche per cache hit
+            
+        Returns:
+            Dati dall'endpoint
+        """
+        cache_key = self.get_cache_key(source, endpoint, date)
+        
+        try:
+            # Prima controlla se esiste un file cache (valido o scaduto)
+            cache_path = self._find_latest_cache_file(source, endpoint, date)
+            if cache_path and (cache_entry := self._validate_cache_file(cache_path)):
+                
+                # Controlla se la cache è ancora valida usando nome file + data target
+                if self._validate_cache_age_from_filename(cache_path, source, date):
+                    
+                    # Per realtime, sempre refresh
+                    if source == 'realtime':
+                        self._log.info(f"🔄 REALTIME REFRESH: {cache_key} ({date})")
+                        fresh_data = fetch_func()
+                        self.save_to_cache(source, endpoint, date, fresh_data)
+                        return fresh_data
+                    
+                    # Per dati storici o se force_db_check è True, verifica database
+                    target_dt = datetime.strptime(date, '%Y-%m-%d').date()
+                    today = datetime.now().date()
+                    
+                    if force_db_check or target_dt < today:
+                        # Verifica se i dati sono effettivamente nel database
+                        if not self._check_database_data_exists(source, date):
+                            self._log.warning(f"🔍 CACHE HIT ma DATABASE VUOTO: {cache_key} ({date}) - Rifetch necessario")
+                            fresh_data = fetch_func()
+                            self.save_to_cache(source, endpoint, date, fresh_data)
+                            return fresh_data
+                    
+                    # Cache hit normale
+                    self._log.info(f"✅ CACHE HIT: {cache_key} ({date})")
+                    return cache_entry['data']
+                
+                # Cache scaduto (> 15 min): hash check per web/api (solo per dati di oggi)
+                elif source in ['web', 'api_ufficiali']:
+                    target_dt = datetime.strptime(date, '%Y-%m-%d').date()
+                    today = datetime.now().date()
+                    
+                    # Per dati storici, usa sempre la cache senza hash check (ma con db check se richiesto)
+                    if target_dt < today:
+                        if force_db_check and not self._check_database_data_exists(source, date):
+                            self._log.warning(f"📚 HISTORICAL CACHE ma DATABASE VUOTO: {cache_key} ({date}) - Rifetch necessario")
+                            fresh_data = fetch_func()
+                            self.save_to_cache(source, endpoint, date, fresh_data)
+                            return fresh_data
+                        
+                        self._log.info(f"📚 HISTORICAL CACHE HIT: {cache_key} ({date})")
+                        return cache_entry['data']
+                    
+                    # Per dati di oggi, fai hash check
+                    self._log.info(f"⏰ CACHE EXPIRED (>15min): {cache_key} ({date})")
+                    return self._check_hash_and_refresh(source, endpoint, date, fetch_func, cache_entry['data'])
+            
+            # Cache miss completo - nessun file trovato
+            self._log.info(f"🌐 API CALL: {cache_key} ({date})")
+            fresh_data = fetch_func()
+            self.save_to_cache(source, endpoint, date, fresh_data)
+            return fresh_data
+            
+        except Exception as e:
+            self._log.error(f"Cache operation failed {cache_key}: {e}")
+            raise RuntimeError(f"Cache operation failed for {cache_key}") from e
