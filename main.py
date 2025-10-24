@@ -232,8 +232,9 @@ def run_web_flow(log, cache, start_date=None, end_date=None) -> int:
     import yaml
     from pathlib import Path
     
-    # Carica configurazione per passarla al parser e scheduler
-    config = load_config_with_env_substitution("config/main.yaml")
+    # Carica configurazione completa (inclusi i file sources) per passarla al parser e scheduler
+    config_manager = get_config_manager("config/main.yaml")
+    config = config_manager.get_raw_config()
     
     # Inizializza scheduler
     scheduler_config = SchedulerConfig.from_config(config)
