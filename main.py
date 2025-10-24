@@ -618,18 +618,20 @@ def run_history_mode(log, cache, config) -> int:
     log.info("=" * 60)
     if interrupted:
         log.info(f"📈 History Mode Interrotto")
-        log.info(f"✅ Successi API: {success_count}/{len(months)}")
-        log.info(f"❌ Fallimenti API: {failed_count}/{len(months)}")
+        log.info(f"✅ API: {success_count}/{len(months)} mesi")
+        if failed_count > 0:
+            log.info(f"❌ Fallimenti API: {failed_count}/{len(months)}")
         log.info(f"⏸️ Rimanenti: {len(months) - success_count - failed_count}/{len(months)}")
         if web_executed:
-            log.info(f"🌐 Web flow eseguito per dati real-time")
+            log.info(f"🌐 Web: 7/7 giorni")
         log.info("💡 Riavvia con --history per continuare dal punto di interruzione")
     else:
         log.info(f"📈 History Mode Completato")
-        log.info(f"✅ Successi API: {success_count}/{len(months)}")
-        log.info(f"❌ Fallimenti API: {failed_count}/{len(months)}")
+        log.info(f"✅ API: {success_count}/{len(months)} mesi")
+        if failed_count > 0:
+            log.info(f"❌ Fallimenti API: {failed_count}/{len(months)}")
         if web_executed:
-            log.info(f"🌐 Web flow eseguito per dati real-time")
+            log.info(f"🌐 Web: 7/7 giorni")
     log.info("=" * 60)
     
     # Ritorna 0 se interrotto pulitamente o completato con successo

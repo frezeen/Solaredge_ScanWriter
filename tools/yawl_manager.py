@@ -17,18 +17,46 @@ class YawlManager:
         # Path del progetto
         self.root_dir = Path(__file__).resolve().parent.parent
 
+    def _get_category_for_device(self, device_type: str) -> str:
+        """Determina la categoria appropriata basata sul device type"""
+        device_type_upper = device_type.upper()
+        
+        # Mapping diretto device type -> categoria
+        if device_type_upper == 'INVERTER':
+            return 'Inverter'
+        elif device_type_upper == 'METER':
+            return 'Meter'
+        elif device_type_upper == 'SITE':
+            return 'Site'
+        elif device_type_upper == 'STRING':
+            return 'String'
+        elif device_type_upper == 'WEATHER':
+            return 'Weather'
+        elif device_type_upper == 'OPTIMIZER':
+            return 'Optimizer group'
+        else:
+            # Fallback per device types non riconosciuti
+            return 'Site'
+
     def _create_device_endpoint(self, item, item_id, device_type, device_id, device_name):
         """Helper: crea configurazione endpoint per un dispositivo"""
         endpoint_key = f"{device_type.lower()}_{device_id}"
-        endpoint = {
-            'enabled': False,
-            'device_type': device_type,
-            'device_id': device_id,
-            'device_name': device_name,
-            'measurements': {}
-        }
-
-        # Gestione connessioni per OPTIMIZER e STRING
+        
+        # Determina la categoria basata sul device type
+        device_category = self._get_category_for_device(device_type)
+        
+        # Converti device_id in stringa se necessario (per compatibilità YAML)
+        device_id_str = str(device_id)
+        
+        # Struttura endpoint con ordine preciso dei campi come nel file attuale
+        endpoint = {}
+        endpoint['device_id'] = device_id_str
+        endpoint['device_name'] = device_name
+        endpoint['device_type'] = device_type
+        endpoint['enabled'] = True  # IMPORTANTE: deve essere True come nel file attuale
+        endpoint['category'] = device_category  # Aggiungi categoria al device
+        
+        # Gestione connessioni per OPTIMIZER e STRING (prima dei measurements)
         if device_type in ['OPTIMIZER', 'STRING']:
             connected_to = item_id.get('connectedToInverter', '')
             if connected_to:
@@ -37,17 +65,18 @@ class YawlManager:
             else:
                 self.logger.debug(f"    ⚠️  {device_type} {device_id} senza connectedToInverter")
 
-            # Per STRING, usa identifier se disponibile
-            if device_type == 'STRING':
-                identifier = item_id.get('identifier', '')
-                if identifier and identifier != '0':
-                    endpoint['identifier'] = identifier
-                    self.logger.debug(f"    🆔 {device_type} {device_id} ha identifier: {identifier}")
+        # Per STRING, usa identifier se disponibile (dopo inverter, prima measurements)
+        if device_type == 'STRING':
+            identifier = item_id.get('identifier', '')
+            if identifier and identifier != '0':
+                endpoint['identifier'] = identifier
+                self.logger.debug(f"    🆔 {device_type} {device_id} ha identifier: {identifier}")
 
-        # Converti parameters in measurements
+        # Measurements sempre per ultimo
+        endpoint['measurements'] = {}
         if 'parameters' in item and item['parameters']:
             for param in item['parameters']:
-                endpoint['measurements'][param] = {'enabled': False}
+                endpoint['measurements'][param] = {'enabled': True}  # IMPORTANTE: deve essere True
 
         return endpoint_key, endpoint
 
@@ -60,8 +89,14 @@ class YawlManager:
         if 'itemId' in item:
             item_id = item['itemId']
             device_type = item_id.get('itemType', 'GENERIC')
-            device_id = item_id.get('id', f'{device_type.lower()}_default')
-            device_name = item.get('name', f'{device_type}_{device_id}')
+            device_id_raw = item_id.get('id', f'{device_type.lower()}_default')
+            device_name = item.get('name', f'{device_type}_{device_id_raw}')
+
+            # Gestione speciale per device_id basata sul device_type
+            if device_type == 'WEATHER':
+                device_id = 'weather_default'
+            else:
+                device_id = device_id_raw
 
             # Crea endpoint solo se ha parameters
             if 'parameters' in item and item['parameters']:
@@ -118,7 +153,8 @@ class YawlManager:
             if endpoints:
                 self.logger.info("Endpoint web trovati:")
                 for key, config in endpoints.items():
-                    self.logger.info(f"  - {key}: {len(config['measurements'])} measurements")
+                    category = config.get('category', 'Info')
+                    self.logger.info(f"  - {key}: {len(config['measurements'])} measurements (categoria: {category})")
 
             return endpoints
 
@@ -130,10 +166,73 @@ class YawlManager:
 
 
 
+    def _load_existing_config(self):
+        """Carica configurazione esistente per preservare impostazioni enabled"""
+        web_endpoints_path = self.root_dir / "config" / "sources" / "web_endpoints.yaml"
+        
+        if not web_endpoints_path.exists():
+            return {}
+            
+        try:
+            with open(web_endpoints_path, 'r', encoding='utf-8') as f:
+                existing_config = yaml.safe_load(f)
+                
+            if isinstance(existing_config, dict) and 'web_scraping' in existing_config:
+                endpoints = existing_config['web_scraping'].get('endpoints', {})
+                self.logger.info(f"Caricata configurazione esistente con {len(endpoints)} endpoints")
+                return endpoints
+            else:
+                return {}
+                
+        except Exception as e:
+            self.logger.warning(f"Errore caricamento configurazione esistente: {e}")
+            return {}
+
+    def _merge_with_existing_config(self, new_endpoints, existing_endpoints):
+        """Merge nuovi endpoints con configurazione esistente preservando enabled states"""
+        merged_endpoints = {}
+        
+        for endpoint_key, new_endpoint in new_endpoints.items():
+            if endpoint_key in existing_endpoints:
+                # Preserva impostazioni enabled esistenti
+                existing_endpoint = existing_endpoints[endpoint_key]
+                
+                # Copia la struttura nuova
+                merged_endpoint = new_endpoint.copy()
+                
+                # Preserva enabled del device se esiste
+                if 'enabled' in existing_endpoint:
+                    merged_endpoint['enabled'] = existing_endpoint['enabled']
+                
+                # Preserva enabled dei measurements se esistono
+                if 'measurements' in existing_endpoint and 'measurements' in merged_endpoint:
+                    for measurement_name, new_measurement in merged_endpoint['measurements'].items():
+                        if measurement_name in existing_endpoint['measurements']:
+                            existing_measurement = existing_endpoint['measurements'][measurement_name]
+                            if 'enabled' in existing_measurement:
+                                new_measurement['enabled'] = existing_measurement['enabled']
+                
+                merged_endpoints[endpoint_key] = merged_endpoint
+                self.logger.debug(f"Merged endpoint {endpoint_key} con configurazione esistente")
+            else:
+                # Nuovo endpoint, usa configurazione di default
+                merged_endpoints[endpoint_key] = new_endpoint
+                self.logger.debug(f"Nuovo endpoint {endpoint_key}")
+        
+        return merged_endpoints
+
     def save_web_endpoints_file(self, web_endpoints):
-        """Salva solo il file web_endpoints.yaml"""
+        """Salva solo il file web_endpoints.yaml preservando configurazioni esistenti"""
         try:
             web_endpoints_path = self.root_dir / "config" / "sources" / "web_endpoints.yaml"
+            
+            # Carica configurazione esistente
+            existing_endpoints = self._load_existing_config()
+            
+            # Merge con configurazione esistente
+            if existing_endpoints:
+                web_endpoints = self._merge_with_existing_config(web_endpoints, existing_endpoints)
+                self.logger.info("Configurazioni enabled preservate dalla versione esistente")
             
             # Crea la struttura per web_endpoints.yaml
             web_config = {
