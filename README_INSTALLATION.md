@@ -5,8 +5,10 @@
 Dal tuo container Debian/Ubuntu, esegui semplicemente:
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/frezeen/Solaredge_ScanWriter/main/install.sh | bash
+curl -sSL https://raw.githubusercontent.com/frezeen/Solaredge_ScanWriter/main/install.sh | sudo bash
 ```
+
+**Nota**: Lo script richiede privilegi root per installare pacchetti di sistema e configurare servizi.
 
 Questo comando fa tutto automaticamente:
 - ✅ Scarica il progetto completo da GitHub
