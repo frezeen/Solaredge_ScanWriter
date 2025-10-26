@@ -751,9 +751,16 @@ body {
     background: var(--bg-secondary);
     font-size: 0.875rem;
     color: var(--text-muted);
+    gap: 1rem;
 }
 
 .logs-count {
+    font-weight: 500;
+}
+
+.logs-info {
+    font-size: 0.8rem;
+    color: var(--accent-blue);
     font-weight: 500;
 }
 

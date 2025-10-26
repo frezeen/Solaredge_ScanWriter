@@ -32,6 +32,15 @@ class SimpleWebGUI:
         self.max_log_buffer = 1000  # Massimo numero di log da tenere
         self.stop_requested = False  # Flag per richiesta di stop
         
+        # Tracking delle run per flow type (mantiene solo ultime 3 run per tipo)
+        self.flow_runs = {
+            'api': [],      # Lista di run, ogni run è una lista di log entries
+            'web': [],
+            'realtime': [],
+            'general': []
+        }
+        self.max_runs_per_flow = 3  # Mantieni solo ultime 3 run per flow
+        
         # Inizializza statistiche vuote
         from datetime import datetime
         self.loop_stats = {
@@ -403,29 +412,35 @@ class SimpleWebGUI:
             return web.json_response({"error": str(e)}, status=500)
 
     async def handle_loop_logs(self, request):
-        """Restituisce i log del loop mode con filtro opzionale per flow"""
+        """Restituisce i log del loop mode con filtro opzionale per flow (ultime 3 run)"""
         try:
             # Parametri query per paginazione e filtro
-            limit = int(request.query.get('limit', 100))
-            offset = int(request.query.get('offset', 0))
-            flow_filter = request.query.get('flow', None)  # Nuovo: filtro per flow type (api/web/realtime/general/all)
+            limit = int(request.query.get('limit', 500))  # Aumentato per contenere 3 run
+            flow_filter = request.query.get('flow', 'all')  # Filtro per flow type (api/web/realtime/general/all)
             
-            # Filtra i log se richiesto
-            if flow_filter and flow_filter != 'all':
-                filtered_logs = [log for log in self.log_buffer if log.get('flow_type') == flow_filter]
+            # Ottieni log filtrati dalle ultime 3 run
+            filtered_logs = self._get_filtered_logs(flow_filter, limit)
+            
+            # Conta totale per flow type
+            total_count = len(filtered_logs)
+            
+            # Conta run per flow type
+            if flow_filter == 'all':
+                run_counts = {
+                    'api': len(self.flow_runs['api']),
+                    'web': len(self.flow_runs['web']),
+                    'realtime': len(self.flow_runs['realtime']),
+                    'general': len(self.flow_runs['general'])
+                }
             else:
-                filtered_logs = self.log_buffer
-            
-            # Applica paginazione
-            logs = filtered_logs[-limit-offset:-offset] if offset > 0 else filtered_logs[-limit:]
+                run_counts = {flow_filter: len(self.flow_runs.get(flow_filter, []))}
             
             return web.json_response({
-                "logs": logs,
-                "total": len(filtered_logs),
-                "total_unfiltered": len(self.log_buffer),
-                "limit": limit,
-                "offset": offset,
-                "flow_filter": flow_filter or 'all'
+                "logs": filtered_logs,
+                "total": total_count,
+                "run_counts": run_counts,
+                "flow_filter": flow_filter,
+                "max_runs_per_flow": self.max_runs_per_flow
             })
             
         except Exception as e:
@@ -433,7 +448,7 @@ class SimpleWebGUI:
             return web.json_response({"error": str(e)}, status=500)
 
     def add_log_entry(self, level, message, timestamp=None):
-        """Aggiunge un entry al buffer dei log"""
+        """Aggiunge un entry al buffer dei log (deprecato - usa il log handler)"""
         if timestamp is None:
             timestamp = datetime.now()
         
@@ -448,6 +463,55 @@ class SimpleWebGUI:
         # Mantieni solo gli ultimi N log
         if len(self.log_buffer) > self.max_log_buffer:
             self.log_buffer = self.log_buffer[-self.max_log_buffer:]
+    
+    def _is_run_start_marker(self, message):
+        """Verifica se il messaggio è un marker di inizio run"""
+        message_lower = message.lower()
+        return any(marker in message_lower for marker in [
+            '🚀 avvio flusso api',
+            '🚀 avvio flusso web', 
+            '🚀 avvio flusso realtime'
+        ])
+    
+    def _add_log_to_flow_runs(self, log_entry):
+        """Aggiunge un log alla struttura delle run per flow type"""
+        flow_type = log_entry.get('flow_type', 'general')
+        
+        # Se è un marker di inizio run, crea una nuova run
+        if self._is_run_start_marker(log_entry['message']):
+            # Crea nuova run
+            self.flow_runs[flow_type].append([log_entry])
+            
+            # Mantieni solo le ultime N run
+            if len(self.flow_runs[flow_type]) > self.max_runs_per_flow:
+                self.flow_runs[flow_type] = self.flow_runs[flow_type][-self.max_runs_per_flow:]
+        else:
+            # Aggiungi alla run corrente (se esiste)
+            if self.flow_runs[flow_type]:
+                self.flow_runs[flow_type][-1].append(log_entry)
+            else:
+                # Se non c'è una run corrente, creane una nuova
+                self.flow_runs[flow_type].append([log_entry])
+    
+    def _get_filtered_logs(self, flow_filter='all', limit=100):
+        """Ottiene i log filtrati per flow type dalle ultime 3 run"""
+        filtered_logs = []
+        
+        if flow_filter == 'all':
+            # Combina le ultime 3 run di tutti i flow types
+            for flow_type in ['api', 'web', 'realtime', 'general']:
+                for run in self.flow_runs[flow_type]:
+                    filtered_logs.extend(run)
+        else:
+            # Solo le ultime 3 run del flow type specifico
+            for run in self.flow_runs.get(flow_filter, []):
+                filtered_logs.extend(run)
+        
+        # Ordina per timestamp (più recenti per ultimi)
+        # Nota: assumiamo che i log siano già in ordine cronologico
+        
+        # Applica limit
+        return filtered_logs[-limit:] if len(filtered_logs) > limit else filtered_logs
 
     async def handle_loop_start(self, request):
         """Avvia il loop mode con ricaricamento configurazione"""
@@ -535,6 +599,28 @@ class SimpleWebGUI:
         except Exception as e:
             self.logger.error(f"[GUI] Errore loop stop: {e}")
             return web.json_response({"error": str(e)}, status=500)
+    
+    async def handle_clear_logs(self, request):
+        """Pulisce i log e le run salvate"""
+        try:
+            self.logger.info("[GUI] Richiesta clear logs ricevuta")
+            
+            # Pulisci buffer log
+            self.log_buffer.clear()
+            
+            # Pulisci run per ogni flow type
+            for flow_type in self.flow_runs:
+                self.flow_runs[flow_type].clear()
+            
+            self.logger.info("[GUI] ✅ Log puliti con successo")
+            
+            return web.json_response({
+                "status": "success",
+                "message": "Log puliti con successo"
+            })
+        except Exception as e:
+            self.logger.error(f"[GUI] Errore clear logs: {e}")
+            return web.json_response({"error": str(e)}, status=500)
 
     async def handle_log(self, request):
         """Endpoint per logging dal frontend"""
@@ -577,6 +663,7 @@ class SimpleWebGUI:
         self.app.router.add_get('/api/loop/logs', self.handle_loop_logs)
         self.app.router.add_post('/api/loop/start', self.handle_loop_start)
         self.app.router.add_post('/api/loop/stop', self.handle_loop_stop)
+        self.app.router.add_post('/api/loop/logs/clear', self.handle_clear_logs)
         
         # Endpoint configuration routes
         self.app.router.add_post('/api/endpoints/toggle', self.handle_toggle_endpoint)
@@ -1021,29 +1108,38 @@ class SimpleWebGUI:
                         'level': record.levelname,
                         'logger': record.name,
                         'message': message,
-                        'flow_type': flow_type  # Nuovo campo per filtrare i log
+                        'flow_type': flow_type  # Campo per filtrare i log
                     }
                     
-                    # Aggiungi al buffer della GUI
+                    # Aggiungi al buffer della GUI (deprecato ma mantenuto per compatibilità)
                     self.gui.log_buffer.append(log_entry)
-                    
-                    # Mantieni solo gli ultimi N log
                     if len(self.gui.log_buffer) > self.gui.max_log_buffer:
                         self.gui.log_buffer = self.gui.log_buffer[-self.gui.max_log_buffer:]
+                    
+                    # Aggiungi alla struttura delle run (nuovo sistema)
+                    self.gui._add_log_to_flow_runs(log_entry)
                         
                 except Exception:
                     pass  # Ignora errori nel logging per evitare loop infiniti
             
             def _detect_flow_type(self, logger_name, message):
-                """Rileva il tipo di flow dal logger o dal messaggio"""
+                """Rileva il tipo di flow dal logger o dal messaggio usando i marker delle pipeline"""
                 message_lower = message.lower()
                 
-                # Controlla keywords nel messaggio
-                if any(keyword in message_lower for keyword in ['api flow', 'collector_api', 'api_parser', 'flusso api', 'avvio flusso api']):
+                # Controlla marker di inizio/fine pipeline (più affidabili)
+                if 'avvio flusso api' in message_lower or 'pipeline api completata' in message_lower:
                     return 'api'
-                elif any(keyword in message_lower for keyword in ['web flow', 'collector_web', 'web_parser', 'flusso web', 'avvio flusso web', 'web scraping']):
+                elif 'avvio flusso web' in message_lower or 'pipeline web completata' in message_lower:
                     return 'web'
-                elif any(keyword in message_lower for keyword in ['realtime', 'modbus', 'collector_realtime', 'parser_realtime', 'flusso realtime', 'avvio flusso realtime']):
+                elif 'avvio flusso realtime' in message_lower or 'pipeline realtime completata' in message_lower:
+                    return 'realtime'
+                
+                # Controlla keywords specifiche nel messaggio
+                if any(keyword in message_lower for keyword in ['api flow', 'collector_api', 'api_parser', 'flusso api', 'endpoint', 'raccolta api']):
+                    return 'api'
+                elif any(keyword in message_lower for keyword in ['web flow', 'collector_web', 'web_parser', 'flusso web', 'web scraping', 'raccolta web', 'raccogliendo dati web']):
+                    return 'web'
+                elif any(keyword in message_lower for keyword in ['realtime', 'modbus', 'collector_realtime', 'parser_realtime', 'flusso realtime', 'raccolta realtime']):
                     return 'realtime'
                 
                 # Controlla il nome del logger
@@ -1054,7 +1150,7 @@ class SimpleWebGUI:
                 elif 'realtime' in logger_name.lower() or 'modbus' in logger_name.lower():
                     return 'realtime'
                 
-                # Default: general (per log di sistema)
+                # Default: general (per log di sistema, cache, GUI, etc.)
                 return 'general'
         
         # Aggiungi handler ai logger principali
