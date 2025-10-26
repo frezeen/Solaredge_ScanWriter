@@ -659,11 +659,12 @@ except Exception as e:
         return True
     
     def import_grafana_dashboard(self) -> bool:
-        """Importa sempre la dashboard Grafana dopo l'update"""
+        """Importa dashboard Grafana con UIDs corretti (come install.sh)"""
         try:
             import json
             import os
             from pathlib import Path
+            import requests
             
             dashboard_file = self.project_root / "grafana" / "dashboard-solaredge.json"
             
@@ -671,41 +672,94 @@ except Exception as e:
                 self.log("Dashboard file not found, skipping", "WARNING")
                 return True
             
-            self.log("📊 Importing Grafana dashboard...", "INFO")
+            self.log("📊 Importing Grafana dashboard with correct UIDs...", "INFO")
             
             # Leggi credenziali da environment
             grafana_url = os.getenv('GRAFANA_URL', 'http://localhost:3000')
             grafana_user = os.getenv('GRAFANA_USER', 'admin')
             grafana_pass = os.getenv('GRAFANA_PASSWORD', 'admin')
             
-            # Carica dashboard JSON
-            with open(dashboard_file, 'r') as f:
-                dashboard_json = json.load(f)
-            
-            # Prepara payload
-            payload = {
-                "dashboard": dashboard_json,
-                "overwrite": True,
-                "message": "Updated by smart_update.py"
-            }
-            
-            # Importa via API
-            import requests
-            response = requests.post(
-                f"{grafana_url}/api/dashboards/db",
-                auth=(grafana_user, grafana_pass),
-                json=payload,
-                timeout=10
-            )
-            
-            if response.status_code == 200:
-                result = response.json()
-                self.log("✅ Dashboard imported successfully", "SUCCESS")
-                if 'url' in result:
-                    self.log(f"Dashboard URL: {grafana_url}{result['url']}", "INFO")
-                return True
-            else:
-                self.log(f"Failed to import dashboard: HTTP {response.status_code}", "WARNING")
+            # 1. Ottieni UIDs dei data sources da Grafana
+            try:
+                ds_response = requests.get(
+                    f"{grafana_url}/api/datasources",
+                    auth=(grafana_user, grafana_pass),
+                    timeout=10
+                )
+                
+                if ds_response.status_code == 200:
+                    datasources = ds_response.json()
+                    
+                    # Trova UIDs
+                    influx_uid = None
+                    sunmoon_uid = None
+                    
+                    for ds in datasources:
+                        if ds.get('name') == 'Solaredge':
+                            influx_uid = ds.get('uid')
+                            self.log(f"Found Solaredge data source UID: {influx_uid}", "INFO")
+                        elif ds.get('name') == 'Sun and Moon':
+                            sunmoon_uid = ds.get('uid')
+                            self.log(f"Found Sun and Moon data source UID: {sunmoon_uid}", "INFO")
+                    
+                    # 2. Carica e modifica dashboard JSON con UIDs corretti
+                    with open(dashboard_file, 'r') as f:
+                        dashboard_json = json.load(f)
+                    
+                    # 3. Aggiorna UIDs nel dashboard (walk through nested structure)
+                    def update_datasource_uids(obj, influx_uid, sunmoon_uid):
+                        """Recursively update data source UIDs in dashboard JSON"""
+                        if isinstance(obj, dict):
+                            # Update InfluxDB datasources
+                            if obj.get('type') == 'influxdb' and influx_uid:
+                                obj['uid'] = influx_uid
+                            # Update Sun and Moon datasources
+                            elif obj.get('type') == 'fetzerch-sunandmoon-datasource' and sunmoon_uid:
+                                obj['uid'] = sunmoon_uid
+                            # Recurse into nested objects
+                            for value in obj.values():
+                                update_datasource_uids(value, influx_uid, sunmoon_uid)
+                        elif isinstance(obj, list):
+                            # Recurse into list items
+                            for item in obj:
+                                update_datasource_uids(item, influx_uid, sunmoon_uid)
+                    
+                    if influx_uid or sunmoon_uid:
+                        update_datasource_uids(dashboard_json, influx_uid, sunmoon_uid)
+                        self.log("✅ Dashboard UIDs updated", "SUCCESS")
+                    else:
+                        self.log("⚠️ No data source UIDs found, importing dashboard as-is", "WARNING")
+                    
+                    # 4. Importa dashboard con UIDs corretti
+                    payload = {
+                        "dashboard": dashboard_json,
+                        "overwrite": True,
+                        "message": "Updated by smart_update.py with correct UIDs"
+                    }
+                    
+                    response = requests.post(
+                        f"{grafana_url}/api/dashboards/db",
+                        auth=(grafana_user, grafana_pass),
+                        json=payload,
+                        timeout=10
+                    )
+                    
+                    if response.status_code == 200:
+                        result = response.json()
+                        self.log("✅ Dashboard imported successfully with correct UIDs", "SUCCESS")
+                        if 'url' in result:
+                            self.log(f"Dashboard URL: {grafana_url}{result['url']}", "INFO")
+                        return True
+                    else:
+                        self.log(f"Failed to import dashboard: HTTP {response.status_code}", "WARNING")
+                        self.log(f"Response: {response.text}", "WARNING")
+                        return True  # Non bloccare l'update
+                else:
+                    self.log(f"Failed to get data sources: HTTP {ds_response.status_code}", "WARNING")
+                    return True  # Non bloccare l'update
+                    
+            except requests.exceptions.RequestException as e:
+                self.log(f"Grafana connection error: {e}", "WARNING")
                 return True  # Non bloccare l'update
                 
         except Exception as e:
