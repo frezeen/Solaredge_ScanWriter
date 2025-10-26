@@ -614,13 +614,11 @@ echo "=== SolarEdge Installation Test ==="
 echo ""
 
 # Test System Python
-echo "🐍 Python System Python:"
-if [[ -f venv/bin/activate ]]; then
+echo "🐍 System Python:"
+if command -v python3 &> /dev/null; then
     echo "✅ System Python exists"
-    # Using system Python
-    echo "  Python path: $(which python)"
-    echo "  Python version: $(python --version)"
-    echo "  Virtual env: $VIRTUAL_ENV"
+    echo "  Python path: $(which python3)"
+    echo "  Python version: $(python3 --version)"
 else
     echo "❌ System Python not found"
 fi
@@ -628,10 +626,10 @@ echo ""
 
 # Test installed packages
 echo "📦 Installed Python packages:"
-if [[ -f pip3 ]]; then
-    ./pip3 list | grep -E "(aiohttp|influxdb|yaml|pymodbus|requests|solaredge)" | head -10
+if command -v pip3 &> /dev/null; then
+    pip3 list | grep -E "(aiohttp|influxdb|yaml|pymodbus|solaredge)" | head -10
 else
-    echo "❌ pip not found in System Python"
+    echo "❌ pip3 not found"
 fi
 echo ""
 
@@ -662,7 +660,7 @@ echo ""
 echo "🧪 Application test:"
 if [[ -f main.py ]]; then
     echo "✅ main.py exists"
-    if # Using system Python && python -c "import main" 2>/dev/null; then
+    if python3 -c "import main" 2>/dev/null; then
         echo "✅ Main module imports successfully"
     else
         echo "⚠️ Main module has import issues (check dependencies)"
@@ -704,9 +702,9 @@ echo ""
 
 # System Python check
 echo "🐍 System Python:"
-if [[ -d /opt/Solaredge_ScanWriter/venv ]]; then
-    echo "✅ System Python exists"
-    echo "  Python: $(/usr/bin/python3 --version)"
+if command -v python3 &> /dev/null; then
+    echo "✅ System Python available"
+    echo "  Python: $(python3 --version)"
 else
     echo "❌ System Python not found"
 fi

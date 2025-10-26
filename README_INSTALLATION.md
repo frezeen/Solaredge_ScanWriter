@@ -93,7 +93,7 @@ systemctl enable --now solaredge-collector
 apt update && apt upgrade -y
 
 # Installa dipendenze sistema
-apt install -y python3 python3-pip python3-venv python3-dev \
+apt install -y python3 python3-pip python3-dev \
                build-essential curl wget git nano htop systemd cron
 
 # Verifica versione Python (richiesta 3.10+)
@@ -118,12 +118,8 @@ chown solaredge:solaredge /opt/solaredge-collector
 cp -r . /opt/solaredge-collector/
 chown -R solaredge:solaredge /opt/solaredge-collector
 
-# Crea ambiente virtuale Python
-sudo -u solaredge python3 -m venv /opt/solaredge-collector/venv
-
-# Installa dipendenze Python
-sudo -u solaredge /opt/solaredge-collector/venv/bin/pip install --upgrade pip
-sudo -u solaredge /opt/solaredge-collector/venv/bin/pip install -r /opt/solaredge-collector/requirements.txt
+# Installa dipendenze Python system-wide
+pip3 install -r /opt/solaredge-collector/requirements.txt --break-system-packages
 ```
 
 ### 4. Configurazione Servizi Systemd
@@ -232,20 +228,20 @@ Dopo l'installazione, importa la dashboard tramite Web UI:
 cd /opt/solaredge-collector
 
 # Test API
-./venv/bin/python main.py --api
+python3 main.py --api
 
 # Test Web Scraping
-./venv/bin/python main.py --web
+python3 main.py --web
 
 # Test Real-time (Modbus)
-./venv/bin/python main.py --realtime
+python3 main.py --realtime
 ```
 
 ### 2. Modalità Interattiva (GUI + Loop controllabile)
 
 ```bash
 # Avvia GUI interattiva (modalità predefinita senza argomenti)
-./venv/bin/python main.py
+python3 main.py
 
 # La GUI include controlli per start/stop del loop
 ```
@@ -317,7 +313,7 @@ Il sistema include:
    ```bash
    # Reinstalla dipendenze
    cd /opt/solaredge-collector
-   ./venv/bin/pip install -r requirements.txt --force-reinstall
+   pip3 install -r requirements.txt --force-reinstall --break-system-packages
    ```
 
 3. **Errore Connessione InfluxDB**
@@ -365,7 +361,7 @@ cd /opt/solaredge-collector
 git pull
 
 # Aggiorna dipendenze
-./venv/bin/pip install -r requirements.txt --upgrade
+pip3 install -r requirements.txt --upgrade --break-system-packages
 
 # Riavvia servizio
 systemctl start solaredge-collector
@@ -429,10 +425,10 @@ If you see the error: `cannot import name 'Endian' from 'pymodbus.constants'`
 ```bash
 cd /opt/Solaredge_ScanWriter
 sudo systemctl stop solaredge-scanwriter.service
-sudo -u solaredge venv/bin/pip cache purge
-sudo -u solaredge venv/bin/pip uninstall -y pymodbus solaredge-modbus
-sudo -u solaredge venv/bin/pip install pymodbus==3.5.4
-sudo -u solaredge venv/bin/pip install solaredge-modbus==0.8.0
+pip3 cache purge
+pip3 uninstall -y pymodbus solaredge-modbus
+pip3 install pymodbus==3.5.4 --break-system-packages
+pip3 install solaredge-modbus==0.8.0 --break-system-packages
 sudo systemctl start solaredge-scanwriter.service
 ```
 

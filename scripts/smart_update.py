@@ -63,8 +63,7 @@ class UpdateConfig:
         "install.sh", 
         "setup-permissions.sh",
         "scripts/smart_update.py",
-        "scripts/cleanup_logs.sh",
-        "venv.sh"
+        "scripts/cleanup_logs.sh"
     )
     
     possible_services: Tuple[str, ...] = (
@@ -483,38 +482,46 @@ class SmartUpdater:
         except KeyError:
             return False
             
+    def update_system_packages(self) -> bool:
+        """Aggiorna pacchetti di sistema Debian/Ubuntu"""
+        try:
+            self.log("Updating system packages...", "INFO")
+            
+            # Update package list
+            self.run_command(["apt-get", "update", "-qq"])
+            
+            # Upgrade only Python-related packages
+            self.run_command([
+                "apt-get", "upgrade", "-y", "-qq",
+                "python3*"
+            ])
+            
+            self.log("System packages updated", "SUCCESS")
+            return True
+        except Exception as e:
+            self.log(f"System package update warning: {e}", "WARNING")
+            return True  # Non bloccare l'update
+    
     def update_dependencies(self) -> bool:
-        """Aggiorna dipendenze Python"""
+        """Aggiorna dipendenze Python (system-wide, no venv)"""
         requirements_file = self.project_root / "requirements.txt"
         if not requirements_file.exists():
             self.log("requirements.txt not found, skipping dependency update")
             return True
             
-        # Check for virtual environment
-        venv_pip = self.project_root / "venv" / "bin" / "pip"
-        if venv_pip.exists():
-            pip_cmd = str(venv_pip)
-        else:
-            pip_cmd = sys.executable
-            
         try:
-            if venv_pip.exists():
-                # Use venv pip directly
-                self.run_command([pip_cmd, "install", "-r", "requirements.txt", "--upgrade"])
-            else:
-                # Use system python with pip module - allow system packages modification
-                self.run_command([
-                    pip_cmd, "-m", "pip", "install", 
-                    "-r", "requirements.txt", 
-                    "--upgrade",
-                    "--break-system-packages"  # Allow modifying system packages
-                ])
+            # Use system python - upgrade only if needed (changed in requirements.txt)
+            self.run_command([
+                sys.executable, "-m", "pip", "install", 
+                "-r", "requirements.txt",
+                "--upgrade-strategy", "only-if-needed",
+                "--break-system-packages"
+            ])
             self.log("Dependencies updated successfully", "SUCCESS")
             return True
         except Exception as e:
             self.log(f"Dependency update warning: {e}", "WARNING")
-            # Non bloccare l'update per problemi di dipendenze
-            return True
+            return True  # Non bloccare l'update
             
     def validate_configuration(self) -> bool:
         """Valida la configurazione dopo l'aggiornamento seguendo le linee guida del progetto"""
@@ -538,16 +545,9 @@ except Exception as e:
     sys.exit(2)
 """
             
-            # Use venv python if available, fallback to system python
-            venv_python = self.project_root / "venv" / "bin" / "python3"
-            
-            if venv_python.exists():
-                python_cmd = str(venv_python)
-            else:
-                python_cmd = sys.executable
-            
+            # Use system python (no venv)
             result = self.run_command([
-                python_cmd, "-c", validation_script
+                sys.executable, "-c", validation_script
             ])
             
             # 2. Verifica file di configurazione essenziali
@@ -609,21 +609,24 @@ except Exception as e:
     
     def _finalize_update(self, service_name: Optional[str], service_was_running: bool) -> bool:
         """Finalizza l'aggiornamento: dipendenze, validazione e riavvio servizi"""
-        # 7. Aggiorna dipendenze
+        # 7. Aggiorna pacchetti di sistema
+        self.update_system_packages()
+        
+        # 8. Aggiorna dipendenze Python
         if not self.update_dependencies():
             self.log("Dependency update failed", "WARNING")
             # Non è critico, continua
             
-        # 8. Valida configurazione
+        # 9. Valida configurazione
         if not self.validate_configuration():
             self.log("Configuration validation failed", "ERROR")
             self.log("Consider running rollback", "WARNING")
             return False
         
-        # 9. Importa dashboard Grafana (sempre)
+        # 10. Importa dashboard Grafana (sempre)
         self.import_grafana_dashboard()
             
-        # 10. Riavvia servizio
+        # 11. Riavvia servizio
         if service_was_running and service_name:
             self.start_service(service_name)
             
