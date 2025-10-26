@@ -274,6 +274,35 @@ REQS
         grafana-cli plugins install fetzerch-sunandmoon-datasource >/dev/null 2>&1 || warn "Failed to install sun-and-moon plugin"
         grafana-cli plugins install grafana-clock-panel >/dev/null 2>&1 || warn "Failed to install clock plugin"
         
+        # Configure Grafana date formats
+        log "📅 Configuring Grafana date formats..."
+        GRAFANA_INI="/etc/grafana/grafana.ini"
+        if [[ -f "$GRAFANA_INI" ]]; then
+            # Check if date_formats section exists
+            if ! grep -q "\[date_formats\]" "$GRAFANA_INI"; then
+                # Add date_formats section at the end of the file
+                cat >> "$GRAFANA_INI" << 'DATEFORMATS'
+
+[date_formats]
+# For information on what formatting patterns that are supported https://momentjs.com/docs/#/displaying/
+# Default system date format used in time range picker and other places where full time is displayed
+full_date = YYYY-MM-DD HH:mm:ss
+# Used by graph and other places where we only show small intervals
+interval_second = HH:mm:ss
+interval_minute = HH:mm
+interval_hour = HH:mm
+interval_day = DD MMMM dddd
+interval_month = MMMM YYYY
+interval_year = YYYY
+DATEFORMATS
+                log "✅ Grafana date formats configured"
+            else
+                log "ℹ️ Grafana date_formats section already exists, skipping"
+            fi
+        else
+            warn "Grafana configuration file not found at $GRAFANA_INI"
+        fi
+        
         systemctl enable grafana-server >/dev/null 2>&1
         systemctl start grafana-server >/dev/null 2>&1
         
