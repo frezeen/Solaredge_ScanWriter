@@ -87,6 +87,7 @@ temp/
 # Local configuration and sensitive data
 local_config.yaml
 config/local/
+config/sources/web_endpoints.yaml
 *.db
 *.sqlite
 *.sqlite3

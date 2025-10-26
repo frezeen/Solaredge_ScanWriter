@@ -48,12 +48,16 @@ class YawlManager:
         # Converti device_id in stringa se necessario (per compatibilità YAML)
         device_id_str = str(device_id)
         
+        # Determina se il device deve essere abilitato di default
+        # Solo OPTIMIZER e WEATHER sono abilitati, tutto il resto disabled
+        default_enabled = device_type in ['OPTIMIZER', 'WEATHER']
+        
         # Struttura endpoint con ordine preciso dei campi come nel file attuale
         endpoint = {}
         endpoint['device_id'] = device_id_str
         endpoint['device_name'] = device_name
         endpoint['device_type'] = device_type
-        endpoint['enabled'] = True  # IMPORTANTE: deve essere True come nel file attuale
+        endpoint['enabled'] = default_enabled  # Solo OPTIMIZER e WEATHER abilitati di default
         endpoint['category'] = device_category  # Aggiungi categoria al device
         
         # Gestione connessioni per OPTIMIZER e STRING (prima dei measurements)
@@ -76,7 +80,8 @@ class YawlManager:
         endpoint['measurements'] = {}
         if 'parameters' in item and item['parameters']:
             for param in item['parameters']:
-                endpoint['measurements'][param] = {'enabled': True}  # IMPORTANTE: deve essere True
+                # Measurements abilitati solo se il device è abilitato
+                endpoint['measurements'][param] = {'enabled': default_enabled}
 
         return endpoint_key, endpoint
 
