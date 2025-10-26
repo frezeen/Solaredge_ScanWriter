@@ -31,7 +31,7 @@ def timed_operation(logger, operation_name: str):
         yield
     finally:
         duration_ms = (time.perf_counter() - start) * 1000
-        logger.info(f"{operation_name}", extra={
+        logger.debug(f"{operation_name}", extra={
             "duration_ms": f"{duration_ms:.2f}",
             "operation": operation_name
         })
@@ -54,8 +54,8 @@ class RealtimeCollector:
             self._log.error(f"Errore caricamento configurazione modbus: {e}")
             raise
         
-        self._log.info(f"RealtimeCollector: {self._realtime_config.host}:{self._realtime_config.port}")
-        self._log.info(f"Endpoints abilitati: {self._get_enabled_endpoints_summary()}")
+        self._log.debug(f"RealtimeCollector: {self._realtime_config.host}:{self._realtime_config.port}")
+        self._log.debug(f"Endpoints abilitati: {self._get_enabled_endpoints_summary()}")
     
     def _get_enabled_endpoints_summary(self) -> str:
         """Restituisce riassunto degli endpoints abilitati.
@@ -388,7 +388,7 @@ class RealtimeCollector:
             if not formatted_output:
                 raise RuntimeError("Generazione output formattato fallita")
             
-            self._log.info("Raccolta dati completata", extra={
+            self._log.debug("Raccolta dati completata", extra={
                 "host": self._realtime_config.host,
                 "port": self._realtime_config.port,
                 "output_size_bytes": len(formatted_output)
