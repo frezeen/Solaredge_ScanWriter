@@ -58,30 +58,25 @@ apt-get install -y -qq nano htop systemd cron
 log "Installing repository tools..."
 apt-get install -y -qq apt-transport-https gnupg ca-certificates
 
-# Download and extract project
-TEMP_DIR="/tmp/solaredge-installer"
-rm -rf "$TEMP_DIR"
-mkdir -p "$TEMP_DIR"
-cd "$TEMP_DIR"
+# Clone project from GitHub
+log "📥 Cloning project from GitHub..."
+APP_DIR="/opt/Solaredge_ScanWriter"
 
-log "📥 Downloading project from GitHub..."
-if curl -sSL "https://github.com/frezeen/Solaredge_ScanWriter/archive/main.zip" -o project.zip; then
-    log "📂 Extracting project files..."
-    unzip -q project.zip
+# Rimuovi directory esistente se presente
+if [[ -d "$APP_DIR" ]]; then
+    log "⚠️  Directory esistente trovata, creando backup..."
+    mv "$APP_DIR" "${APP_DIR}.backup.$(date +%Y%m%d_%H%M%S)"
+fi
+
+# Clone repository
+if git clone https://github.com/frezeen/Solaredge_ScanWriter.git "$APP_DIR"; then
+    log "✅ Repository clonato con successo"
     
-    # Find the extracted directory
-    PROJECT_DIR=$(find . -name "*Solaredge_ScanWriter*" -type d | head -1)
-    if [[ -n "$PROJECT_DIR" ]]; then
+    # Entra nella directory
+    cd "$APP_DIR"
+    
+    if [[ -d "$APP_DIR" ]]; then
         log "🔧 Starting installation process..."
-        
-        # Create application directory
-        APP_DIR="/opt/Solaredge_ScanWriter"
-        log "📁 Creating application directory: $APP_DIR"
-        mkdir -p "$APP_DIR"
-        
-        # Copy project files
-        log "📋 Copying project files..."
-        cp -r "$PROJECT_DIR"/* "$APP_DIR/"
         
         # Create required directories
         log "📂 Creating required directories..."
@@ -315,7 +310,9 @@ REQS
         fi
         
         # Import Grafana dashboard with correct UIDs
-        if [[ -f "$APP_DIR/grafana/dashboard-solaredge.json" ]]; then
+        DASHBOARD_FILE="$APP_DIR/grafana/dashboard-solaredge.json"
+        
+        if [[ -f "$DASHBOARD_FILE" ]]; then
             log "📊 Importing Grafana dashboard..."
             
             # Disable exit on error for this section
@@ -331,7 +328,7 @@ REQS
                 
                 # Create temporary dashboard file with updated UIDs
                 TEMP_DASHBOARD="/tmp/dashboard-solaredge-temp.json"
-                cp "$APP_DIR/grafana/dashboard-solaredge.json" "$TEMP_DASHBOARD"
+                cp "$DASHBOARD_FILE" "$TEMP_DASHBOARD"
                 
                 # Replace data source UIDs in the dashboard JSON using jq for safer manipulation
                 if command -v jq &> /dev/null; then
@@ -392,6 +389,7 @@ REQS
                 if echo "$IMPORT_RESPONSE" | grep -q '"status":"success"'; then
                     DASHBOARD_URL=$(echo "$IMPORT_RESPONSE" | jq -r '.url' 2>/dev/null)
                     log "✅ Grafana dashboard imported successfully"
+                    
                     if [[ -n "$DASHBOARD_URL" && "$DASHBOARD_URL" != "null" ]]; then
                         log "Dashboard URL: http://$(hostname -I | awk '{print $1}'):3000$DASHBOARD_URL"
                     fi
@@ -1080,10 +1078,6 @@ JOURNAL_SCRIPT
             ufw allow 3000/tcp comment "Grafana" >/dev/null 2>&1 || true
         fi
         
-        # Cleanup
-        cd /
-        rm -rf "$TEMP_DIR"
-        
         log "✅ Installation completed successfully!"
         echo ""
         echo "╔════════════════════════════════════════════════════════════╗"
@@ -1310,11 +1304,11 @@ REPORT_EOF
         echo ""
         
     else
-        error "Could not find extracted project directory"
+        error "Git clone failed or directory not created"
         exit 1
     fi
 else
-    error "Failed to download project from GitHub"
+    error "Failed to clone repository from GitHub"
     exit 1
 fi
 
