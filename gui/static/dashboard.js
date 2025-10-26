@@ -979,13 +979,7 @@ const updateLoopButtons = (isRunning) => {
     if (stopBtn) stopBtn.disabled = !isRunning;
 };
 
-// Initialize
-let dashboard;
-document.addEventListener('DOMContentLoaded', () => {
-    dashboard = new SolarDashboard();
-});
-/
-/ ===== LOG TAB FILTERING =====
+// ===== LOG TAB FILTERING =====
 let currentLogFlow = 'all';
 let autoScrollEnabled = true;
 let logUpdateInterval = null;
@@ -1088,8 +1082,15 @@ function escapeHtml(text) {
     return div.innerHTML;
 }
 
-// Avvia il caricamento dei log quando la pagina è pronta
+// Rendi le funzioni globali per onclick
+window.switchLogTab = switchLogTab;
+window.clearLogs = clearLogs;
+window.toggleAutoScroll = toggleAutoScroll;
+
+// Initialize dashboard and logs
+let dashboard;
 document.addEventListener('DOMContentLoaded', () => {
+    dashboard = new SolarDashboard();
     // Carica log iniziali
     switchLogTab('all');
 });

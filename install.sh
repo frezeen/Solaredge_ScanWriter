@@ -44,19 +44,19 @@ apt-get update -qq
 
 # Install packages in groups to handle potential failures
 log "Installing core packages..."
-apt-get install -y -qq curl wget git unzip
+apt-get install -y -qq curl wget git unzip >/dev/null 2>&1
 
 log "Installing Python packages..."
-apt-get install -y -qq python3 python3-pip python3-dev
+apt-get install -y -qq python3 python3-pip python3-dev >/dev/null 2>&1
 
 log "Installing build tools..."
-apt-get install -y -qq build-essential
+apt-get install -y -qq build-essential >/dev/null 2>&1
 
 log "Installing system utilities..."
-apt-get install -y -qq nano htop systemd cron
+apt-get install -y -qq nano htop systemd cron >/dev/null 2>&1
 
 log "Installing repository tools..."
-apt-get install -y -qq apt-transport-https gnupg ca-certificates
+apt-get install -y -qq apt-transport-https gnupg ca-certificates >/dev/null 2>&1
 
 # Clone project from GitHub
 log "📥 Cloning project from GitHub..."
@@ -111,8 +111,8 @@ REQS
         curl -s https://repos.influxdata.com/influxdata-archive_compat.key | gpg --dearmor -o /usr/share/keyrings/influxdata-archive-keyring.gpg 2>/dev/null
         echo "deb [signed-by=/usr/share/keyrings/influxdata-archive-keyring.gpg] https://repos.influxdata.com/debian stable main" | tee /etc/apt/sources.list.d/influxdb.list >/dev/null
         
-        apt-get update -qq
-        if ! apt-get install -y -qq influxdb2; then
+        apt-get update -qq >/dev/null 2>&1
+        if ! apt-get install -y -qq influxdb2 >/dev/null 2>&1; then
             warn "Failed to install InfluxDB from repository, trying direct download..."
             INFLUX_VERSION="2.7.4"
             ARCH=$(dpkg --print-architecture)
@@ -146,7 +146,7 @@ REQS
         done
         
         # Install jq for JSON parsing
-        apt-get install -y -qq jq
+        apt-get install -y -qq jq >/dev/null 2>&1
         
         # Check if InfluxDB needs setup
         SETUP_STATUS=$(curl -s http://localhost:8086/api/v2/setup 2>/dev/null)
@@ -226,8 +226,8 @@ REQS
         curl -s https://packages.grafana.com/gpg.key | gpg --dearmor -o /usr/share/keyrings/grafana-archive-keyring.gpg 2>/dev/null
         echo "deb [signed-by=/usr/share/keyrings/grafana-archive-keyring.gpg] https://packages.grafana.com/oss/deb stable main" | tee /etc/apt/sources.list.d/grafana.list >/dev/null
         
-        apt-get update -qq
-        if ! apt-get install -y -qq grafana; then
+        apt-get update -qq >/dev/null 2>&1
+        if ! apt-get install -y -qq grafana >/dev/null 2>&1; then
             warn "Failed to install Grafana from repository, trying direct download..."
             GRAFANA_VERSION="10.2.3"
             ARCH=$(dpkg --print-architecture)
@@ -1297,10 +1297,14 @@ REPORT_EOF
 
         chmod 644 "$REPORT_FILE"
         
-        # Change to project directory for convenience
-        cd /opt/Solaredge_ScanWriter
-        echo "📂 Current directory: $(pwd)"
         echo "📄 Installation report saved to: $REPORT_FILE"
+        echo ""
+        echo "╔════════════════════════════════════════════════════════════╗"
+        echo "║  💡 To start working, run:                                ║"
+        echo "║                                                            ║"
+        echo "║     cd /opt/Solaredge_ScanWriter                          ║"
+        echo "║                                                            ║"
+        echo "╚════════════════════════════════════════════════════════════╝"
         echo ""
         
     else
