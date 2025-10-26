@@ -403,20 +403,29 @@ class SimpleWebGUI:
             return web.json_response({"error": str(e)}, status=500)
 
     async def handle_loop_logs(self, request):
-        """Restituisce i log del loop mode"""
+        """Restituisce i log del loop mode con filtro opzionale per flow"""
         try:
-            # Parametri query per paginazione
+            # Parametri query per paginazione e filtro
             limit = int(request.query.get('limit', 100))
             offset = int(request.query.get('offset', 0))
+            flow_filter = request.query.get('flow', None)  # Nuovo: filtro per flow type (api/web/realtime/general/all)
             
-            # Restituisci gli ultimi log
-            logs = self.log_buffer[-limit-offset:-offset] if offset > 0 else self.log_buffer[-limit:]
+            # Filtra i log se richiesto
+            if flow_filter and flow_filter != 'all':
+                filtered_logs = [log for log in self.log_buffer if log.get('flow_type') == flow_filter]
+            else:
+                filtered_logs = self.log_buffer
+            
+            # Applica paginazione
+            logs = filtered_logs[-limit-offset:-offset] if offset > 0 else filtered_logs[-limit:]
             
             return web.json_response({
                 "logs": logs,
-                "total": len(self.log_buffer),
+                "total": len(filtered_logs),
+                "total_unfiltered": len(self.log_buffer),
                 "limit": limit,
-                "offset": offset
+                "offset": offset,
+                "flow_filter": flow_filter or 'all'
             })
             
         except Exception as e:
@@ -990,7 +999,7 @@ class SimpleWebGUI:
             return web.json_response({'error': str(e)}, status=500)
 
     def _setup_log_capture(self):
-        """Setup log capture per la GUI"""
+        """Setup log capture per la GUI con identificazione flow"""
         import logging
         from datetime import datetime
         
@@ -1001,12 +1010,18 @@ class SimpleWebGUI:
                 
             def emit(self, record):
                 try:
+                    message = record.getMessage()
+                    
+                    # Identifica il flow type dal messaggio o dal logger
+                    flow_type = self._detect_flow_type(record.name, message)
+                    
                     # Formatta il log
                     log_entry = {
                         'timestamp': datetime.now().strftime('%H:%M:%S'),
                         'level': record.levelname,
                         'logger': record.name,
-                        'message': record.getMessage()
+                        'message': message,
+                        'flow_type': flow_type  # Nuovo campo per filtrare i log
                     }
                     
                     # Aggiungi al buffer della GUI
@@ -1018,13 +1033,36 @@ class SimpleWebGUI:
                         
                 except Exception:
                     pass  # Ignora errori nel logging per evitare loop infiniti
+            
+            def _detect_flow_type(self, logger_name, message):
+                """Rileva il tipo di flow dal logger o dal messaggio"""
+                message_lower = message.lower()
+                
+                # Controlla keywords nel messaggio
+                if any(keyword in message_lower for keyword in ['api flow', 'collector_api', 'api_parser', 'flusso api', 'avvio flusso api']):
+                    return 'api'
+                elif any(keyword in message_lower for keyword in ['web flow', 'collector_web', 'web_parser', 'flusso web', 'avvio flusso web', 'web scraping']):
+                    return 'web'
+                elif any(keyword in message_lower for keyword in ['realtime', 'modbus', 'collector_realtime', 'parser_realtime', 'flusso realtime', 'avvio flusso realtime']):
+                    return 'realtime'
+                
+                # Controlla il nome del logger
+                if 'api' in logger_name.lower():
+                    return 'api'
+                elif 'web' in logger_name.lower():
+                    return 'web'
+                elif 'realtime' in logger_name.lower() or 'modbus' in logger_name.lower():
+                    return 'realtime'
+                
+                # Default: general (per log di sistema)
+                return 'general'
         
         # Aggiungi handler ai logger principali
         gui_handler = GUILogHandler(self)
         gui_handler.setLevel(logging.INFO)
         
         # Aggiungi ai logger che ci interessano
-        loggers_to_capture = ['main', 'SimpleWebGUI', 'collector', 'parser', 'storage']
+        loggers_to_capture = ['main', 'SimpleWebGUI', 'collector', 'parser', 'storage', 'scheduler']
         for logger_name in loggers_to_capture:
             logger = logging.getLogger(logger_name)
             logger.addHandler(gui_handler)
