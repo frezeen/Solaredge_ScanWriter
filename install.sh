@@ -100,7 +100,10 @@ if [[ -d "$APP_DIR" ]]; then
 fi
 
 # Clone repository
-if git clone --quiet https://github.com/frezeen/Solaredge_ScanWriter.git "$APP_DIR" >/dev/null 2>&1; then
+{
+    git clone --quiet https://github.com/frezeen/Solaredge_ScanWriter.git "$APP_DIR"
+} >/dev/null 2>&1
+if [[ $? -eq 0 ]]; then
     log "✅ Repository clonato con successo"
     
     # Entra nella directory
@@ -278,8 +281,15 @@ REQS
         log "Waiting for Grafana to be ready..."
         GRAFANA_READY=false
         for i in {1..60}; do
-            if curl -s http://localhost:3000/api/health 2>/dev/null | grep -q "ok"; then
+            HEALTH_CHECK=$(curl -s http://localhost:3000/api/health 2>/dev/null)
+            if [[ -n "$HEALTH_CHECK" ]] && echo "$HEALTH_CHECK" | grep -q "database.*ok"; then
                 log "✅ Grafana is ready"
+                GRAFANA_READY=true
+                break
+            fi
+            # Also accept simple 200 response
+            if curl -s -o /dev/null -w "%{http_code}" http://localhost:3000/api/health 2>/dev/null | grep -q "200"; then
+                log "✅ Grafana is ready (HTTP 200)"
                 GRAFANA_READY=true
                 break
             fi
@@ -289,11 +299,10 @@ REQS
             sleep 2
         done
         
-        # Skip Grafana configuration if not ready
+        # Warn if Grafana may not be ready, but try anyway
         if [[ "$GRAFANA_READY" != "true" ]]; then
-            warn "Skipping Grafana configuration - service not ready"
-            warn "You can configure Grafana manually later or run: systemctl restart grafana-server"
-        else
+            warn "Grafana may not be fully ready, but attempting configuration anyway..."
+        fi
         
         # Configure Grafana data source
         log "⚙️ Configuring Grafana data source..."
@@ -445,8 +454,6 @@ REQS
         
         # Re-enable exit on error
         set -e
-        
-        fi  # End of GRAFANA_READY check
         
         # Create .env file
         log "📝 Creating configuration file..."
