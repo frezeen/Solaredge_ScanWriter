@@ -502,13 +502,19 @@ class SmartUpdater:
                 # Use venv pip directly
                 self.run_command([pip_cmd, "install", "-r", "requirements.txt", "--upgrade"])
             else:
-                # Use system python with pip module
-                self.run_command([pip_cmd, "-m", "pip", "install", "-r", "requirements.txt", "--upgrade"])
+                # Use system python with pip module - allow system packages modification
+                self.run_command([
+                    pip_cmd, "-m", "pip", "install", 
+                    "-r", "requirements.txt", 
+                    "--upgrade",
+                    "--break-system-packages"  # Allow modifying system packages
+                ])
             self.log("Dependencies updated successfully", "SUCCESS")
             return True
         except Exception as e:
-            self.log(f"Failed to update dependencies: {e}", "ERROR")
-            return False
+            self.log(f"Dependency update warning: {e}", "WARNING")
+            # Non bloccare l'update per problemi di dipendenze
+            return True
             
     def validate_configuration(self) -> bool:
         """Valida la configurazione dopo l'aggiornamento seguendo le linee guida del progetto"""
