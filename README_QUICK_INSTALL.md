@@ -1,14 +1,28 @@
 # SolarEdge Data Collector - Installazione Rapida
 
-## One-Liner Installation (Raccomandato)
+## Metodo 1: One-Liner Installation (Veloce)
 
-Dal tuo container Debian, esegui semplicemente:
+Dal tuo container Debian, esegui:
 
 ```bash
 curl -sSL https://raw.githubusercontent.com/frezeen/Solaredge_ScanWriter/main/install.sh | sudo bash
 ```
 
-**Nota**: Lo script richiede privilegi root per installare pacchetti di sistema e configurare servizi.
+**Nota**: Questo metodo usa password di default (InfluxDB: `solaredge123`, Grafana: `admin`)
+
+## Metodo 2: Installation con Password Personalizzate (Consigliato)
+
+Per scegliere password personalizzate:
+
+```bash
+# Scarica lo script
+curl -sSL https://raw.githubusercontent.com/frezeen/Solaredge_ScanWriter/main/install.sh -o install.sh
+
+# Esegui (ti chiederà le password)
+sudo bash install.sh
+```
+
+**Nota**: Entrambi i metodi richiedono privilegi root per installare pacchetti di sistema e configurare servizi.
 
 Questo comando:
 - ✅ Scarica automaticamente tutto il progetto da GitHub
