@@ -92,16 +92,16 @@ Per testare singole funzionalità:
 cd /opt/Solaredge_ScanWriter
 
 # Test API SolarEdge
-./venv/bin/python main.py --api
+python3 main.py --api
 
 # Test Web Scraping
-./venv/bin/python main.py --web
+python3 main.py --web
 
 # Test Real-time (Modbus)
-./venv/bin/python main.py --realtime
+python3 main.py --realtime
 
 # Scansione configurazione web
-./venv/bin/python main.py --scan
+python3 main.py --scan
 ```
 
 ## Risoluzione Problemi
@@ -116,7 +116,7 @@ sudo nano /opt/Solaredge_ScanWriter/.env
 
 # Test manuale
 cd /opt/Solaredge_ScanWriter
-sudo -u solaredge ./venv/bin/python main.py
+python3 main.py
 ```
 
 ### InfluxDB non funziona
