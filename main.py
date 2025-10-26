@@ -233,6 +233,8 @@ def run_web_flow(log, cache, start_date=None, end_date=None) -> int:
     import yaml
     from pathlib import Path
     
+    log.info(color.bold("🚀 Avvio flusso web"))
+    
     # Carica configurazione completa (inclusi i file sources) per passarla al parser e scheduler
     config_manager = get_config_manager("config/main.yaml")
     config = config_manager.get_raw_config()
@@ -292,7 +294,7 @@ def run_web_flow(log, cache, start_date=None, end_date=None) -> int:
     if all_influx_points:
         with InfluxWriter() as writer:
             writer.write_points(all_influx_points, measurement_type="web")
-            log.info(color.success(f"✅ Pipeline web completata - {len(all_influx_points)} punti scritti"))
+            log.info(color.success(f"✅ Pipeline web completata con successo"))
     else:
         log.warning(color.warning("Nessun punto da scrivere"))
     
@@ -309,6 +311,8 @@ def run_api_flow(log, cache, config, start_date=None, end_date=None) -> int:
     from collector.collector_api import CollectorAPI
     from parser.api_parser import create_parser
     from storage.writer_influx import InfluxWriter
+    
+    log.info(color.bold("🚀 Avvio flusso API"))
     
     # Inizializza scheduler
     scheduler_config = SchedulerConfig.from_config(config)
@@ -353,7 +357,7 @@ def run_api_flow(log, cache, config, start_date=None, end_date=None) -> int:
     if influx_points:
         with InfluxWriter() as writer:
             writer.write_points(influx_points, measurement_type="api")
-            log.info(color.success("   ✅ Pipeline API completata"))
+            log.info(color.success("✅ Pipeline API completata con successo"))
     else:
         log.warning(color.warning("   Nessun punto da scrivere"))
     

@@ -1013,16 +1013,16 @@ function switchLogTab(flow) {
 
 async function loadFilteredLogs() {
     try {
-        const response = await fetch(`/api/loop/logs?flow=${currentLogFlow}&limit=100`);
+        const response = await fetch(`/api/loop/logs?flow=${currentLogFlow}&limit=500`);
         const data = await response.json();
         
-        renderFilteredLogs(data.logs, data.total);
+        renderFilteredLogs(data.logs, data.total, data.run_counts);
     } catch (error) {
         console.error('Error loading filtered logs:', error);
     }
 }
 
-function renderFilteredLogs(logs, total) {
+function renderFilteredLogs(logs, total, runCounts) {
     const container = document.getElementById('logsContent');
     if (!container || !logs) return;
     
@@ -1052,8 +1052,15 @@ function renderFilteredLogs(logs, total) {
     
     container.innerHTML = logsHtml || '<div class="log-entry info"><span class="log-message">Nessun log disponibile per questo filtro</span></div>';
     
-    // Aggiorna contatore
-    document.getElementById('logsCount').textContent = `${total} log visualizzati`;
+    // Aggiorna contatore con info sulle run
+    let countText = `${total} log visualizzati`;
+    if (runCounts) {
+        const totalRuns = Object.values(runCounts).reduce((sum, count) => sum + count, 0);
+        if (totalRuns > 0) {
+            countText += ` (ultime ${totalRuns} run)`;
+        }
+    }
+    document.getElementById('logsCount').textContent = countText;
     
     // Auto-scroll se abilitato
     if (shouldScroll) {
@@ -1061,12 +1068,28 @@ function renderFilteredLogs(logs, total) {
     }
 }
 
-function clearLogs() {
-    const container = document.getElementById('logsContent');
-    if (container) {
-        container.innerHTML = '<div class="log-entry info"><span class="log-message">Log puliti - in attesa di nuovi log...</span></div>';
+async function clearLogs() {
+    if (!confirm('Sei sicuro di voler pulire tutti i log?')) {
+        return;
     }
-    document.getElementById('logsCount').textContent = '0 log visualizzati';
+    
+    try {
+        const response = await fetch('/api/loop/logs/clear', { method: 'POST' });
+        const result = await response.json();
+        
+        if (response.ok) {
+            const container = document.getElementById('logsContent');
+            if (container) {
+                container.innerHTML = '<div class="log-entry info"><span class="log-message">Log puliti - in attesa di nuovi log...</span></div>';
+            }
+            document.getElementById('logsCount').textContent = '0 log visualizzati';
+            dashboard.notify('Log puliti con successo', 'success');
+        } else {
+            dashboard.notify(`Errore pulizia log: ${result.error}`, 'error');
+        }
+    } catch (error) {
+        dashboard.notify(`Errore di connessione: ${error.message}`, 'error');
+    }
 }
 
 function toggleAutoScroll() {
