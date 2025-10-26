@@ -1094,10 +1094,16 @@ class SimpleWebGUI:
             def __init__(self, gui_instance):
                 super().__init__()
                 self.gui = gui_instance
+                # Regex per rimuovere codici ANSI
+                import re
+                self.ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
                 
             def emit(self, record):
                 try:
                     message = record.getMessage()
+                    
+                    # Rimuovi codici ANSI dal messaggio
+                    message = self.ansi_escape.sub('', message)
                     
                     # Identifica il flow type dal messaggio o dal logger
                     flow_type = self._detect_flow_type(record.name, message)
@@ -1125,8 +1131,9 @@ class SimpleWebGUI:
             def _detect_flow_type(self, logger_name, message):
                 """Rileva il tipo di flow dal logger o dal messaggio usando i marker delle pipeline"""
                 message_lower = message.lower()
+                logger_lower = logger_name.lower()
                 
-                # Controlla marker di inizio/fine pipeline (più affidabili)
+                # 1. Controlla marker di inizio/fine pipeline (più affidabili)
                 if 'avvio flusso api' in message_lower or 'pipeline api completata' in message_lower:
                     return 'api'
                 elif 'avvio flusso web' in message_lower or 'pipeline web completata' in message_lower:
@@ -1134,23 +1141,60 @@ class SimpleWebGUI:
                 elif 'avvio flusso realtime' in message_lower or 'pipeline realtime completata' in message_lower:
                     return 'realtime'
                 
-                # Controlla keywords specifiche nel messaggio
-                if any(keyword in message_lower for keyword in ['api flow', 'collector_api', 'api_parser', 'flusso api', 'endpoint', 'raccolta api']):
+                # 2. Controlla il nome del logger (più affidabile del messaggio)
+                if any(name in logger_lower for name in ['collector.collector_api', 'parser.api', 'api_parser']):
                     return 'api'
-                elif any(keyword in message_lower for keyword in ['web flow', 'collector_web', 'web_parser', 'flusso web', 'web scraping', 'raccolta web', 'raccogliendo dati web']):
+                elif any(name in logger_lower for name in ['collector.collector_web', 'parser.web', 'web_parser']):
                     return 'web'
-                elif any(keyword in message_lower for keyword in ['realtime', 'modbus', 'collector_realtime', 'parser_realtime', 'flusso realtime', 'raccolta realtime']):
+                elif any(name in logger_lower for name in ['collector.collector_realtime', 'parser.parser_realtime', 'realtime', 'modbus']):
                     return 'realtime'
                 
-                # Controlla il nome del logger
-                if 'api' in logger_name.lower():
+                # 3. Controlla keywords specifiche nel messaggio (più ampie)
+                api_keywords = [
+                    'api flow', 'collector_api', 'api_parser', 'flusso api', 
+                    'endpoint', 'raccolta api', 'raccolti dati da', 'endpoint equipment',
+                    'endpoint site', 'parser api', 'influxdb points da api'
+                ]
+                web_keywords = [
+                    'web flow', 'collector_web', 'web_parser', 'flusso web', 
+                    'web scraping', 'raccolta web', 'raccogliendo dati web',
+                    'parser web', 'influxdb points da web', 'dispositivo', 'measurements'
+                ]
+                realtime_keywords = [
+                    'realtime', 'modbus', 'collector_realtime', 'parser_realtime', 
+                    'flusso realtime', 'raccolta realtime', 'inverter', 'meter',
+                    'metriche abilitate', 'parsing completato'
+                ]
+                
+                if any(keyword in message_lower for keyword in api_keywords):
                     return 'api'
-                elif 'web' in logger_name.lower():
+                elif any(keyword in message_lower for keyword in web_keywords):
                     return 'web'
-                elif 'realtime' in logger_name.lower() or 'modbus' in logger_name.lower():
+                elif any(keyword in message_lower for keyword in realtime_keywords):
                     return 'realtime'
                 
-                # Default: general (per log di sistema, cache, GUI, etc.)
+                # 4. Controlla logger generico 'main' - usa context dal messaggio
+                if logger_lower == 'main':
+                    # Se il messaggio parla di collector/parser/storage, prova a dedurre
+                    if 'collector' in message_lower or 'parser' in message_lower or 'storage' in message_lower:
+                        # Cerca indizi nel messaggio
+                        if 'api' in message_lower:
+                            return 'api'
+                        elif 'web' in message_lower:
+                            return 'web'
+                        elif 'realtime' in message_lower:
+                            return 'realtime'
+                
+                # 5. Log di storage/influx - assegna al flow corrente se possibile
+                if 'storage' in logger_lower or 'influx' in logger_lower:
+                    if 'solaredge_realtime' in message_lower:
+                        return 'realtime'
+                    elif 'solaredge' in message_lower and 'realtime' not in message_lower:
+                        # Bucket Solaredge generico è usato da API e Web
+                        # Difficile distinguere, lascia come general
+                        pass
+                
+                # Default: general (solo per log veramente di sistema: GUI, cache, scheduler, config)
                 return 'general'
         
         # Aggiungi handler ai logger principali
