@@ -41,6 +41,13 @@ class UpdateConfig:
         "config/sources/web_endpoints.yaml", 
         "config/sources/modbus_endpoints.yaml",
         "cookies/web_cookies.json",
+        "install_report.md",
+        "test.sh",
+        "status.sh",
+        "run-manual.sh",
+        "check-buckets.sh",
+        "check-logrotate.sh",
+        "manage-journal.sh",
     )
     
     preserve_dirs: Tuple[str, ...] = (
@@ -72,6 +79,7 @@ class UpdateConfig:
     command_timeout: int = 300  # 5 minutes default for commands
     git_timeout: int = 600      # 10 minutes for git operations
     backup_dir_name: str = ".temp_config_backup"
+    last_backup_dir_name: str = ".last_backup"  # Backup permanente dell'ultimo update
 
 
 class SmartUpdater:
@@ -256,7 +264,7 @@ class SmartUpdater:
     def backup_configs(self) -> bool:
         """Backup temporaneo delle configurazioni durante l'aggiornamento"""
         try:
-            # Crea backup temporaneo
+            # Rimuovi backup temporaneo precedente
             temp_backup = self.project_root / self.config.backup_dir_name
             if temp_backup.exists():
                 shutil.rmtree(temp_backup)
@@ -381,11 +389,19 @@ class SmartUpdater:
                     restored_count += 1
                 else:
                     self.logger.debug(f"Backup file not found: {file_path}")
-                    
+            
+            self.log(f"Restored {restored_count} configuration files", "SUCCESS")
+            
+            # Salva backup permanente dell'ultimo update riuscito (sovrascrive il precedente)
+            last_backup = self.project_root / self.config.last_backup_dir_name
+            if last_backup.exists():
+                shutil.rmtree(last_backup)
+            shutil.copytree(temp_backup, last_backup)
+            self.log("Saved permanent backup of last successful update", "SUCCESS")
+            
             # Rimuovi backup temporaneo
             shutil.rmtree(temp_backup)
             
-            self.log(f"Restored {restored_count} configuration files", "SUCCESS")
             return True
             
         except (OSError, PermissionError) as e:
