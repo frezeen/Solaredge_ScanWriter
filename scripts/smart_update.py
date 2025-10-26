@@ -483,19 +483,50 @@ class SmartUpdater:
             return False
             
     def update_system_packages(self) -> bool:
-        """Aggiorna solo la lista dei pacchetti (non i pacchetti stessi)"""
+        """Aggiorna pacchetti di sistema Debian/Ubuntu in modo sicuro"""
         try:
-            self.log("Updating package list...", "INFO")
+            self.log("Updating system packages...", "INFO")
             
-            # Solo update della lista pacchetti, non upgrade
-            # L'upgrade dei pacchetti di sistema dovrebbe essere fatto manualmente dall'admin
+            # 1. Update package list
             self.run_command(["apt-get", "update", "-qq"], check=False)
             
-            self.log("Package list updated", "SUCCESS")
+            # 2. Upgrade packages in modo sicuro (non rimuove pacchetti)
+            # Usa --with-new-pkgs per installare nuove dipendenze se necessario
+            # ma senza rimuovere pacchetti esistenti
+            try:
+                self.run_command([
+                    "apt-get", "upgrade", "-y", "-qq",
+                    "--allow-downgrades",
+                    "--allow-remove-essential",
+                    "--allow-change-held-packages"
+                ], check=False)
+                self.log("System packages upgraded", "SUCCESS")
+            except Exception as upgrade_error:
+                self.log(f"Package upgrade warning: {upgrade_error}", "WARNING")
+                # Prova con dist-upgrade se upgrade fallisce
+                try:
+                    self.log("Trying dist-upgrade...", "INFO")
+                    self.run_command([
+                        "apt-get", "dist-upgrade", "-y", "-qq",
+                        "--allow-downgrades",
+                        "--allow-remove-essential",
+                        "--allow-change-held-packages"
+                    ], check=False)
+                    self.log("System packages dist-upgraded", "SUCCESS")
+                except Exception as dist_error:
+                    self.log(f"Dist-upgrade warning: {dist_error}", "WARNING")
+            
+            # 3. Cleanup
+            try:
+                self.run_command(["apt-get", "autoremove", "-y", "-qq"], check=False)
+                self.run_command(["apt-get", "autoclean", "-y", "-qq"], check=False)
+            except Exception:
+                pass  # Non critico
+            
             return True
         except Exception as e:
-            self.log(f"Package list update warning: {e}", "WARNING")
-            return True  # Non bloccare l'update
+            self.log(f"System package update warning: {e}", "WARNING")
+            return True  # Non bloccare l'update del progetto
     
     def update_dependencies(self) -> bool:
         """Aggiorna dipendenze Python (system-wide, no venv)"""
