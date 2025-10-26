@@ -174,36 +174,57 @@
                     </div>
                 </div>
                 
-                <!-- Informazioni -->
-                <div class="logs-container">
+                <!-- Loop Controls -->
+                <div class="loop-controls-container">
                     <div class="logs-header">
-                        <h3>ℹ️ Informazioni</h3>
+                        <h3>🎮 Controlli Loop</h3>
                         <div class="logs-controls">
                             <button class="btn btn-success" onclick="startLoop()" id="startBtn">▶️ Start Loop</button>
                             <button class="btn btn-danger" onclick="stopLoop()" id="stopBtn">⏹️ Stop Loop</button>
                         </div>
                     </div>
-                    <div class="info-content" id="infoContent">
-                        <div class="info-entry">
-                            <span class="info-timestamp">03:32:15</span>
-                            <span class="info-level info">INFO</span>
-                            <span class="info-message">🚀 SOLAREDGE DASHBOARD MODERNA</span>
+                </div>
+
+                <!-- Log Monitor con Tab -->
+                <div class="logs-container">
+                    <div class="logs-header">
+                        <h3>📋 Log Monitor</h3>
+                        <div class="log-tabs">
+                            <button class="log-tab active" data-flow="all" onclick="switchLogTab('all')">
+                                <span class="tab-icon">📋</span> Tutti
+                            </button>
+                            <button class="log-tab" data-flow="api" onclick="switchLogTab('api')">
+                                <span class="tab-icon">🌐</span> API
+                            </button>
+                            <button class="log-tab" data-flow="web" onclick="switchLogTab('web')">
+                                <span class="tab-icon">🔌</span> Web
+                            </button>
+                            <button class="log-tab" data-flow="realtime" onclick="switchLogTab('realtime')">
+                                <span class="tab-icon">⚡</span> Realtime
+                            </button>
+                            <button class="log-tab" data-flow="general" onclick="switchLogTab('general')">
+                                <span class="tab-icon">ℹ️</span> Sistema
+                            </button>
                         </div>
-                        <div class="info-entry">
-                            <span class="info-timestamp">03:32:15</span>
-                            <span class="info-level info">INFO</span>
-                            <span class="info-message">[GUI] GUI Web avviata su: http://127.0.0.1:8092</span>
+                        <div class="logs-controls">
+                            <button class="btn btn-secondary btn-sm" onclick="clearLogs()">🗑️ Pulisci</button>
+                            <button class="btn btn-secondary btn-sm" onclick="toggleAutoScroll()" id="autoScrollBtn">
+                                📌 Auto-scroll: ON
+                            </button>
                         </div>
-                        <div class="info-entry">
-                            <span class="info-timestamp">03:32:15</span>
-                            <span class="info-level warning">WARN</span>
-                            <span class="info-message">⚠️ Per modificare .env o endpoint: ferma il loop prima!</span>
+                    </div>
+                    <div class="logs-content" id="logsContent">
+                        <!-- I log verranno caricati qui dinamicamente -->
+                        <div class="log-entry info">
+                            <span class="log-timestamp">--:--:--</span>
+                            <span class="log-level">INFO</span>
+                            <span class="log-flow">SYSTEM</span>
+                            <span class="log-message">In attesa di log...</span>
                         </div>
-                        <div class="info-entry">
-                            <span class="info-timestamp">03:32:15</span>
-                            <span class="info-level info">INFO</span>
-                            <span class="info-message">⏰ Intervalli: API/Web ogni 15 min, Realtime ogni 5 sec</span>
-                        </div>
+                    </div>
+                    <div class="logs-footer">
+                        <span class="logs-count" id="logsCount">0 log visualizzati</span>
+                        <span class="logs-filter" id="logsFilter">Filtro: Tutti</span>
                     </div>
                 </div>
             </section>

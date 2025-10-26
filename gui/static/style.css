@@ -591,6 +591,8 @@ body {
     padding: 1.5rem;
     border-bottom: 1px solid var(--border);
     background: var(--bg-secondary);
+    flex-wrap: wrap;
+    gap: 1rem;
 }
 
 .logs-header h3 {
@@ -599,9 +601,55 @@ body {
     font-size: 1.25rem;
 }
 
+.log-tabs {
+    display: flex;
+    gap: 0.5rem;
+    flex: 1;
+    justify-content: center;
+}
+
+.log-tab {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    color: var(--text-secondary);
+    padding: 0.5rem 1rem;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    transition: all 0.2s;
+    font-size: 0.875rem;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.log-tab:hover {
+    background: var(--bg-hover);
+    border-color: var(--accent-blue);
+    color: var(--text-primary);
+}
+
+.log-tab.active {
+    background: var(--accent-blue);
+    border-color: var(--accent-blue);
+    color: white;
+}
+
+.log-tab .tab-icon {
+    font-size: 1rem;
+}
+
 .logs-controls {
     display: flex;
     gap: 0.75rem;
+}
+
+.loop-controls-container {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    margin-bottom: 1.5rem;
+    overflow: hidden;
 }
 
 .logs-content {
@@ -659,9 +707,58 @@ body {
     color: var(--accent-green);
 }
 
+.log-flow {
+    font-weight: 600;
+    min-width: 80px;
+    text-align: center;
+    padding: 0.125rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+}
+
+.log-flow[data-flow="api"] {
+    background: rgba(59, 130, 246, 0.2);
+    color: var(--accent-blue);
+}
+
+.log-flow[data-flow="web"] {
+    background: rgba(139, 92, 246, 0.2);
+    color: #a78bfa;
+}
+
+.log-flow[data-flow="realtime"] {
+    background: rgba(245, 158, 11, 0.2);
+    color: var(--accent-orange);
+}
+
+.log-flow[data-flow="general"] {
+    background: rgba(107, 114, 128, 0.2);
+    color: #9ca3af;
+}
+
 .log-message, .info-message {
     color: var(--text-primary);
     flex: 1;
+}
+
+.logs-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.75rem 1.5rem;
+    border-top: 1px solid var(--border);
+    background: var(--bg-secondary);
+    font-size: 0.875rem;
+    color: var(--text-muted);
+}
+
+.logs-count {
+    font-weight: 500;
+}
+
+.logs-filter {
+    font-style: italic;
 }
 
 /* ===== CONFIG SECTION ===== */

@@ -984,3 +984,112 @@ let dashboard;
 document.addEventListener('DOMContentLoaded', () => {
     dashboard = new SolarDashboard();
 });
+/
+/ ===== LOG TAB FILTERING =====
+let currentLogFlow = 'all';
+let autoScrollEnabled = true;
+let logUpdateInterval = null;
+
+function switchLogTab(flow) {
+    currentLogFlow = flow;
+    
+    // Aggiorna UI dei tab
+    document.querySelectorAll('.log-tab').forEach(tab => {
+        tab.classList.toggle('active', tab.dataset.flow === flow);
+    });
+    
+    // Aggiorna filtro display
+    const filterNames = {
+        'all': 'Tutti',
+        'api': 'API',
+        'web': 'Web',
+        'realtime': 'Realtime',
+        'general': 'Sistema'
+    };
+    document.getElementById('logsFilter').textContent = `Filtro: ${filterNames[flow]}`;
+    
+    // Carica log filtrati
+    loadFilteredLogs();
+    
+    // Avvia polling se non già attivo
+    if (!logUpdateInterval) {
+        logUpdateInterval = setInterval(loadFilteredLogs, 3000);
+    }
+}
+
+async function loadFilteredLogs() {
+    try {
+        const response = await fetch(`/api/loop/logs?flow=${currentLogFlow}&limit=100`);
+        const data = await response.json();
+        
+        renderFilteredLogs(data.logs, data.total);
+    } catch (error) {
+        console.error('Error loading filtered logs:', error);
+    }
+}
+
+function renderFilteredLogs(logs, total) {
+    const container = document.getElementById('logsContent');
+    if (!container || !logs) return;
+    
+    // Mantieni scroll position se auto-scroll è disabilitato
+    const shouldScroll = autoScrollEnabled || 
+        (container.scrollTop + container.clientHeight >= container.scrollHeight - 10);
+    
+    // Genera HTML per i log con flow badge
+    const logsHtml = logs.map(log => {
+        const flowType = log.flow_type || 'general';
+        const flowIcons = {
+            'api': '🌐',
+            'web': '🔌',
+            'realtime': '⚡',
+            'general': 'ℹ️'
+        };
+        
+        return `
+            <div class="log-entry ${log.level.toLowerCase()}">
+                <span class="log-timestamp">${log.timestamp}</span>
+                <span class="log-level ${log.level.toLowerCase()}">${log.level}</span>
+                <span class="log-flow" data-flow="${flowType}">${flowIcons[flowType]} ${flowType.toUpperCase()}</span>
+                <span class="log-message">${escapeHtml(log.message)}</span>
+            </div>
+        `;
+    }).join('');
+    
+    container.innerHTML = logsHtml || '<div class="log-entry info"><span class="log-message">Nessun log disponibile per questo filtro</span></div>';
+    
+    // Aggiorna contatore
+    document.getElementById('logsCount').textContent = `${total} log visualizzati`;
+    
+    // Auto-scroll se abilitato
+    if (shouldScroll) {
+        container.scrollTop = container.scrollHeight;
+    }
+}
+
+function clearLogs() {
+    const container = document.getElementById('logsContent');
+    if (container) {
+        container.innerHTML = '<div class="log-entry info"><span class="log-message">Log puliti - in attesa di nuovi log...</span></div>';
+    }
+    document.getElementById('logsCount').textContent = '0 log visualizzati';
+}
+
+function toggleAutoScroll() {
+    autoScrollEnabled = !autoScrollEnabled;
+    const btn = document.getElementById('autoScrollBtn');
+    btn.textContent = `📌 Auto-scroll: ${autoScrollEnabled ? 'ON' : 'OFF'}`;
+    btn.classList.toggle('active', autoScrollEnabled);
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+// Avvia il caricamento dei log quando la pagina è pronta
+document.addEventListener('DOMContentLoaded', () => {
+    // Carica log iniziali
+    switchLogTab('all');
+});
