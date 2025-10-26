@@ -38,6 +38,28 @@ fi
 
 log "🚀 Starting SolarEdge Data Collector installation..."
 
+# Ask for passwords before installation
+echo ""
+info "📝 Configuration Setup"
+echo "Please provide passwords for InfluxDB and Grafana."
+echo "Press Enter to use default values."
+echo ""
+
+# InfluxDB password
+read -p "InfluxDB admin password (default: solaredge123): " CUSTOM_INFLUX_PASSWORD
+INFLUX_PASSWORD="${CUSTOM_INFLUX_PASSWORD:-solaredge123}"
+INFLUX_USERNAME="admin"
+
+# Grafana password
+read -p "Grafana admin password (default: admin): " CUSTOM_GRAFANA_PASSWORD
+GRAFANA_PASS="${CUSTOM_GRAFANA_PASSWORD:-admin}"
+GRAFANA_USER="admin"
+GRAFANA_URL="http://localhost:3000"
+
+echo ""
+log "✅ Configuration saved"
+echo ""
+
 # Install basic dependencies
 log "📦 Installing basic dependencies..."
 apt-get update -qq
@@ -127,8 +149,7 @@ REQS
         
         # Configure InfluxDB
         log "⚙️ Configuring InfluxDB..."
-        INFLUX_USERNAME="admin"
-        INFLUX_PASSWORD="solaredge123"
+        # INFLUX_USERNAME and INFLUX_PASSWORD already set at script start
         INFLUX_ORG="fotovoltaico"
         INFLUX_BUCKET="Solaredge"
         INFLUX_BUCKET_REALTIME="Solaredge_Realtime"
@@ -258,8 +279,7 @@ REQS
         
         # Configure Grafana data source
         log "⚙️ Configuring Grafana data source..."
-        GRAFANA_USER="admin"
-        GRAFANA_PASS="admin"
+        # Note: GRAFANA_URL, GRAFANA_USER, GRAFANA_PASS already set at script start
         
         # Create InfluxDB data source in Grafana
         DATASOURCE_RESPONSE=$(curl -s -X POST http://localhost:3000/api/datasources \
@@ -469,6 +489,11 @@ LOG_DIRECTORY=logs
 # === GUI CONFIGURATION ===
 GUI_HOST=127.0.0.1
 GUI_PORT=8092
+
+# === GRAFANA CONFIGURATION ===
+GRAFANA_URL=$GRAFANA_URL
+GRAFANA_USER=$GRAFANA_USER
+GRAFANA_PASSWORD=$GRAFANA_PASS
 
 # === ENVIRONMENT SETTINGS ===
 ENVIRONMENT=production
