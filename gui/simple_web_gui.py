@@ -1097,6 +1097,8 @@ class SimpleWebGUI:
                 # Regex per rimuovere codici ANSI
                 import re
                 self.ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
+                # Tracking del flow corrente (per assegnare log senza marker)
+                self.current_flow = None
                 
             def emit(self, record):
                 try:
@@ -1107,6 +1109,29 @@ class SimpleWebGUI:
                     
                     # Identifica il flow type dal messaggio o dal logger
                     flow_type = self._detect_flow_type(record.name, message)
+                    
+                    # Aggiorna il flow corrente se troviamo un marker di inizio
+                    if '🚀 avvio flusso' in message.lower():
+                        if 'api' in message.lower():
+                            self.current_flow = 'api'
+                        elif 'web' in message.lower():
+                            self.current_flow = 'web'
+                        elif 'realtime' in message.lower():
+                            self.current_flow = 'realtime'
+                    
+                    # Se il flow type è general ma abbiamo un flow corrente attivo,
+                    # e il messaggio sembra essere parte di un flow, usa il flow corrente
+                    if flow_type == 'general' and self.current_flow:
+                        # Messaggi che fanno parte di un flow
+                        if any(keyword in message.lower() for keyword in [
+                            'collector', 'parser', 'filtro', 'scritti', 'punti',
+                            'bucket', 'influxwriter', 'cache hit', 'cache miss'
+                        ]):
+                            flow_type = self.current_flow
+                    
+                    # Reset del flow corrente se troviamo un marker di fine
+                    if 'pipeline' in message.lower() and 'completata' in message.lower():
+                        self.current_flow = None
                     
                     # Formatta il log
                     log_entry = {
