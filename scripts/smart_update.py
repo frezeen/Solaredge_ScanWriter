@@ -629,6 +629,60 @@ except Exception as e:
             
         return True
     
+    def import_grafana_dashboard(self) -> bool:
+        """Importa sempre la dashboard Grafana dopo l'update"""
+        try:
+            import json
+            import os
+            from pathlib import Path
+            
+            dashboard_file = self.project_root / "grafana" / "dashboard-solaredge.json"
+            
+            if not dashboard_file.exists():
+                self.log("Dashboard file not found, skipping", "WARNING")
+                return True
+            
+            self.log("📊 Importing Grafana dashboard...", "INFO")
+            
+            # Leggi credenziali da environment
+            grafana_url = os.getenv('GRAFANA_URL', 'http://localhost:3000')
+            grafana_user = os.getenv('GRAFANA_USER', 'admin')
+            grafana_pass = os.getenv('GRAFANA_PASSWORD', 'admin')
+            
+            # Carica dashboard JSON
+            with open(dashboard_file, 'r') as f:
+                dashboard_json = json.load(f)
+            
+            # Prepara payload
+            payload = {
+                "dashboard": dashboard_json,
+                "overwrite": True,
+                "message": "Updated by smart_update.py"
+            }
+            
+            # Importa via API
+            import requests
+            response = requests.post(
+                f"{grafana_url}/api/dashboards/db",
+                auth=(grafana_user, grafana_pass),
+                json=payload,
+                timeout=10
+            )
+            
+            if response.status_code == 200:
+                result = response.json()
+                self.log("✅ Dashboard imported successfully", "SUCCESS")
+                if 'url' in result:
+                    self.log(f"Dashboard URL: {grafana_url}{result['url']}", "INFO")
+                return True
+            else:
+                self.log(f"Failed to import dashboard: HTTP {response.status_code}", "WARNING")
+                return True  # Non bloccare l'update
+                
+        except Exception as e:
+            self.log(f"Error importing dashboard: {e}", "WARNING")
+            return True  # Non bloccare l'update
+    
     def _log_update_completion(self, service_name: Optional[str]) -> None:
         """Log finale dell'aggiornamento completato"""
         self.log("🎉 Smart update completed successfully!", "SUCCESS")
@@ -747,57 +801,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
-    def import_grafana_dashboard(self) -> bool:
-        """Importa sempre la dashboard Grafana dopo l'update"""
-        try:
-            import json
-            import os
-            from pathlib import Path
-            
-            dashboard_file = self.project_root / "grafana" / "dashboard-solaredge.json"
-            
-            if not dashboard_file.exists():
-                self.log("Dashboard file not found, skipping", "WARNING")
-                return True
-            
-            self.log("📊 Importing Grafana dashboard...", "INFO")
-            
-            # Leggi credenziali da environment
-            grafana_url = os.getenv('GRAFANA_URL', 'http://localhost:3000')
-            grafana_user = os.getenv('GRAFANA_USER', 'admin')
-            grafana_pass = os.getenv('GRAFANA_PASSWORD', 'admin')
-            
-            # Carica dashboard JSON
-            with open(dashboard_file, 'r') as f:
-                dashboard_json = json.load(f)
-            
-            # Prepara payload
-            payload = {
-                "dashboard": dashboard_json,
-                "overwrite": True,
-                "message": "Updated by smart_update.py"
-            }
-            
-            # Importa via API
-            import requests
-            response = requests.post(
-                f"{grafana_url}/api/dashboards/db",
-                auth=(grafana_user, grafana_pass),
-                json=payload,
-                timeout=10
-            )
-            
-            if response.status_code == 200:
-                result = response.json()
-                self.log("✅ Dashboard imported successfully", "SUCCESS")
-                if 'url' in result:
-                    self.log(f"Dashboard URL: {grafana_url}{result['url']}", "INFO")
-                return True
-            else:
-                self.log(f"Failed to import dashboard: HTTP {response.status_code}", "WARNING")
-                return True  # Non bloccare l'update
-                
-        except Exception as e:
-            self.log(f"Error importing dashboard: {e}", "WARNING")
-            return True  # Non bloccare l'update
