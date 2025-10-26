@@ -279,34 +279,73 @@ REQS
         
         # Wait for Grafana to be ready
         log "Waiting for Grafana to be ready..."
+        
+        # Disable exit on error for health checks
+        set +e
+        
         GRAFANA_READY=false
         for i in {1..60}; do
-            HEALTH_CHECK=$(curl -s http://localhost:3000/api/health 2>/dev/null)
-            if [[ -n "$HEALTH_CHECK" ]] && echo "$HEALTH_CHECK" | grep -q "database.*ok"; then
+            # Simple HTTP 200 check is most reliable
+            HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3000/api/health 2>/dev/null)
+            if [[ "$HTTP_CODE" == "200" ]]; then
                 log "✅ Grafana is ready"
                 GRAFANA_READY=true
                 break
             fi
-            # Also accept simple 200 response
-            if curl -s -o /dev/null -w "%{http_code}" http://localhost:3000/api/health 2>/dev/null | grep -q "200"; then
-                log "✅ Grafana is ready (HTTP 200)"
-                GRAFANA_READY=true
-                break
+            
+            # Show progress every 10 iterations (20 seconds)
+            if [[ $((i % 10)) -eq 0 ]]; then
+                log "Still waiting... (${i}/60 attempts)"
             fi
-            if [[ $i -eq 60 ]]; then
-                warn "Grafana did not become ready after 120 seconds"
-            fi
+            
             sleep 2
         done
         
-        # Warn if Grafana may not be ready, but try anyway
+        # Re-enable exit on error
+        set -e
+        
         if [[ "$GRAFANA_READY" != "true" ]]; then
-            warn "Grafana may not be fully ready, but attempting configuration anyway..."
+            warn "Grafana did not become ready after 120 seconds"
+            warn "Attempting configuration anyway - you may need to configure manually"
         fi
         
         # Configure Grafana data source
         log "⚙️ Configuring Grafana data source..."
         # Note: GRAFANA_URL, GRAFANA_USER, GRAFANA_PASS already set at script start
+        
+        # Disable exit on error for Grafana configuration
+        set +e
+        
+        # Test if default credentials work, if not try to set password
+        log "Testing Grafana authentication..."
+        AUTH_TEST=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3000/api/datasources -u "$GRAFANA_USER:$GRAFANA_PASS" 2>/dev/null)
+        log "Auth test with configured credentials: HTTP $AUTH_TEST"
+        
+        if [[ "$AUTH_TEST" != "200" ]]; then
+            # Try with default admin:admin first
+            AUTH_TEST_DEFAULT=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3000/api/datasources -u "admin:admin" 2>/dev/null)
+            log "Auth test with admin:admin: HTTP $AUTH_TEST_DEFAULT"
+            
+            if [[ "$AUTH_TEST_DEFAULT" == "200" ]] && [[ "$GRAFANA_PASS" != "admin" ]]; then
+                # Default credentials work, change password
+                log "Setting Grafana admin password..."
+                PASS_CHANGE=$(curl -s -X PUT http://localhost:3000/api/user/password \
+                    -u "admin:admin" \
+                    -H "Content-Type: application/json" \
+                    -d "{\"oldPassword\":\"admin\",\"newPassword\":\"$GRAFANA_PASS\",\"confirmNew\":\"$GRAFANA_PASS\"}")
+                log "Password change response: $PASS_CHANGE"
+            elif [[ "$AUTH_TEST_DEFAULT" == "200" ]]; then
+                # Using default admin:admin
+                log "Using default Grafana credentials (admin:admin)"
+                GRAFANA_USER="admin"
+                GRAFANA_PASS="admin"
+            else
+                warn "Grafana authentication failed with both configured and default credentials"
+                warn "HTTP codes: configured=$AUTH_TEST, default=$AUTH_TEST_DEFAULT"
+            fi
+        else
+            log "Configured Grafana credentials work"
+        fi
         
         # Create InfluxDB data source in Grafana
         DATASOURCE_RESPONSE=$(curl -s -X POST http://localhost:3000/api/datasources \
@@ -332,7 +371,9 @@ REQS
         if echo "$DATASOURCE_RESPONSE" | grep -q '"id"'; then
             log "✅ Grafana InfluxDB data source configured successfully"
         else
-            warn "Could not configure Grafana InfluxDB data source automatically. You can configure it manually in Grafana UI."
+            warn "Could not configure Grafana InfluxDB data source automatically"
+            log "Response: $DATASOURCE_RESPONSE"
+            warn "You can configure it manually in Grafana UI"
         fi
         
         # Configure Sun and Moon data source
