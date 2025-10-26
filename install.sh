@@ -45,14 +45,23 @@ echo "Please provide passwords for InfluxDB and Grafana."
 echo "Press Enter to use default values."
 echo ""
 
-# InfluxDB password
-read -p "InfluxDB admin password (default: solaredge123): " CUSTOM_INFLUX_PASSWORD
-INFLUX_PASSWORD="${CUSTOM_INFLUX_PASSWORD:-solaredge123}"
-INFLUX_USERNAME="admin"
+# Check if running via pipe (no interactive terminal)
+if [ -t 0 ]; then
+    # Interactive mode - prompt for passwords
+    read -p "InfluxDB admin password (default: solaredge123): " CUSTOM_INFLUX_PASSWORD
+    INFLUX_PASSWORD="${CUSTOM_INFLUX_PASSWORD:-solaredge123}"
+    
+    read -p "Grafana admin password (default: admin): " CUSTOM_GRAFANA_PASSWORD
+    GRAFANA_PASS="${CUSTOM_GRAFANA_PASSWORD:-admin}"
+else
+    # Non-interactive mode (piped from curl) - use defaults
+    warn "Running in non-interactive mode, using default passwords"
+    INFLUX_PASSWORD="solaredge123"
+    GRAFANA_PASS="admin"
+fi
 
-# Grafana password
-read -p "Grafana admin password (default: admin): " CUSTOM_GRAFANA_PASSWORD
-GRAFANA_PASS="${CUSTOM_GRAFANA_PASSWORD:-admin}"
+# Set other credentials
+INFLUX_USERNAME="admin"
 GRAFANA_USER="admin"
 GRAFANA_URL="http://localhost:3000"
 
@@ -91,7 +100,7 @@ if [[ -d "$APP_DIR" ]]; then
 fi
 
 # Clone repository
-if git clone https://github.com/frezeen/Solaredge_ScanWriter.git "$APP_DIR"; then
+if git clone --quiet https://github.com/frezeen/Solaredge_ScanWriter.git "$APP_DIR" >/dev/null 2>&1; then
     log "✅ Repository clonato con successo"
     
     # Entra nella directory
@@ -267,15 +276,24 @@ REQS
         
         # Wait for Grafana to be ready
         log "Waiting for Grafana to be ready..."
-        for i in {1..30}; do
-            if curl -s http://localhost:3000/api/health >/dev/null 2>&1; then
+        GRAFANA_READY=false
+        for i in {1..60}; do
+            if curl -s http://localhost:3000/api/health 2>/dev/null | grep -q "ok"; then
+                log "✅ Grafana is ready"
+                GRAFANA_READY=true
                 break
             fi
-            if [[ $i -eq 30 ]]; then
-                warn "Grafana may not be ready, continuing anyway..."
+            if [[ $i -eq 60 ]]; then
+                warn "Grafana did not become ready after 120 seconds"
             fi
             sleep 2
         done
+        
+        # Skip Grafana configuration if not ready
+        if [[ "$GRAFANA_READY" != "true" ]]; then
+            warn "Skipping Grafana configuration - service not ready"
+            warn "You can configure Grafana manually later or run: systemctl restart grafana-server"
+        else
         
         # Configure Grafana data source
         log "⚙️ Configuring Grafana data source..."
@@ -427,6 +445,8 @@ REQS
         
         # Re-enable exit on error
         set -e
+        
+        fi  # End of GRAFANA_READY check
         
         # Create .env file
         log "📝 Creating configuration file..."
