@@ -6,6 +6,8 @@ Questo documento analizza tutti gli endpoint API ufficiali SolarEdge abilitati n
 
 ## Struttura Dati InfluxDB
 
+**Bucket Name**: Il nome del bucket InfluxDB è configurato nel file `.env` alla voce `INFLUXDB_BUCKET` (default: `Solaredge`). Usare questo valore in tutte le query Flux.
+
 ### Measurement: `api`
 
 - **Field Types** (basati su categoria endpoint):

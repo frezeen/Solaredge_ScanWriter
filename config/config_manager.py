@@ -162,6 +162,44 @@ class ConfigManager:
             web_data = yaml.safe_load(web_content) or {}
             if 'web_scraping' in web_data:
                 sources['web_scraping'] = web_data['web_scraping']
+        else:
+            # File web_endpoints.yaml mancante - genera automaticamente
+            from app_logging import get_logger
+            logger = get_logger(__name__)
+            logger.warning("⚠️ File web_endpoints.yaml non trovato. Avvio scansione automatica...")
+            
+            try:
+                # Importa e esegui lo scanner
+                from tools.yawl_manager import YawlManager
+                from collector.web_tree_scanner import WebTreeScanner
+                
+                # Esegui scan del web tree
+                scanner = WebTreeScanner()
+                scanner.scan()
+                
+                # Genera il file web_endpoints.yaml
+                ym = YawlManager()
+                if ym.generate_web_endpoints_only():
+                    logger.info("✅ File web_endpoints.yaml generato automaticamente")
+                    
+                    # Ricarica il file appena creato
+                    if web_file.exists():
+                        web_content = web_file.read_text(encoding='utf-8')
+                        web_content = self._substitute_env_vars(web_content)
+                        web_data = yaml.safe_load(web_content) or {}
+                        if 'web_scraping' in web_data:
+                            sources['web_scraping'] = web_data['web_scraping']
+                    else:
+                        logger.critical("❌ ERRORE CRITICO: File web_endpoints.yaml non creato dopo scansione")
+                        raise RuntimeError("Impossibile generare web_endpoints.yaml - file non trovato dopo scansione")
+                else:
+                    logger.critical("❌ ERRORE CRITICO: Generazione automatica web_endpoints.yaml fallita")
+                    raise RuntimeError("Impossibile generare web_endpoints.yaml - scansione fallita")
+            except Exception as e:
+                logger.critical(f"❌ ERRORE CRITICO durante scansione automatica: {e}")
+                logger.info("💡 Verifica credenziali in .env e connessione al portale SolarEdge")
+                raise RuntimeError(f"Impossibile generare web_endpoints.yaml: {e}") from e
+                logger.info("💡 Puoi generarlo manualmente con: python main.py --scan")
         
         # Merge sources nel config principale
         if sources:
