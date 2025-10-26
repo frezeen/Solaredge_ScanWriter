@@ -483,23 +483,18 @@ class SmartUpdater:
             return False
             
     def update_system_packages(self) -> bool:
-        """Aggiorna pacchetti di sistema Debian/Ubuntu"""
+        """Aggiorna solo la lista dei pacchetti (non i pacchetti stessi)"""
         try:
-            self.log("Updating system packages...", "INFO")
+            self.log("Updating package list...", "INFO")
             
-            # Update package list
-            self.run_command(["apt-get", "update", "-qq"])
+            # Solo update della lista pacchetti, non upgrade
+            # L'upgrade dei pacchetti di sistema dovrebbe essere fatto manualmente dall'admin
+            self.run_command(["apt-get", "update", "-qq"], check=False)
             
-            # Upgrade only Python-related packages
-            self.run_command([
-                "apt-get", "upgrade", "-y", "-qq",
-                "python3*"
-            ])
-            
-            self.log("System packages updated", "SUCCESS")
+            self.log("Package list updated", "SUCCESS")
             return True
         except Exception as e:
-            self.log(f"System package update warning: {e}", "WARNING")
+            self.log(f"Package list update warning: {e}", "WARNING")
             return True  # Non bloccare l'update
     
     def update_dependencies(self) -> bool:
