@@ -1175,23 +1175,34 @@ class SimpleWebGUI:
                 
                 # 4. Controlla logger generico 'main' - usa context dal messaggio
                 if logger_lower == 'main':
-                    # Se il messaggio parla di collector/parser/storage, prova a dedurre
-                    if 'collector' in message_lower or 'parser' in message_lower or 'storage' in message_lower:
-                        # Cerca indizi nel messaggio
-                        if 'api' in message_lower:
+                    # Messaggi che contengono questi pattern vanno nei flow
+                    if any(pattern in message_lower for pattern in [
+                        'collector:', 'parser:', 'filtro:', 'storage:', 'writer:',
+                        'pipeline', 'punti', 'bucket', 'scritti', 'generati',
+                        'raccolti', 'raccogliendo', 'processando', 'validati'
+                    ]):
+                        # Cerca indizi nel messaggio per capire quale flow
+                        if any(word in message_lower for word in ['api', 'endpoint']):
                             return 'api'
-                        elif 'web' in message_lower:
+                        elif any(word in message_lower for word in ['web', 'scraping', 'dispositivo']):
                             return 'web'
-                        elif 'realtime' in message_lower:
+                        elif any(word in message_lower for word in ['realtime', 'modbus', 'inverter', 'meter']):
                             return 'realtime'
+                        # Se non riesci a capire quale flow, ma è chiaramente un flow, metti in general
+                        # (meglio che perderlo)
                 
                 # 5. Log di storage/influx - assegna al flow corrente se possibile
                 if 'storage' in logger_lower or 'influx' in logger_lower:
-                    if 'solaredge_realtime' in message_lower:
+                    if 'solaredge_realtime' in message_lower or 'realtime' in message_lower:
                         return 'realtime'
                     elif 'solaredge' in message_lower and 'realtime' not in message_lower:
-                        # Bucket Solaredge generico è usato da API e Web
-                        # Difficile distinguere, lascia come general
+                        # Bucket Solaredge generico - prova a dedurre dal contesto
+                        # Se il messaggio precedente era di un flow, probabilmente è quello
+                        # Per ora, se non possiamo dedurre, lasciamo in general
+                        pass
+                    # Log generici di InfluxWriter (inizializzazione, etc.)
+                    if 'inizializzato' in message_lower or 'influxwriter' in message_lower:
+                        # Questi sono log di setup, possono stare in general
                         pass
                 
                 # Default: general (solo per log veramente di sistema: GUI, cache, scheduler, config)
@@ -1202,7 +1213,15 @@ class SimpleWebGUI:
         gui_handler.setLevel(logging.INFO)
         
         # Aggiungi ai logger che ci interessano
-        loggers_to_capture = ['main', 'SimpleWebGUI', 'collector', 'parser', 'storage', 'scheduler']
+        loggers_to_capture = [
+            'main',           # Logger principale
+            'SimpleWebGUI',   # Logger GUI
+            'collector',      # Tutti i collector (api, web, realtime)
+            'parser',         # Tutti i parser
+            'storage',        # Storage/InfluxDB
+            'scheduler',      # Scheduler
+            'cache_manager'   # Cache manager (aggiunto!)
+        ]
         for logger_name in loggers_to_capture:
             logger = logging.getLogger(logger_name)
             logger.addHandler(gui_handler)
