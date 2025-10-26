@@ -493,7 +493,7 @@ class SimpleWebGUI:
                 # Se non c'è una run corrente, creane una nuova
                 self.flow_runs[flow_type].append([log_entry])
     
-    def _get_filtered_logs(self, flow_filter='all', limit=100):
+    def _get_filtered_logs(self, flow_filter='all', limit=500):
         """Ottiene i log filtrati per flow type dalle ultime 3 run"""
         filtered_logs = []
         
@@ -502,15 +502,24 @@ class SimpleWebGUI:
             for flow_type in ['api', 'web', 'realtime', 'general']:
                 for run in self.flow_runs[flow_type]:
                     filtered_logs.extend(run)
+            
+            # Ordina per timestamp per avere ordine cronologico corretto
+            # Converti timestamp HH:MM:SS in secondi per ordinamento
+            def timestamp_to_seconds(ts_str):
+                try:
+                    h, m, s = map(int, ts_str.split(':'))
+                    return h * 3600 + m * 60 + s
+                except:
+                    return 0
+            
+            filtered_logs.sort(key=lambda log: timestamp_to_seconds(log.get('timestamp', '00:00:00')))
         else:
             # Solo le ultime 3 run del flow type specifico
             for run in self.flow_runs.get(flow_filter, []):
                 filtered_logs.extend(run)
+            # I log di un singolo flow sono già in ordine cronologico
         
-        # Ordina per timestamp (più recenti per ultimi)
-        # Nota: assumiamo che i log siano già in ordine cronologico
-        
-        # Applica limit
+        # Applica limit (prendi gli ultimi N log)
         return filtered_logs[-limit:] if len(filtered_logs) > limit else filtered_logs
 
     async def handle_loop_start(self, request):
