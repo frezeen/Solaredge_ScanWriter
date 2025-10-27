@@ -152,6 +152,8 @@ Lo script installa automaticamente:
 
 ### Metodo 2: Installazione Manuale
 
+**⚠️ Nota**: Con l'installazione manuale dovrai configurare manualmente il token InfluxDB nel file `.env` dopo aver completato il setup di InfluxDB.
+
 ```bash
 # 1. Clone repository
 git clone https://github.com/frezeen/Solaredge_ScanWriter.git
@@ -164,12 +166,13 @@ chmod +x setup-permissions.sh
 # 3. Installa dipendenze
 pip3 install -r requirements.txt --break-system-packages
 
-# 4. Copia e configura .env
+# 4. Installa InfluxDB e Grafana manualmente
+# Vedi sezione "Installazione Servizi" sotto
+
+# 5. Dopo il setup di InfluxDB, copia il token generato
+# e configuralo in .env insieme alle credenziali SolarEdge
 cp .env.example .env
 nano .env
-
-# 5. Installa InfluxDB e Grafana manualmente
-# Vedi sezione "Installazione Servizi" sotto
 ```
 
 ### Metodo 3: Installazione Docker
@@ -203,9 +206,11 @@ systemctl enable influxdb
 systemctl start influxdb
 
 # Setup iniziale (http://localhost:8086)
+# NOTA: Se usi install.sh, questo viene fatto automaticamente!
 # Org: fotovoltaico
 # Bucket: Solaredge
 # Bucket Realtime: Solaredge_Realtime (retention 2 giorni)
+# Il token generato verrà automaticamente inserito in .env
 ```
 
 #### Grafana
@@ -237,15 +242,21 @@ systemctl start grafana-server
 nano /opt/Solaredge_ScanWriter/.env
 ```
 
-Parametri obbligatori:
+**Parametri da configurare**:
 ```bash
+# Credenziali SolarEdge (OBBLIGATORI)
 SOLAREDGE_SITE_ID=123456
 SOLAREDGE_USERNAME=your.email@example.com
 SOLAREDGE_PASSWORD=your_password
 SOLAREDGE_API_KEY=your_api_key
 
-INFLUXDB_TOKEN=your_influxdb_token
+# InfluxDB Token (GIÀ CONFIGURATO dall'installer)
+# INFLUXDB_TOKEN=xxx  # ← Già presente, generato automaticamente
 ```
+
+**Note**:
+- ✅ **Con install.sh**: Il token InfluxDB è già configurato automaticamente. Aggiungi solo le credenziali SolarEdge.
+- ⚠️ **Con installazione manuale**: Dopo il setup di InfluxDB (http://localhost:8086), copia il token generato e inseriscilo manualmente in `.env` alla voce `INFLUXDB_TOKEN`.
 
 #### 2. Test Installazione
 ```bash
@@ -360,9 +371,9 @@ REALTIME_MODBUS_HOST=192.168.1.100
 REALTIME_MODBUS_PORT=1502
 MODBUS_ENABLED=true
 
-# InfluxDB
+# InfluxDB (configurato automaticamente dall'installer)
 INFLUXDB_URL=http://localhost:8086
-INFLUXDB_TOKEN=your_influxdb_token
+INFLUXDB_TOKEN=<generato_automaticamente_da_install.sh>
 INFLUXDB_ORG=fotovoltaico
 INFLUXDB_BUCKET=Solaredge
 INFLUXDB_BUCKET_REALTIME=Solaredge_Realtime
@@ -834,6 +845,10 @@ sudo journalctl -u influxdb -f
 1. Verifica data source InfluxDB in Grafana
 2. Controlla token e bucket name
 3. Testa query manualmente in InfluxDB UI
+
+**Nota Token InfluxDB**:
+- Con `install.sh`: Il token è già configurato automaticamente in `.env`
+- Con installazione manuale: Recupera il token da InfluxDB UI (http://localhost:8086) → Load Data → API Tokens → Copia il token e aggiungilo in `.env`
 
 #### API Rate Limit
 - Limite: 300 richieste/giorno per site
