@@ -1,6 +1,8 @@
-# SolarEdge Data Collector
+# ⚡ SolarEdge ScanWriter
 
-Sistema completo di raccolta, elaborazione e visualizzazione dati per impianti fotovoltaici SolarEdge con integrazione InfluxDB e Grafana.
+**Sistema completo di monitoraggio per impianti fotovoltaici SolarEdge**
+
+Raccogli, analizza e visualizza i dati del tuo impianto fotovoltaico con dashboard Grafana professionali. Gestione semplice tramite interfaccia web, nessuna configurazione manuale richiesta.
 
 ![Python](https://img.shields.io/badge/Python-3.11+-blue.svg)
 ![License](https://img.shields.io/badge/License-MIT-green.svg)
@@ -258,11 +260,25 @@ cd /opt/Solaredge_ScanWriter
 sudo systemctl enable --now solaredge-scanwriter
 ```
 
-#### 4. Importa Dashboard Grafana
+#### 4. Accedi a Grafana
 
-1. Accedi a Grafana: `http://localhost:3000` (admin/admin)
-2. Vai su **"+" → Import**
-3. Upload file: `/opt/Solaredge_ScanWriter/grafana/dashboard-solaredge.json`
+La dashboard è già configurata automaticamente dall'installer!
+
+1. Accedi a Grafana: `http://localhost:3000`
+2. Usa le credenziali configurate durante l'installazione (default: admin/admin)
+3. La dashboard "SolarEdge" è già disponibile nella home
+
+**Nota**: L'installer configura automaticamente:
+- ✅ Data source InfluxDB "Solaredge"
+- ✅ Data source "Sun and Moon" per alba/tramonto
+- ✅ Dashboard completa con tutte le metriche
+- ✅ Formati data italiani (DD-MM-YYYY)
+
+**Importazione manuale** (solo se necessario):
+Se la dashboard non è stata importata automaticamente, puoi farlo manualmente:
+1. Vai su **"+" → Import**
+2. Upload file: `/opt/Solaredge_ScanWriter/grafana/dashboard-solaredge.json`
+3. Seleziona data source "Solaredge"
 4. Clicca **"Import"**
 
 ## ⚙️ Configurazione
@@ -634,7 +650,29 @@ http://localhost:8086
 ### Accesso
 - URL: `http://localhost:3000`
 - User: `admin`
-- Password: configurata durante install
+- Password: configurata durante install (default: admin)
+
+### Configurazione Automatica
+
+L'installer `install.sh` configura automaticamente:
+
+1. **Installazione Grafana** con plugin:
+   - `fetzerch-sunandmoon-datasource` - Dati alba/tramonto
+   - `grafana-clock-panel` - Pannello orologio
+
+2. **Data Sources**:
+   - **Solaredge** (InfluxDB Flux) - Collegato al bucket principale
+   - **Sun and Moon** - Coordinate geografiche preconfigurate
+
+3. **Dashboard Import**:
+   - Dashboard completa importata automaticamente via API
+   - UIDs dei data source aggiornati automaticamente
+   - Formati data italiani (DD-MM-YYYY, HH:mm)
+
+4. **Formati Data Italiani**:
+   - Configurazione automatica in `/etc/grafana/grafana.ini`
+   - Formato date: `DD MMMM YYYY`
+   - Formato ore: `HH:mm:ss`
 
 ### Dashboard Pre-Configurate
 
@@ -790,6 +828,10 @@ Lo script `update.sh`:
 - ✅ Aggiornamento dipendenze
 - ✅ Risoluzione conflitti automatica
 - ✅ Restart servizio
+
+**Nota Grafana**: Gli aggiornamenti del codice non modificano la configurazione Grafana esistente. Se la dashboard viene aggiornata nel repository, puoi:
+1. Reimportarla manualmente da Grafana UI (sovrascrive la precedente)
+2. Oppure eseguire nuovamente `install.sh` (preserva le configurazioni esistenti)
 
 ### Permessi e Sicurezza
 
