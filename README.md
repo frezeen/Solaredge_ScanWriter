@@ -277,13 +277,23 @@ Questo comando:
 - 📝 Genera automaticamente `config/sources/web_endpoints.yaml`
 - ✅ Rileva tutti i device del tuo impianto (inverter, optimizer, meter, sensori)
 
-#### 4. Configura Endpoint tramite GUI
+#### 4. Avvia Servizio
+```bash
+sudo systemctl enable --now solaredge-scanwriter
+```
+
+Questo avvia:
+- 🌐 GUI Dashboard su `http://localhost:8092`
+- 🔄 Loop di raccolta dati automatico
+- 📊 Scrittura dati su InfluxDB
+
+#### 5. Configura Endpoint tramite GUI (Opzionale)
 
 **Accedi alla GUI Dashboard**: `http://localhost:8092`
 
-La GUI permette di configurare quali dati raccogliere. Gli endpoint abilitati di default sono quelli utilizzati dalla dashboard Grafana:
+La configurazione di default è già ottimizzata per la dashboard Grafana. Puoi personalizzare gli endpoint se necessario:
 
-**📊 Endpoint API Abilitati di Default** (9 endpoint):
+**📊 Endpoint API Abilitati di Default** (9/22 endpoint):
 - ✅ `equipment_data` - Dati tecnici inverter (tensioni, correnti, temperatura)
 - ✅ `equipment_list` - Lista dispositivi installati
 - ✅ `site_details` - Dettagli impianto
@@ -307,11 +317,6 @@ La GUI permette di configurare quali dati raccogliere. Gli endpoint abilitati di
 
 **Personalizzazione**:
 Dalla GUI puoi abilitare/disabilitare endpoint aggiuntivi per raccogliere altri dati secondo le tue esigenze. Tutti i 22 endpoint API sono disponibili per analisi personalizzate.
-
-#### 5. Avvia Servizio
-```bash
-sudo systemctl enable --now solaredge-scanwriter
-```
 
 #### 6. Accedi a Grafana
 
@@ -611,8 +616,8 @@ http://[IP_SERVER]:8092
 
 1. **Configura credenziali** in `.env` (API key, username, password, site ID)
 2. **Genera configurazione web**: `python main.py --scan` (rileva i tuoi device)
-3. **Personalizza endpoint** tramite GUI: `http://localhost:8092`
-4. **Avvia il servizio**: `sudo systemctl start solaredge-scanwriter`
+3. **Avvia il servizio**: `sudo systemctl start solaredge-scanwriter`
+4. **Personalizza endpoint** (opzionale) tramite GUI: `http://localhost:8092`
 5. **Visualizza dati** in Grafana: `http://localhost:3000`
 
 **Configurazione Default**:
