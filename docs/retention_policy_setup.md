@@ -13,7 +13,8 @@ Il sistema SolarEdge Data Collector supporta retention policy diverse per i dive
 
 Il sistema utilizza due bucket InfluxDB:
 
-1. **Bucket Principale** (`INFLUXDB_BUCKET`): 
+1. **Bucket Principale** (`INFLUXDB_BUCKET`):
+
    - Contiene dati API e Web
    - Retention configurabile (default: infinita)
    - Measurements: `api`, `web`
@@ -63,6 +64,7 @@ Per installazioni esistenti, usa lo script di setup:
 ```
 
 Lo script:
+
 1. Verifica la connessione InfluxDB
 2. Controlla se il bucket realtime esiste
 3. Crea il bucket con retention di 2 giorni
@@ -81,7 +83,7 @@ writer.write_points(realtime_points, measurement_type="realtime")
 # Dati API → bucket principale
 writer.write_points(api_points, measurement_type="api")
 
-# Dati Web → bucket principale  
+# Dati Web → bucket principale
 writer.write_points(web_points, measurement_type="web")
 ```
 

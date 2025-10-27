@@ -302,7 +302,18 @@ cd /opt/Solaredge_ScanWriter
 ./update.sh  # Backup automatico, pull, update dipendenze, restart
 ```
 
-**Nota Grafana**: Gli aggiornamenti non modificano la configurazione Grafana. Per aggiornare la dashboard, reimportala manualmente da Grafana UI.
+Lo script `update.sh`:
+- ✅ Backup automatico configurazione
+- ✅ Pull da GitHub e aggiornamento dipendenze
+- ✅ Restart servizio
+- ✅ **Importa automaticamente dashboard Grafana aggiornata**
+
+**⚠️ Importante - Dashboard Personalizzate**:
+Se hai creato dashboard personalizzate in Grafana, salvale con un **nome diverso** da "SolarEdge". Lo script `update.sh` sovrascrive automaticamente la dashboard "SolarEdge" con la versione aggiornata dal repository.
+
+**Esempio**:
+- Dashboard originale: "SolarEdge" → Verrà sovrascritta da update.sh
+- Dashboard personalizzata: "SolarEdge - Custom" → Sarà preservata
 
 ## 🤝 Contributi
 
