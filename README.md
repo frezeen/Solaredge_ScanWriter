@@ -368,6 +368,18 @@ api_ufficiali:
 ```
 
 **Abilitare/Disabilitare endpoint:**
+
+⚠️ **Importante**: Non modificare i file YAML manualmente! Usa la GUI Dashboard per gestire gli endpoint.
+
+```bash
+# Avvia la GUI
+python main.py
+
+# Accedi a: http://localhost:8092
+# Sezione: "API Endpoints" → Toggle on/off per ogni endpoint
+```
+
+Se proprio necessario modificare manualmente:
 ```yaml
 site_overview:
   enabled: false  # ← Disabilita questo endpoint
@@ -468,6 +480,55 @@ modbus:
 
 ## 🎯 Utilizzo
 
+### 🌐 GUI Dashboard - Interfaccia Web
+
+La GUI Dashboard è l'interfaccia principale per gestire il sistema. Offre 5 sezioni principali:
+
+#### 1. **Device Web Scraping** 🔌
+Gestisci i dispositivi rilevati dal portale SolarEdge:
+- Toggle on/off per ogni device (Inverter, Optimizer, Meter, Weather)
+- Abilita/disabilita metriche specifiche per device
+- Modifica `config/sources/web_endpoints.yaml` tramite interfaccia
+
+#### 2. **API Endpoints** 🌐
+Configura gli endpoint dell'API REST SolarEdge:
+- Filtra per categoria: Info, Inverter, Meter, Flusso
+- Toggle on/off per ogni endpoint
+- Visualizza descrizione e parametri endpoint
+- Modifica `config/sources/api_endpoints.yaml` tramite interfaccia
+
+#### 3. **Modbus Realtime** ⚡
+Gestisci la telemetria in tempo reale:
+- Toggle device Modbus
+- Abilita/disabilita metriche specifiche
+- Modifica `config/sources/modbus_endpoints.yaml` tramite interfaccia
+
+#### 4. **Loop Monitor** 🔄
+Controlla il loop di raccolta dati:
+- **Start/Stop** loop con un click
+- Visualizza statistiche in tempo reale (API, Web, Realtime)
+- Log live con filtri per tipo (info, warning, error)
+- Cronologia esecuzioni con successi/fallimenti
+
+#### 5. **YAML Config** ⚙️
+Editor configurazioni avanzato:
+- Visualizza e modifica file YAML direttamente
+- Syntax highlighting
+- Validazione automatica
+- Salvataggio con backup automatico
+
+**Accesso GUI:**
+```bash
+# Avvia
+python main.py
+
+# Accedi da browser
+http://localhost:8092
+
+# Accesso da rete locale (se firewall permette)
+http://[IP_SERVER]:8092
+```
+
 ### Setup Iniziale - Prima Esecuzione
 
 Prima di avviare il sistema, devi generare la configurazione web:
@@ -495,10 +556,14 @@ python main.py
 ```
 
 La GUI permette di:
-- ✅ Avviare/fermare il loop di raccolta
-- ✅ Monitorare statistiche in tempo reale
-- ✅ Visualizzare log live
-- ✅ Controllare stato cache e database
+- ✅ **Gestire Device Web Scraping**: Toggle on/off device e metriche
+- ✅ **Configurare API Endpoints**: Abilitare/disabilitare endpoint per categoria
+- ✅ **Gestire Modbus Realtime**: Configurare device e metriche Modbus
+- ✅ **Controllare Loop**: Avviare/fermare il loop di raccolta dati
+- ✅ **Monitorare in Tempo Reale**: Statistiche, log live, stato esecuzioni
+- ✅ **Editare YAML**: Visualizzare e modificare configurazioni direttamente
+
+**⚠️ Importante**: Usa sempre la GUI per modificare le configurazioni YAML. Le modifiche manuali possono causare errori di sintassi.
 
 ### Modalità Command Line
 
