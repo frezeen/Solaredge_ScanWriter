@@ -5379,13 +5379,13 @@
     ]
   },
   "time": {
-    "from": "now-1d/d",
-    "to": "now-1d/d"
+    "from": "now/d",
+    "to": "now/d"
   },
   "timepicker": {},
   "timezone": "",
   "title": "Solaredge 3.0",
   "uid": "afb91a6f-d8f7-43ae-8a98-67eab1bb4baa",
-  "version": 149,
+  "version": 150,
   "weekStart": "monday"
 }
