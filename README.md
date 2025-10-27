@@ -615,11 +615,19 @@ sudo journalctl -u solaredge-scanwriter -f
 docker-compose up -d
 
 # Log
-docker-compose logs -f solaredge
+docker-compose logs -f solaredge-scanwriter
 
 # Stop
 docker-compose down
+
+# Accesso GUI
+http://localhost:8092
+
+# Accesso InfluxDB
+http://localhost:8086
 ```
+
+**Nota**: Il docker-compose include sia l'applicazione che InfluxDB. Grafana va installato separatamente o aggiunto al compose.
 
 ## 📊 Dashboard Grafana
 
