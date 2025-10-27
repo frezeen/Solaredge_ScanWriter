@@ -255,12 +255,54 @@ cd /opt/Solaredge_ScanWriter
 
 **Nota**: Gli script `test.sh` e `status.sh` vengono creati automaticamente dall'installer.
 
-#### 3. Avvia Servizio
+#### 3. Genera Configurazione Web (Prima Esecuzione)
+```bash
+cd /opt/Solaredge_ScanWriter
+python3 main.py --scan
+```
+
+Questo comando:
+- 🔍 Scansiona il portale SolarEdge
+- 📝 Genera automaticamente `config/sources/web_endpoints.yaml`
+- ✅ Rileva tutti i device del tuo impianto (inverter, optimizer, meter, sensori)
+
+#### 4. Configura Endpoint tramite GUI
+
+**Accedi alla GUI Dashboard**: `http://localhost:8092`
+
+La GUI permette di configurare quali dati raccogliere. Gli endpoint abilitati di default sono quelli utilizzati dalla dashboard Grafana:
+
+**📊 Endpoint API Abilitati di Default** (9 endpoint):
+- ✅ `equipment_data` - Dati tecnici inverter (tensioni, correnti, temperatura)
+- ✅ `equipment_list` - Lista dispositivi installati
+- ✅ `site_details` - Dettagli impianto
+- ✅ `site_energy_day` - Produzione giornaliera
+- ✅ `site_energy_details` - Dettagli energia 15 minuti (produzione, consumo, autoconsumo, immissione, prelievo)
+- ✅ `site_env_benefits` - Benefici ambientali (CO2 evitata)
+- ✅ `site_overview` - Panoramica corrente
+- ✅ `site_power_details` - Dettagli potenza istantanea
+- ✅ `site_timeframe_energy` - Energia totale anno corrente
+
+**🔌 Endpoint Web Scraping Abilitati di Default**:
+- ✅ **Optimizer** - Tutti gli optimizer rilevati (dati pannelli 15 minuti)
+- ✅ **Weather** - Sensori meteo (se presenti)
+- ❌ **Inverter** - Disabilitato (usa API o Modbus)
+- ❌ **Meter** - Disabilitato (usa API o Modbus)
+
+**⚡ Endpoint Modbus Realtime Abilitati di Default**:
+- ✅ **Inverter Realtime** - Tutte le metriche (potenza, tensioni, correnti, temperatura, stato)
+- ✅ **Meter Realtime** - Tutte le metriche (import/export energia, potenze per fase)
+- ❌ **Batteries** - Disabilitato (abilita se hai batterie)
+
+**Personalizzazione**:
+Dalla GUI puoi abilitare/disabilitare endpoint aggiuntivi per raccogliere altri dati secondo le tue esigenze. Tutti i 22 endpoint API sono disponibili per analisi personalizzate.
+
+#### 5. Avvia Servizio
 ```bash
 sudo systemctl enable --now solaredge-scanwriter
 ```
 
-#### 4. Accedi a Grafana
+#### 6. Accedi a Grafana
 
 La dashboard è già configurata automaticamente dall'installer!
 
@@ -500,22 +542,29 @@ modbus:
 
 La GUI Dashboard è l'interfaccia principale per gestire il sistema. Offre 5 sezioni principali:
 
+**URL**: `http://localhost:8092`
+
 #### 1. **Device Web Scraping** 🔌
 Gestisci i dispositivi rilevati dal portale SolarEdge:
 - Toggle on/off per ogni device (Inverter, Optimizer, Meter, Weather)
 - Abilita/disabilita metriche specifiche per device
 - Modifica `config/sources/web_endpoints.yaml` tramite interfaccia
 
+**Default**: Solo **Optimizer** e **Weather** sono abilitati (usati dalla dashboard Grafana)
+
 #### 2. **API Endpoints** 🌐
-Configura gli endpoint dell'API REST SolarEdge:
+Configura gli endpoint dell'API REST SolarEdge (22 endpoint disponibili):
 - Filtra per categoria: Info, Inverter, Meter, Flusso
 - Toggle on/off per ogni endpoint
 - Visualizza descrizione e parametri endpoint
 - Modifica `config/sources/api_endpoints.yaml` tramite interfaccia
 
+**Default**: 9 endpoint abilitati (quelli usati dalla dashboard Grafana):
+- Dati tecnici inverter, produzione, consumo, autoconsumo, immissione, prelievo, benefici ambientali
+
 #### 3. **Modbus Realtime** ⚡
 Gestisci la telemetria in tempo reale:
-- Toggle device Modbus
+- Toggle device Modbus (Inverter, Meter, Batteries)
 - Abilita/disabilita metriche specifiche
 - Modifica `config/sources/modbus_endpoints.yaml` tramite interfaccia
 
@@ -544,6 +593,19 @@ http://localhost:8092
 # Accesso da rete locale (se firewall permette)
 http://[IP_SERVER]:8092
 ```
+
+### 📋 Flusso di Configurazione Iniziale
+
+**Dopo l'installazione, segui questi passi**:
+
+1. **Configura credenziali** in `.env` (API key, username, password, site ID)
+2. **Genera configurazione web**: `python main.py --scan` (rileva i tuoi device)
+3. **Personalizza endpoint** tramite GUI: `http://localhost:8092`
+4. **Avvia il servizio**: `sudo systemctl start solaredge-scanwriter`
+5. **Visualizza dati** in Grafana: `http://localhost:3000`
+
+**Configurazione Default**:
+Il sistema parte con gli endpoint necessari per la dashboard Grafana già abilitati. Puoi personalizzare quali dati raccogliere tramite la GUI secondo le tue esigenze.
 
 ### Setup Iniziale - Prima Esecuzione
 
@@ -580,6 +642,36 @@ La GUI permette di:
 - ✅ **Editare YAML**: Visualizzare e modificare configurazioni direttamente
 
 **⚠️ Importante**: Usa sempre la GUI per modificare le configurazioni YAML. Le modifiche manuali possono causare errori di sintassi.
+
+### 🎨 Personalizzazione Endpoint
+
+**Endpoint Disponibili**:
+- **22 endpoint API** - Tutti i dati disponibili dall'API ufficiale SolarEdge
+- **Device Web** - Optimizer, inverter, meter, sensori meteo (rilevati automaticamente)
+- **Modbus Realtime** - Inverter, meter, batterie (telemetria 5 secondi)
+
+**Configurazione Default vs Personalizzata**:
+
+La configurazione di default abilita solo gli endpoint necessari per la dashboard Grafana inclusa. Questo garantisce:
+- ✅ Consumo minimo di API calls (rispetto limite 300/giorno)
+- ✅ Carico ridotto sul sistema
+- ✅ Dashboard funzionante immediatamente
+
+**Quando personalizzare**:
+- 📊 Vuoi creare dashboard Grafana personalizzate con metriche aggiuntive
+- 🔍 Hai bisogno di dati specifici non inclusi nella dashboard default
+- 📈 Vuoi analizzare dati storici di equipment specifici
+- 🔋 Hai batterie e vuoi monitorare storage
+- 🌡️ Vuoi dati dettagliati dei sensori
+
+**Come personalizzare**:
+1. Accedi alla GUI: `http://localhost:8092`
+2. Vai nella sezione corrispondente (API Endpoints / Device Web / Modbus)
+3. Abilita gli endpoint aggiuntivi che ti interessano
+4. Salva la configurazione
+5. Il sistema inizierà a raccogliere i nuovi dati automaticamente
+
+**Nota**: Tutti i dati raccolti sono disponibili in InfluxDB per query personalizzate, anche se non visualizzati nella dashboard Grafana di default.
 
 ### Modalità Command Line
 
