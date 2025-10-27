@@ -377,10 +377,7 @@ site_overview:
 
 **Prima configurazione:**
 ```bash
-# Copia il file di esempio
-cp config/sources/web_endpoints.yaml.example config/sources/web_endpoints.yaml
-
-# Oppure genera automaticamente (raccomandato)
+# Genera automaticamente la configurazione
 python main.py --scan
 ```
 
