@@ -1,0 +1,100 @@
+# Web Endpoints Configuration Example
+# Copy this file to web_endpoints.yaml and configure your devices
+# Run: python main.py --scan to auto-generate configuration
+
+web_scraping:
+  enabled: true
+  endpoints:
+    # Example Inverter
+    inverter_XXXXXXXX-XX:
+      category: Inverter
+      device_id: XXXXXXXX-XX
+      device_name: Inverter 1
+      device_type: INVERTER
+      enabled: true
+      measurements:
+        AC_PRODUCTION_POWER:
+          enabled: true
+        AC_PRODUCTION_ENERGY:
+          enabled: true
+        AC_VOLTAGE:
+          enabled: true
+        AC_CURRENT:
+          enabled: true
+        DC_VOLTAGE:
+          enabled: true
+        AC_FREQUENCY:
+          enabled: true
+        KWH_KWP_RATIO:
+          enabled: true
+    
+    # Example Meter
+    meter_XXXXXXXXX:
+      category: Meter
+      device_id: 'XXXXXXXXX'
+      device_name: Import/Export Meter
+      device_type: METER
+      enabled: true
+      measurements:
+        EXPORT_ENERGY:
+          enabled: true
+        EXPORT_POWER:
+          enabled: true
+        IMPORT_ENERGY:
+          enabled: true
+        IMPORT_POWER:
+          enabled: true
+    
+    # Example Optimizer
+    optimizer_XXXXXXXX-XX:
+      category: Optimizer group
+      device_id: XXXXXXXX-XX
+      device_name: Optimizer 1.0.1
+      device_type: OPTIMIZER
+      enabled: true
+      inverter: XXXXXXXX-XX
+      measurements:
+        MODULE_CURRENT:
+          enabled: true
+        MODULE_OUTPUT_VOLTAGE:
+          enabled: true
+        OPTIMIZER_OUTPUT_VOLTAGE:
+          enabled: true
+        PRODUCTION_ENERGY:
+          enabled: true
+        PRODUCTION_POWER:
+          enabled: true
+    
+    # Example Site
+    site_XXXXXXX:
+      category: Site
+      device_id: 'XXXXXXX'
+      device_name: Site
+      device_type: SITE
+      enabled: true
+      measurements:
+        PRODUCTION_ENERGY:
+          enabled: true
+        PRODUCTION_POWER:
+          enabled: true
+    
+    # Example Weather
+    weather_default:
+      category: Weather
+      device_id: weather_default
+      device_name: Weather Station
+      device_type: WEATHER
+      enabled: true
+      measurements:
+        IRRADIANCE:
+          enabled: true
+        TEMPERATURE:
+          enabled: true
+        WIND_SPEED:
+          enabled: true
+
+# Notes:
+# - Run 'python main.py --scan' to automatically detect and configure all devices
+# - Device IDs are specific to your SolarEdge installation
+# - Enable/disable measurements based on your needs
+# - The scan command will update this file with your actual device configuration
