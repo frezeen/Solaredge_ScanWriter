@@ -371,7 +371,18 @@ site_overview:
   enabled: false  # ← Disabilita questo endpoint
 ```
 
-#### `config/sources/web_endpoints.yaml` - Optimizer Web (21 device)
+#### `config/sources/web_endpoints.yaml` - Optimizer Web (Auto-generato)
+
+**Nota**: Questo file è specifico per il tuo impianto e non è incluso nel repository. Devi generarlo con il comando scan.
+
+**Prima configurazione:**
+```bash
+# Copia il file di esempio
+cp config/sources/web_endpoints.yaml.example config/sources/web_endpoints.yaml
+
+# Oppure genera automaticamente (raccomandato)
+python main.py --scan
+```
 
 Configurazione device web scraping. Ogni device include:
 - `device_id`: ID univoco device
