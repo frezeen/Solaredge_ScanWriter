@@ -408,15 +408,50 @@ web_scraping:
           enabled: true
 ```
 
-**Configurazione automatica tramite scan:**
+**Configurazione automatica tramite scan (Raccomandato):**
+
 ```bash
+# Prima configurazione - genera web_endpoints.yaml
 python main.py --scan
 ```
 
-Questo comando:
-1. Scansiona il portale web SolarEdge
-2. Rileva automaticamente tutti i device
-3. Aggiorna `config/sources/web_endpoints.yaml`
+**Cosa fa il comando scan:**
+1. 🔍 **Scansiona** il portale web SolarEdge (monitoring.solaredge.com)
+2. 🔎 **Rileva automaticamente** tutti i device del tuo impianto:
+   - Inverter (con serial number e modello)
+   - Optimizer (tutti i pannelli con ID univoci)
+   - Meter (contatori import/export)
+   - Sensori meteo (se presenti)
+3. 📝 **Genera** il file `config/sources/web_endpoints.yaml` con configurazione completa
+4. ✅ **Abilita** automaticamente tutte le metriche disponibili
+
+**Quando usare il comando scan:**
+- ✅ Prima installazione (per generare la configurazione iniziale)
+- ✅ Dopo aggiunta/sostituzione di optimizer o device
+- ✅ Per aggiornare la configurazione dopo modifiche hardware
+
+**Requisiti:**
+- Credenziali web SolarEdge configurate in `.env`:
+  ```bash
+  SOLAREDGE_USERNAME=your.email@example.com
+  SOLAREDGE_PASSWORD=your_password
+  SOLAREDGE_SITE_ID=123456
+  ```
+
+**Output esempio:**
+```
+🔍 Modalità scan: scansione web tree
+🌐 Login al portale SolarEdge...
+✅ Login effettuato con successo
+📊 Scansione device in corso...
+   ✓ Trovato inverter: 7403D7C5-13
+   ✓ Trovati 16 optimizer
+   ✓ Trovato meter: 606483640
+📝 Aggiornando file web_endpoints.yaml...
+✅ File web_endpoints.yaml aggiornato
+```
+
+**Nota**: Il file generato è specifico per il tuo impianto e non viene committato su Git (è in `.gitignore`)
 
 #### `config/sources/modbus_endpoints.yaml` - Modbus Realtime
 
@@ -433,6 +468,23 @@ modbus:
 ```
 
 ## 🎯 Utilizzo
+
+### Setup Iniziale - Prima Esecuzione
+
+Prima di avviare il sistema, devi generare la configurazione web:
+
+```bash
+# 1. Configura credenziali in .env
+nano /opt/Solaredge_ScanWriter/.env
+
+# 2. Genera configurazione web_endpoints.yaml
+python main.py --scan
+
+# 3. Verifica che il file sia stato creato
+ls -la config/sources/web_endpoints.yaml
+```
+
+**Importante**: Il comando `--scan` è necessario solo la prima volta o dopo modifiche hardware all'impianto.
 
 ### GUI Dashboard (Consigliato)
 
@@ -589,15 +641,25 @@ sudo journalctl -u influxdb -f
 
 #### Web Scraping fallisce
 ```bash
-# Rigenera cookie
+# 1. Verifica che web_endpoints.yaml esista
+ls -la config/sources/web_endpoints.yaml
+
+# 2. Se manca, genera la configurazione
+python main.py --scan
+
+# 3. Rigenera cookie se login fallisce
 rm cookies/web_cookies.json
 
-# Verifica credenziali in .env
+# 4. Verifica credenziali in .env
 nano .env
 
-# Test login
+# 5. Test login
 python main.py --web
 ```
+
+**Errore comune**: `FileNotFoundError: config/sources/web_endpoints.yaml`
+- **Causa**: File di configurazione web non generato
+- **Soluzione**: Esegui `python main.py --scan` per generarlo
 
 #### Modbus non connette
 ```bash
