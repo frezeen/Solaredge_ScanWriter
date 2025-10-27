@@ -248,8 +248,10 @@ INFLUXDB_TOKEN=your_influxdb_token
 #### 2. Test Installazione
 ```bash
 cd /opt/Solaredge_ScanWriter
-./test.sh
+./test.sh  # Script creato automaticamente dall'installer
 ```
+
+**Nota**: Gli script `test.sh` e `status.sh` vengono creati automaticamente dall'installer.
 
 #### 3. Avvia Servizio
 ```bash
@@ -596,9 +598,8 @@ Esempi di query disponibili nella documentazione:
 ## 📚 Documentazione
 
 ### Guide Installazione
-- `README_INSTALLATION.md`: Installazione dettagliata passo-passo
-- `README_QUICK_INSTALL.md`: Quick start per utenti esperti
 - `docs/retention_policy_setup.md`: Configurazione retention InfluxDB
+- Questo README contiene tutte le informazioni per installazione e configurazione
 
 ### Reference API
 - `docs/api_endpoints_reference.md`: Tutti gli endpoint API con esempi query

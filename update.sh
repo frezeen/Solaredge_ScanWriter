@@ -14,7 +14,7 @@ NC='\033[0m'
 
 # Verifica se l'utente ha permessi per controllare il servizio
 if [[ "$(whoami)" == "solaredge" ]]; then
-    if ! systemctl stop solaredge-collector 2>/dev/null; then
+    if ! systemctl stop solaredge-scanwriter 2>/dev/null; then
         echo -e "${YELLOW}⚠️  Nota: Per controllare il servizio senza sudo, installa la regola polkit:${NC}"
         echo -e "${BLUE}   sudo cp systemd/solaredge-user-service.conf /etc/polkit-1/rules.d/10-solaredge-service.rules${NC}"
         echo -e "${BLUE}   sudo systemctl restart polkit${NC}"
