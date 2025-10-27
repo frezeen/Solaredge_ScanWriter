@@ -1,9 +1,9 @@
 version: '3.8'
 
 services:
-  solaredge-collector:
+  solaredge-scanwriter:
     build: .
-    container_name: solaredge-collector
+    container_name: solaredge-scanwriter
     restart: unless-stopped
     
     # Environment variables from .env file
@@ -49,7 +49,7 @@ services:
   # Optional: InfluxDB service
   influxdb:
     image: influxdb:2.7
-    container_name: solaredge-influxdb
+    container_name: solaredge-scanwriter-influxdb
     restart: unless-stopped
     
     environment:
