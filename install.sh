@@ -293,7 +293,7 @@ full_date = DD/MM/YYYY HH:mm:ss
 interval_second = HH:mm:ss
 interval_minute = HH:mm
 interval_hour = HH:mm
-interval_day = DD/MM/YYYY
+interval_day = DD MMMM dddd
 interval_month = MMMM YYYY
 interval_year = YYYY
 DATEFORMATS
