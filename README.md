@@ -224,12 +224,14 @@ python3 main.py --history
 ```
 
 **Caratteristiche**:
-- 🔄 **Esecuzione parallela**: Gira insieme al loop senza interferenze
-- 📅 **Suddivisione mensile**: Scarica automaticamente mese per mese
-- 💾 **Cache intelligente**: Evita duplicati, riprende da interruzioni
+- 🔄 **Run-once**: Esecuzione singola con output dettagliato in console
+- 📅 **Suddivisione mensile**: Processa automaticamente mese per mese
+- 💾 **Cache intelligente**: Skip mesi già scaricati, riprende da interruzioni
 - 📊 **Visualizzazione immediata**: I dati appaiono in Grafana ogni 5 secondi
 
 **Durata tipica**: 5-15 minuti per impianti fino a 5 anni (con endpoint di default)
+
+**Monitoraggio**: Il progresso è visibile direttamente in console con statistiche dettagliate per ogni mese
 
 ## ⚙️ Configurazione
 
