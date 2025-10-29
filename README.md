@@ -8,8 +8,23 @@ Raccogli, analizza e visualizza i dati del tuo impianto fotovoltaico con dashboa
 ![License](https://img.shields.io/badge/License-MIT-green.svg)
 ![Platform](https://img.shields.io/badge/Platform-Linux%20%7C%20Windows-lightgrey.svg)
 
+## 📸 Screenshots
+
+### Dashboard Grafana
+![Dashboard Grafana](screenshoot/dash%20grafana.png)
+
+### GUI - Loop Monitor
+![Loop Monitor](screenshoot/loop%20monitor.png)
+
+### GUI - API Endpoints
+![API Endpoints](screenshoot/api%20endpoints.png)
+
+### GUI - Modbus Endpoints
+![Modbus Endpoints](screenshoot/modbus%20endpoints.png)
+
 ## 📋 Indice
 
+- [Screenshots](#-screenshots)
 - [Caratteristiche](#-caratteristiche)
 - [Architettura](#-architettura)
 - [Requisiti](#-requisiti)
