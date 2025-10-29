@@ -102,18 +102,18 @@ Raccogli, analizza e visualizza i dati del tuo impianto fotovoltaico con dashboa
 - **Site ID**: ID del tuo impianto
 - **Username/Password**: Credenziali portale web
 
-### ⚠️ Requisito Web Scraping (Optimizer)
+### ⚠️ Requisito Web Scraping
 
-Per raccogliere dati dettagliati degli optimizer tramite web scraping, devi avere **abilitata la visualizzazione Charts** nel portale SolarEdge.
+Per raccogliere dati tramite web scraping (optimizer, inverter, meter, sensori meteo), devi avere **abilitata la visualizzazione Charts** nel portale SolarEdge.
 
 **Come abilitare**:
 
 1. Contatta il supporto SolarEdge
 2. Richiedi l'abilitazione della funzionalità "Charts" per il tuo account
-3. Una volta abilitata, potrai visualizzare i grafici dettagliati degli optimizer nel portale web
+3. Una volta abilitata, potrai visualizzare i grafici dettagliati di tutti i device nel portale web
 4. Solo a quel punto il web scraping potrà raccogliere questi dati
 
-**Nota**: Senza Charts abilitato, il web scraping non funzionerà. Puoi comunque usare API e Modbus per raccogliere dati.
+**Nota**: Senza Charts abilitato, il web scraping non funzionerà per nessun device. Puoi comunque usare API e Modbus per raccogliere dati.
 
 ## 🚀 Installazione
 
