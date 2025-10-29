@@ -236,7 +236,7 @@ REALTIME_MODBUS_PORT=1502
 **Note**:
 - ✅ **Con install.sh**: Il token InfluxDB è già configurato automaticamente
 - ⚙️ **Modbus**: Configura IP/porta solo se vuoi telemetria realtime dall'inverter
-- 🔧 **Abilitare/Disabilitare Modbus**: Usa la GUI (`http://localhost:8092`) → Modbus Realtime → Toggle
+- 🔧 **Abilitare/Disabilitare Modbus**: Usa la GUI (`http://localhost:8092` o IP della macchina) → Modbus Realtime → Toggle
 - 🔧 **Altri parametri**: Già preconfigurati con valori ottimali
 
 #### 2. Genera Configurazione Device
@@ -260,11 +260,11 @@ Questo comando:
 sudo systemctl enable --now solaredge-scanwriter
 ```
 
-Questo avvia GUI Dashboard (`http://localhost:8092`), loop di raccolta dati e scrittura su InfluxDB. Dalla GUI è possibile modificare manualmente tutti i file di configurazione tramite il Config Editor.
+Questo avvia GUI Dashboard (`http://localhost:8092` o IP della macchina), loop di raccolta dati e scrittura su InfluxDB. Dalla GUI è possibile modificare manualmente tutti i file di configurazione tramite il Config Editor.
 
 #### 4. Accedi a Grafana
 
-Apri `http://localhost:3000` (admin/admin) - La dashboard è già importata e configurata!
+Apri `http://localhost:3000` o IP della macchina (admin/admin) - La dashboard è già importata e configurata!
 
 #### 5. Download Storico (Opzionale)
 
@@ -311,7 +311,7 @@ La configurazione di default è ottimizzata per la dashboard Grafana inclusa:
 
 ### Personalizzazione
 
-Accedi alla GUI (`http://localhost:8092`) per abilitare/disabilitare endpoint aggiuntivi secondo le tue esigenze. Tutti i 22 endpoint API sono disponibili per analisi personalizzate.
+Accedi alla GUI (`http://localhost:8092` o IP della macchina) per abilitare/disabilitare endpoint aggiuntivi secondo le tue esigenze. Tutti i 22 endpoint API sono disponibili per analisi personalizzate.
 
 **Quando personalizzare**:
 
@@ -323,7 +323,7 @@ Accedi alla GUI (`http://localhost:8092`) per abilitare/disabilitare endpoint ag
 
 ### GUI Dashboard
 
-**URL**: `http://localhost:8092`
+**URL**: `http://localhost:8092` o IP della macchina
 
 ![Loop Monitor](screenshoot/loop%20monitor.png)
 
@@ -369,7 +369,7 @@ docker-compose logs -f solaredge-scanwriter
 
 ### Accesso
 
-- URL: `http://localhost:3000`
+- URL: `http://localhost:3000` o IP della macchina
 - Credenziali: admin/admin (default)
 
 ### Configurazione Automatica
