@@ -8,23 +8,7 @@ Raccogli, analizza e visualizza i dati del tuo impianto fotovoltaico con dashboa
 ![License](https://img.shields.io/badge/License-MIT-green.svg)
 ![Platform](https://img.shields.io/badge/Platform-Linux%20%7C%20Windows-lightgrey.svg)
 
-## 📸 Screenshots
-
-### Dashboard Grafana
-![Dashboard Grafana](screenshoot/dash%20grafana.png)
-
-### GUI - Loop Monitor
-![Loop Monitor](screenshoot/loop%20monitor.png)
-
-### GUI - API Endpoints
-![API Endpoints](screenshoot/api%20endpoints.png)
-
-### GUI - Modbus Endpoints
-![Modbus Endpoints](screenshoot/modbus%20endpoints.png)
-
-## 📋 Indice
-
-- [Screenshots](#-screenshots)
+## � Icndice
 - [Caratteristiche](#-caratteristiche)
 - [Architettura](#-architettura)
 - [Requisiti](#-requisiti)
@@ -38,22 +22,26 @@ Raccogli, analizza e visualizza i dati del tuo impianto fotovoltaico con dashboa
 ## ✨ Caratteristiche
 
 ### Raccolta Dati Multi-Sorgente
+
 - **API Ufficiale SolarEdge**: Dati storici e aggregati (produzione, consumo, meter, inverter)
 - **Web Scraping**: Dati dettagliati optimizer e pannelli (risoluzione 15 minuti)
 - **Modbus TCP Realtime**: Telemetria in tempo reale dall'inverter (5 secondi)
 
 ### Elaborazione Intelligente
+
 - **Pipeline Modulare**: Collector → Parser → Filter → Writer
 - **Cache Avanzata**: Sistema di caching con TTL per ridurre chiamate API
 - **Filtraggio Dati**: Validazione automatica e rimozione outlier
 - **Gestione Errori**: Retry automatico e logging dettagliato
 
 ### Storage e Visualizzazione
+
 - **InfluxDB 2.x**: Database time-series ottimizzato
 - **Grafana**: Dashboard pre-configurate con metriche chiave
 - **Retention Policy**: Gestione automatica ritenzione dati
 
 ### Modalità Operative
+
 - **GUI Dashboard**: Interfaccia web per controllo e monitoraggio
 - **Loop 24/7**: Raccolta automatica continua
 - **History Mode**: Download storico completo con suddivisione mensile
@@ -99,6 +87,7 @@ Raccogli, analizza e visualizza i dati del tuo impianto fotovoltaico con dashboa
 ## 📦 Requisiti
 
 ### Sistema
+
 - **OS**: Linux (Debian/Ubuntu consigliato) o Windows
 - **Python**: 3.11+
 - **RAM**: 512MB minimo, 1GB consigliato
@@ -107,14 +96,17 @@ Raccogli, analizza e visualizza i dati del tuo impianto fotovoltaico con dashboa
 - **Grafana**: 10.x+
 
 ### Credenziali SolarEdge
+
 - **API Key**: Ottienila dal portale SolarEdge
 - **Site ID**: ID del tuo impianto
 - **Username/Password**: Credenziali portale web
 
 ### ⚠️ Requisito Web Scraping (Optimizer)
+
 Per raccogliere dati dettagliati degli optimizer tramite web scraping, devi avere **abilitata la visualizzazione Charts** nel portale SolarEdge.
 
 **Come abilitare**:
+
 1. Contatta il supporto SolarEdge
 2. Richiedi l'abilitazione della funzionalità "Charts" per il tuo account
 3. Una volta abilitata, potrai visualizzare i grafici dettagliati degli optimizer nel portale web
@@ -127,23 +119,27 @@ Per raccogliere dati dettagliati degli optimizer tramite web scraping, devi aver
 ### Metodo 1: One-Liner (Raccomandato)
 
 **Opzione A: Con password personalizzate (consigliato)**
+
 ```bash
 curl -sSL https://raw.githubusercontent.com/frezeen/Solaredge_ScanWriter/main/install.sh -o install.sh
 sudo bash install.sh
 ```
 
 **Opzione B: Con password di default**
+
 ```bash
 curl -sSL https://raw.githubusercontent.com/frezeen/Solaredge_ScanWriter/main/install.sh | sudo bash
 ```
 
 Lo script installa automaticamente:
+
 - ✅ Dipendenze Python, InfluxDB 2.x, Grafana con plugin
 - ✅ Configurazione iniziale (.env), servizio systemd
 - ✅ Dashboard Grafana pre-configurate, formati data italiani
 - ✅ Log rotation e cleanup automatico
 
 **Password di default:**
+
 - InfluxDB: `admin` / `solaredge123`
 - Grafana: `admin` / `admin` (cambiale al primo accesso)
 
@@ -165,11 +161,13 @@ cp .env.example .env && nano .env
 ### Post-Installazione
 
 #### 1. Configura Credenziali SolarEdge
+
 ```bash
 nano /opt/Solaredge_ScanWriter/.env
 ```
 
 Aggiungi le tue credenziali:
+
 ```bash
 SOLAREDGE_SITE_ID=123456
 SOLAREDGE_USERNAME=your.email@example.com
@@ -180,12 +178,14 @@ SOLAREDGE_API_KEY=your_api_key
 **Nota**: Con `install.sh` il token InfluxDB è già configurato automaticamente.
 
 #### 2. Genera Configurazione Device
+
 ```bash
 cd /opt/Solaredge_ScanWriter
 python3 main.py --scan
 ```
 
 Questo comando:
+
 - 🔍 Scansiona il portale web SolarEdge
 - 📝 Rileva automaticamente tutti i device (inverter, optimizer, meter, sensori)
 - 💾 Genera il file `config/sources/web_endpoints.yaml`
@@ -193,6 +193,7 @@ Questo comando:
 **⚠️ Importante**: Se non hai Charts abilitato, lo scan creerà un file yaml vuoto ma valido. Potrai comunque usare API e Modbus.
 
 #### 3. Avvia Servizio
+
 ```bash
 sudo systemctl enable --now solaredge-scanwriter
 ```
@@ -200,6 +201,7 @@ sudo systemctl enable --now solaredge-scanwriter
 Questo avvia GUI Dashboard (`http://localhost:8092`), loop di raccolta dati e scrittura su InfluxDB.
 
 #### 4. Accedi a Grafana
+
 Apri `http://localhost:3000` (admin/admin) - La dashboard è già importata e configurata!
 
 ## ⚙️ Configurazione
@@ -231,6 +233,7 @@ La configurazione di default è ottimizzata per la dashboard Grafana inclusa:
 Accedi alla GUI (`http://localhost:8092`) per abilitare/disabilitare endpoint aggiuntivi secondo le tue esigenze. Tutti i 22 endpoint API sono disponibili per analisi personalizzate.
 
 **Quando personalizzare**:
+
 - Dashboard Grafana personalizzate con metriche aggiuntive
 - Dati specifici non inclusi nella dashboard default
 - Monitoraggio batterie o sensori aggiuntivi
@@ -241,11 +244,15 @@ Accedi alla GUI (`http://localhost:8092`) per abilitare/disabilitare endpoint ag
 
 **URL**: `http://localhost:8092`
 
+![Loop Monitor](screenshoot/loop%20monitor.png)
+
 La GUI offre 5 sezioni:
 
 1. **Device Web Scraping** - Gestisci device rilevati (Optimizer, Meter, Weather)
-2. **API Endpoints** - Configura 22 endpoint API per categoria
-3. **Modbus Realtime** - Gestisci telemetria in tempo reale
+2. **API Endpoints** - Configura 22 endpoint API per categoria  
+   ![API Endpoints](screenshoot/api%20endpoints.png)
+3. **Modbus Realtime** - Gestisci telemetria in tempo reale  
+   ![Modbus Endpoints](screenshoot/modbus%20endpoints.png)
 4. **Loop Monitor** - Start/Stop loop, statistiche, log live
 5. **YAML Config** - Editor configurazioni con syntax highlighting
 
@@ -275,13 +282,17 @@ docker-compose logs -f solaredge-scanwriter
 
 ## 📊 Dashboard Grafana
 
+![Dashboard Grafana](screenshoot/dash%20grafana.png)
+
 ### Accesso
+
 - URL: `http://localhost:3000`
 - Credenziali: admin/admin (default)
 
 ### Configurazione Automatica
 
 L'installer configura automaticamente:
+
 - Data source InfluxDB "Solaredge" e "Sun and Moon"
 - Dashboard completa importata via API
 - Formati data italiani (DD-MM-YYYY, HH:mm)
@@ -308,6 +319,7 @@ L'installer configura automaticamente:
 ## 🔧 Troubleshooting
 
 ### InfluxDB non risponde
+
 ```bash
 sudo systemctl status influxdb
 sudo systemctl restart influxdb
@@ -315,11 +327,13 @@ sudo journalctl -u influxdb -f
 ```
 
 ### Grafana non mostra dati
+
 1. Verifica data source InfluxDB in Grafana
 2. Controlla token e bucket name
 3. Con installazione manuale: Recupera token da InfluxDB UI → Load Data → API Tokens
 
 ### Web Scraping fallisce
+
 ```bash
 # Genera/rigenera configurazione
 python main.py --scan
@@ -329,9 +343,11 @@ rm cookies/web_cookies.json
 ```
 
 **Errore comune**: `FileNotFoundError: config/sources/web_endpoints.yaml`
+
 - **Soluzione**: Esegui `python main.py --scan`
 
 ### API Rate Limit
+
 - Limite: 300 richieste/giorno per site
 - Soluzione: Cache già abilitata di default
 - Verifica: `cache/api_ufficiali/` per file cached
@@ -339,12 +355,14 @@ rm cookies/web_cookies.json
 ### Aggiornamenti
 
 **Aggiornamento standard (raccomandato)**:
+
 ```bash
 cd /opt/Solaredge_ScanWriter
 ./update.sh
 ```
 
 **Comandi avanzati**:
+
 ```bash
 # Solo controllo aggiornamenti (senza applicare)
 python3 scripts/smart_update.py --check-only
@@ -354,6 +372,7 @@ python3 scripts/smart_update.py --force
 ```
 
 **Lo script `update.sh`**:
+
 - ✅ Controlla aggiornamenti disponibili
 - ✅ Backup automatico configurazione
 - ✅ Pull da GitHub e aggiornamento dipendenze
@@ -366,6 +385,7 @@ python3 scripts/smart_update.py --force
 Se hai creato dashboard personalizzate in Grafana, salvale con un **nome diverso** da "SolarEdge". Lo script `update.sh` sovrascrive automaticamente la dashboard "SolarEdge" con la versione aggiornata dal repository.
 
 **Esempio**:
+
 - Dashboard originale: "SolarEdge" → Verrà sovrascritta da update.sh
 - Dashboard personalizzata: "SolarEdge - Custom" → Sarà preservata
 
