@@ -8,7 +8,8 @@ Raccogli, analizza e visualizza i dati del tuo impianto fotovoltaico con dashboa
 ![License](https://img.shields.io/badge/License-MIT-green.svg)
 ![Platform](https://img.shields.io/badge/Platform-Linux%20%7C%20Windows-lightgrey.svg)
 
-## � Icndice
+## � Indice
+
 - [Caratteristiche](#-caratteristiche)
 - [Architettura](#-architettura)
 - [Requisiti](#-requisiti)
@@ -90,14 +91,14 @@ Raccogli, analizza e visualizza i dati del tuo impianto fotovoltaico con dashboa
 
 - **OS**: Linux (Debian/Ubuntu consigliato) o Windows
 - **Python**: 3.11+
-- **RAM**: 512MB minimo, 1GB consigliato
-- **Disco**: 10GB per dati storici
+- **RAM**: 2GB minimo, 4GB consigliato
+- **Disco**: 16GB per dati storici
 - **InfluxDB**: 2.x
 - **Grafana**: 10.x+
 
 ### Credenziali SolarEdge
 
-- **API Key**: Ottienila dal portale SolarEdge
+- **API Key**: Ottienila dal portale o dal supporto SolarEdge
 - **Site ID**: ID del tuo impianto
 - **Username/Password**: Credenziali portale web
 
@@ -198,7 +199,7 @@ Questo comando:
 sudo systemctl enable --now solaredge-scanwriter
 ```
 
-Questo avvia GUI Dashboard (`http://localhost:8092`), loop di raccolta dati e scrittura su InfluxDB.
+Questo avvia GUI Dashboard (`http://localhost:8092`), loop di raccolta dati e scrittura su InfluxDB. Dalla GUI è possibile modificare manualmente tutti i file di configurazione tramite il Config Editor.
 
 #### 4. Accedi a Grafana
 
@@ -254,7 +255,7 @@ La GUI offre 5 sezioni:
 3. **Modbus Realtime** - Gestisci telemetria in tempo reale  
    ![Modbus Endpoints](screenshoot/modbus%20endpoints.png)
 4. **Loop Monitor** - Start/Stop loop, statistiche, log live
-5. **YAML Config** - Editor configurazioni con syntax highlighting
+5. **Config Editor** - Editor per modificare manualmente tutti i file di configurazione con syntax highlighting
 
 ### Modalità Command Line
 
