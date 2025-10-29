@@ -179,12 +179,12 @@ SOLAREDGE_API_KEY=your_api_key
 # Modbus Realtime (OPZIONALE - solo se hai l'inverter in rete)
 REALTIME_MODBUS_HOST=192.168.1.100  # IP del tuo inverter
 REALTIME_MODBUS_PORT=1502
-MODBUS_ENABLED=true  # false per disabilitare Modbus
 ```
 
 **Note**:
 - ✅ **Con install.sh**: Il token InfluxDB è già configurato automaticamente
-- ⚙️ **Modbus**: Configura solo se vuoi telemetria realtime dall'inverter
+- ⚙️ **Modbus**: Configura IP/porta solo se vuoi telemetria realtime dall'inverter
+- 🔧 **Abilitare/Disabilitare Modbus**: Usa la GUI (`http://localhost:8092`) → Modbus Realtime → Toggle
 - 🔧 **Altri parametri**: Già preconfigurati con valori ottimali
 
 #### 2. Genera Configurazione Device
