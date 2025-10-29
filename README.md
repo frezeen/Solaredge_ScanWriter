@@ -80,24 +80,42 @@ Raccogli, analizza e visualizza i dati del tuo impianto fotovoltaico con dashboa
 
 ## 📦 Requisiti
 
+### Sistema
 - **OS**: Linux (Debian/Ubuntu consigliato) o Windows
 - **Python**: 3.11+
 - **RAM**: 512MB minimo, 1GB consigliato
 - **Disco**: 10GB per dati storici
 - **InfluxDB**: 2.x
 - **Grafana**: 10.x+
-- **Credenziali SolarEdge**: API Key, Site ID, Username/Password
+
+### Credenziali SolarEdge
+- **API Key**: Ottienila dal portale SolarEdge
+- **Site ID**: ID del tuo impianto
+- **Username/Password**: Credenziali portale web
+
+### ⚠️ Requisito Web Scraping (Optimizer)
+Per raccogliere dati dettagliati degli optimizer tramite web scraping, devi avere **abilitata la visualizzazione Charts** nel portale SolarEdge.
+
+**Come abilitare**:
+1. Contatta il supporto SolarEdge
+2. Richiedi l'abilitazione della funzionalità "Charts" per il tuo account
+3. Una volta abilitata, potrai visualizzare i grafici dettagliati degli optimizer nel portale web
+4. Solo a quel punto il web scraping potrà raccogliere questi dati
+
+**Nota**: Senza Charts abilitato, il web scraping non funzionerà. Puoi comunque usare API e Modbus per raccogliere dati.
 
 ## 🚀 Installazione
 
 ### Metodo 1: One-Liner (Raccomandato)
 
+**Opzione A: Con password personalizzate (consigliato)**
 ```bash
-# Con password personalizzate (consigliato)
 curl -sSL https://raw.githubusercontent.com/frezeen/Solaredge_ScanWriter/main/install.sh -o install.sh
 sudo bash install.sh
+```
 
-# Con password di default
+**Opzione B: Con password di default**
+```bash
 curl -sSL https://raw.githubusercontent.com/frezeen/Solaredge_ScanWriter/main/install.sh | sudo bash
 ```
 
@@ -149,7 +167,12 @@ cd /opt/Solaredge_ScanWriter
 python3 main.py --scan
 ```
 
-Questo rileva automaticamente tutti i device del tuo impianto (inverter, optimizer, meter, sensori).
+Questo comando:
+- 🔍 Scansiona il portale web SolarEdge
+- 📝 Rileva automaticamente tutti i device (inverter, optimizer, meter, sensori)
+- 💾 Genera il file `config/sources/web_endpoints.yaml`
+
+**⚠️ Importante**: Se non hai Charts abilitato, lo scan creerà un file yaml vuoto ma valido. Potrai comunque usare API e Modbus.
 
 #### 3. Avvia Servizio
 ```bash

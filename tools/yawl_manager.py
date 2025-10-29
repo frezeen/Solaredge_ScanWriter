@@ -268,10 +268,20 @@ class YawlManager:
             self.logger.info("🌐 Caricando web endpoints freschi...")
             web_endpoints = self.get_web_endpoints()
 
+            # Se non ci sono endpoint (snapshot mancante), crea file vuoto ma valido
+            if not web_endpoints:
+                self.logger.warning("⚠️  Nessun endpoint trovato (snapshot mancante?)")
+                self.logger.info("📝 Creando file web_endpoints.yaml vuoto ma valido...")
+                web_endpoints = {}
+
             # Salva solo il file web_endpoints.yaml
             if self.save_web_endpoints_file(web_endpoints):
-                self.logger.info("✅ File web_endpoints.yaml generato con successo")
-                self.logger.info(f"  📊 Web endpoints: {len(web_endpoints)}")
+                if web_endpoints:
+                    self.logger.info("✅ File web_endpoints.yaml generato con successo")
+                    self.logger.info(f"  📊 Web endpoints: {len(web_endpoints)}")
+                else:
+                    self.logger.info("✅ File web_endpoints.yaml vuoto creato")
+                    self.logger.info("  ℹ️  Esegui 'python main.py --scan' per rilevare i device")
                 return True
             else:
                 self.logger.error("❌ Errore generazione file web_endpoints.yaml")
