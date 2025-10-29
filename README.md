@@ -69,9 +69,9 @@ Raccogli, analizza e visualizza i dati del tuo impianto fotovoltaico con dashboa
 │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐       │
 │  │   API        │  │   Web        │  │   Modbus     │       │
 │  │  Collector   │  │  Scraping    │  │   Realtime   │       │
-│  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘       │
-│         │                  │                  │             │
-│         └──────────────────┴──────────────────┘             │
+│  └──────┬───────┘  └───────┬───────┘ └──────┬───────┘       │
+│         │                  │                │               │
+│         └──────────────────┴────────────────┘               │
 │                            │                                │
 │                     ┌──────▼───────┐                        │
 │                     │    Parser    │                        │
@@ -84,7 +84,7 @@ Raccogli, analizza e visualizza i dati del tuo impianto fotovoltaico con dashboa
 │                     └──────┬───────┘                        │
 │                            │                                │
 │         ┌──────────────────┴──────────────────┐             │
-│         │                                      │            │
+│         │                                     │             │
 │  ┌──────▼───────┐                    ┌────────▼────────┐    │
 │  │   InfluxDB   │                    │     Grafana     │    │
 │  │   Database   │◄───────────────────┤    Dashboard    │    │
