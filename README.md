@@ -167,16 +167,25 @@ cp .env.example .env && nano .env
 nano /opt/Solaredge_ScanWriter/.env
 ```
 
-Aggiungi le tue credenziali:
+**Parametri obbligatori da configurare**:
 
 ```bash
+# Credenziali SolarEdge (OBBLIGATORI)
 SOLAREDGE_SITE_ID=123456
 SOLAREDGE_USERNAME=your.email@example.com
 SOLAREDGE_PASSWORD=your_password
 SOLAREDGE_API_KEY=your_api_key
+
+# Modbus Realtime (OPZIONALE - solo se hai l'inverter in rete)
+REALTIME_MODBUS_HOST=192.168.1.100  # IP del tuo inverter
+REALTIME_MODBUS_PORT=1502
+MODBUS_ENABLED=true  # false per disabilitare Modbus
 ```
 
-**Nota**: Con `install.sh` il token InfluxDB è già configurato automaticamente.
+**Note**:
+- ✅ **Con install.sh**: Il token InfluxDB è già configurato automaticamente
+- ⚙️ **Modbus**: Configura solo se vuoi telemetria realtime dall'inverter
+- 🔧 **Altri parametri**: Già preconfigurati con valori ottimali
 
 #### 2. Genera Configurazione Device
 
