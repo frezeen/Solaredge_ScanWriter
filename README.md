@@ -335,14 +335,27 @@ rm cookies/web_cookies.json
 
 ### Aggiornamenti
 
+**Aggiornamento standard (raccomandato)**:
 ```bash
 cd /opt/Solaredge_ScanWriter
-./update.sh  # Backup automatico, pull, update dipendenze, restart
+./update.sh
 ```
 
-Lo script `update.sh`:
+**Comandi avanzati**:
+```bash
+# Solo controllo aggiornamenti (senza applicare)
+python3 scripts/smart_update.py --check-only
+
+# Aggiornamento forzato
+python3 scripts/smart_update.py --force
+```
+
+**Lo script `update.sh`**:
+- ✅ Controlla aggiornamenti disponibili
 - ✅ Backup automatico configurazione
 - ✅ Pull da GitHub e aggiornamento dipendenze
+- ✅ Preserva configurazioni locali (`.env`, `config/*.yaml`)
+- ✅ Corregge permessi automaticamente
 - ✅ Restart servizio
 - ✅ **Importa automaticamente dashboard Grafana aggiornata**
 
