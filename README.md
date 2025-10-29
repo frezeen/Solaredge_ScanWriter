@@ -22,31 +22,83 @@ Raccogli, analizza e visualizza i dati del tuo impianto fotovoltaico con dashboa
 
 ## ✨ Caratteristiche
 
-### Raccolta Dati Multi-Sorgente
+### 🔄 Raccolta Dati Multi-Sorgente Completa
 
-- **API Ufficiale SolarEdge**: Dati storici e aggregati (produzione, consumo, meter, inverter)
-- **Web Scraping**: Dati dettagliati optimizer e pannelli (risoluzione 15 minuti)
-- **Modbus TCP Realtime**: Telemetria in tempo reale dall'inverter (5 secondi)
+**22 Endpoint API Ufficiali SolarEdge**
+- 📊 **Produzione Energetica**: Dati giornalieri, orari e 15-minutali con storico completo
+- 🏠 **Bilancio Energetico**: Produzione, consumo, autoconsumo, prelievo e immissione rete
+- ⚡ **Telemetria Inverter**: Tensioni AC/DC, correnti, frequenza, temperatura, modalità operative
+- 🔋 **Sistema Storage**: Stato batterie, energia caricata/scaricata, capacità e cicli
+- 🌍 **Impatto Ambientale**: CO2 evitata, equivalente alberi piantati, benefici sostenibilità
+- 📋 **Inventario Hardware**: Lista completa inverter, contatori, sensori con dettagli tecnici
 
-### Elaborazione Intelligente
+**Web Scraping Avanzato (Risoluzione 15 minuti)**
+- 🔧 **Optimizer Individuali**: Performance di ogni singolo pannello fotovoltaico
+- 🌡️ **Sensori Ambientali**: Irradianza, temperatura ambiente, velocità vento
+- 📈 **Curve di Produzione**: Analisi dettagliata prestazioni per ottimizzazione impianto
+- 🔍 **Diagnostica Avanzata**: Identificazione pannelli sottoperformanti o guasti
 
-- **Pipeline Modulare**: Collector → Parser → Filter → Writer
-- **Cache Avanzata**: Sistema di caching con TTL per ridurre chiamate API
-- **Filtraggio Dati**: Validazione automatica e rimozione outlier
-- **Gestione Errori**: Retry automatico e logging dettagliato
+**Modbus TCP Realtime (5 secondi)**
+- ⚡ **Telemetria Live**: Potenza istantanea, tensioni, correnti in tempo reale
+- 🌡️ **Monitoraggio Termico**: Temperature inverter, dissipatori, componenti critici
+- 🔧 **Stato Operativo**: Modalità funzionamento, allarmi, controlli di sicurezza
+- 📊 **Metriche Performance**: Efficienza conversione, fattore di potenza, THD
 
-### Storage e Visualizzazione
+### 🧠 Elaborazione Intelligente e Affidabile
 
-- **InfluxDB 2.x**: Database time-series ottimizzato
-- **Grafana**: Dashboard pre-configurate con metriche chiave
-- **Retention Policy**: Gestione automatica ritenzione dati
+**Pipeline Modulare Robusta**
+- 🔄 **Architettura Scalabile**: Collector → Parser → Filter → Writer per massima flessibilità
+- 🛡️ **Validazione Dati**: Controllo automatico range, rimozione outlier, sanity check
+- 🔄 **Retry Intelligente**: Gestione automatica errori temporanei e rate limiting
+- 📝 **Logging Dettagliato**: Tracciabilità completa per debugging e monitoraggio
 
-### Modalità Operative
+**Sistema Cache Avanzato**
+- ⚡ **Performance Ottimizzate**: TTL intelligente per ridurre chiamate API del 90%
+- 💾 **Persistenza Dati**: Cache su disco per sopravvivere a riavvii sistema
+- 🔄 **Invalidazione Smart**: Aggiornamento automatico solo quando necessario
+- 📊 **Statistiche Cache**: Monitoraggio hit/miss ratio per ottimizzazione
 
-- **GUI Dashboard**: Interfaccia web per controllo e monitoraggio
-- **Loop 24/7**: Raccolta automatica continua
-- **History Mode**: Download storico completo con suddivisione mensile
-- **Single Run**: Esecuzione singola per test e debug
+### 📊 Storage e Visualizzazione Professionale
+
+**Database Time-Series InfluxDB 2.x**
+- ⚡ **Performance Elevate**: Ottimizzato per milioni di punti dati temporali
+- 🗜️ **Compressione Avanzata**: Riduzione spazio disco fino al 95%
+- 🔄 **Retention Policy**: Gestione automatica lifecycle dati (alta risoluzione → aggregati)
+- 🔍 **Query Potenti**: Flux query language per analisi complesse
+
+**Dashboard Grafana Pre-Configurate**
+- 📈 **Metriche Chiave**: Produzione, consumo, autoconsumo, bilancio energetico
+- 💰 **Calcoli Economici**: ROI, risparmio SSP, costi energia, payback period
+- 🌍 **Impatto Ambientale**: CO2 evitata, equivalente combustibili fossili
+- 📊 **Analisi Storiche**: Trend mensili, heatmap giornaliere, confronti annuali
+- ⚡ **Monitoraggio Realtime**: Potenza istantanea, stato inverter, allarmi
+- 🔧 **Diagnostica Optimizer**: Performance individuali pannelli, identificazione guasti
+
+### 🎛️ Modalità Operative Flessibili
+
+**GUI Dashboard Web Intuitiva**
+- 🖥️ **Controllo Centralizzato**: Start/stop processi, configurazione endpoint, monitoraggio live
+- 📝 **Editor Configurazione**: Syntax highlighting per modifiche YAML in tempo reale
+- 📊 **Statistiche Live**: Contatori richieste, errori, performance cache
+- 🔧 **Gestione Device**: Abilitazione/disabilitazione singoli endpoint e sensori
+
+**Automazione 24/7 Completa**
+- 🔄 **Loop Continuo**: Raccolta automatica senza intervento manuale
+- 🛡️ **Resilienza Errori**: Continua operazioni anche con fallimenti parziali
+- 📅 **Scheduling Intelligente**: Rispetto rate limit API, ottimizzazione orari
+- 🔄 **Auto-Recovery**: Riavvio automatico processi in caso di problemi
+
+**History Mode Professionale**
+- 📜 **Download Completo**: Scarica tutto lo storico disponibile (anche anni di dati)
+- 📅 **Suddivisione Mensile**: Gestione automatica grandi volumi senza timeout
+- 💾 **Resume Capability**: Riprende da interruzioni senza perdere progressi
+- ⚡ **Parallelizzazione**: Esecuzione contemporanea con loop normale
+
+**Testing e Debug Avanzati**
+- 🧪 **Single Run Mode**: Test singoli endpoint per validazione configurazione
+- 📊 **Modalità Scan**: Auto-discovery device per configurazione automatica
+- 🔍 **Diagnostica Dettagliata**: Log granulari per troubleshooting rapido
+- 📈 **Metriche Performance**: Monitoraggio tempi risposta, throughput, errori
 
 ## 🏗️ Architettura
 
