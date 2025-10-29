@@ -24,7 +24,7 @@
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
-  "id": 0,
+  "id": 1,
   "links": [],
   "panels": [
     {
@@ -5220,7 +5220,7 @@
         {
           "datasource": {
             "type": "influxdb",
-            "uid": "${DS_INFLUXDB}"
+            "uid": "ff27vpmruzxtsc"
           },
           "hide": true,
           "query": "from(bucket: \"Solaredge\")\n  |> range(start: 0, stop: now())\n  |> filter(fn: (r) => r._measurement == \"api\" and r._field == \"Meter\" and r.endpoint == \"site_energy_details\" and r.metric == \"Production\")\n  |> filter(fn: (r) => exists r._value)\n  |> group()\n  |> sum()\n  |> map(fn: (r) => ({ r with _value: r._value / 1000.0 }))\n",
@@ -5229,7 +5229,7 @@
         {
           "datasource": {
             "type": "influxdb",
-            "uid": "${DS_INFLUXDB}"
+            "uid": "ff27vpmruzxtsc"
           },
           "hide": true,
           "query": "from(bucket: \"Solaredge\")\n  |> range(start: 0, stop: now())\n  |> filter(fn: (r) => r._measurement == \"api\" and r._field == \"Meter\" and r.endpoint == \"site_energy_details\" and r.metric == \"Purchased\")\n  |> filter(fn: (r) => exists r._value)\n  |> group()\n  |> sum()\n  |> map(fn: (r) => ({ r with _value: r._value / 1000.0 }))\n",
@@ -5238,7 +5238,7 @@
         {
           "datasource": {
             "type": "influxdb",
-            "uid": "${DS_INFLUXDB}"
+            "uid": "ff27vpmruzxtsc"
           },
           "hide": true,
           "query": "from(bucket: \"Solaredge\")\n  |> range(start: 0, stop: now())\n  |> filter(fn: (r) => r._measurement == \"api\" and r._field == \"Meter\" and r.endpoint == \"site_energy_details\" and r.metric == \"FeedIn\")\n  |> filter(fn: (r) => exists r._value)\n  |> group()\n  |> sum()\n  |> map(fn: (r) => ({ r with _value: r._value / 1000.0 }))\n",
@@ -5379,13 +5379,13 @@
     ]
   },
   "time": {
-    "from": "now/d",
-    "to": "now/d"
+    "from": "now-1d/d",
+    "to": "now-1d/d"
   },
   "timepicker": {},
   "timezone": "",
   "title": "Solaredge 3.0",
   "uid": "afb91a6f-d8f7-43ae-8a98-67eab1bb4baa",
-  "version": 150,
+  "version": 151,
   "weekStart": "monday"
 }
