@@ -24,7 +24,7 @@
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
-  "id": 1,
+  "id": 0,
   "links": [],
   "panels": [
     {
@@ -4741,7 +4741,7 @@
             "uid": "ff27vpmruzxtsc"
           },
           "hide": false,
-          "query": "import \"timezone\"\r\nimport \"date\"\r\nimport \"array\"\r\noption location = timezone.location(name: \"Europe/Rome\")\r\n\r\n// Query dati reali\r\ndata = from(bucket: \"Solaredge\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"web\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"Optimizer group\")\r\n  |> filter(fn: (r) => r[\"endpoint\"] == \"PRODUCTION_POWER\")\r\n  |> aggregateWindow(every: 15m, fn: last, createEmpty: true)\r\n  |> fill(column: \"_value\", value: 0.0)\r\n\r\n// Conta quanti dati ci sono\r\ncount = data |> count() |> findRecord(fn: (key) => true, idx: 0)\r\n\r\n// Se non ci sono dati, crea un punto fittizio a 0\r\ndummy = array.from(rows: [{\r\n  _time: date.truncate(t: now(), unit: 1d),\r\n  _value: 0.0,\r\n  device_id: \"dummy\",\r\n  _field: \"Optimizer group\",\r\n  endpoint: \"PRODUCTION_POWER\"\r\n}])\r\n\r\n// Usa dati reali se esistono, altrimenti dummy\r\nresult = if exists count._value and count._value > 0 then data else dummy\r\n\r\nresult\r\n  |> map(fn: (r) => ({\r\n      _time: r._time,\r\n      _value: r._value,\r\n      _field: r.device_id\r\n  }))\r\n  |> group()\r\n  |> pivot(rowKey: [\"_time\"], columnKey: [\"_field\"], valueColumn: \"_value\")\r\n",
+          "query": "import \"timezone\"\r\nimport \"date\"\r\nimport \"array\"\r\n\r\noption location = timezone.location(name: \"Europe/Rome\")\r\n\r\n// Query dati reali\r\ndata = from(bucket: \"Solaredge\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"web\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"Optimizer group\")\r\n  |> filter(fn: (r) => r[\"endpoint\"] == \"PRODUCTION_POWER\")\r\n  |> aggregateWindow(every: 15m, fn: last, createEmpty: false)  // createEmpty: false!\r\n  |> filter(fn: (r) => exists r._value and r._value > 0.0)      // Rimuovi valori zero/null\r\n\r\n// Conta quanti dati ci sono\r\ncount = data |> count() |> findRecord(fn: (key) => true, idx: 0)\r\n\r\n// Se non ci sono dati, crea un punto fittizio a 0\r\ndummy = array.from(rows: [{\r\n  _time: date.truncate(t: now(), unit: 1d),\r\n  _value: 0.0,\r\n  device_id: \"dummy\",\r\n  _field: \"Optimizer group\",\r\n  endpoint: \"PRODUCTION_POWER\"\r\n}])\r\n\r\n// Usa dati reali se esistono, altrimenti dummy\r\nresult = if exists count._value and count._value > 0 then data else dummy\r\n\r\nresult\r\n  |> map(fn: (r) => ({\r\n    _time: r._time,\r\n    _value: r._value,\r\n    _field: r.device_id\r\n  }))\r\n  |> group()\r\n  |> pivot(rowKey: [\"_time\"], columnKey: [\"_field\"], valueColumn: \"_value\")\r\n",
           "refId": "B"
         }
       ],
@@ -5379,13 +5379,13 @@
     ]
   },
   "time": {
-    "from": "now-1d/d",
-    "to": "now-1d/d"
+    "from": "now/d",
+    "to": "now/d"
   },
   "timepicker": {},
   "timezone": "",
   "title": "Solaredge 3.0",
   "uid": "afb91a6f-d8f7-43ae-8a98-67eab1bb4baa",
-  "version": 151,
+  "version": 152,
   "weekStart": "monday"
 }
