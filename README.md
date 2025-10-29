@@ -214,6 +214,23 @@ Questo avvia GUI Dashboard (`http://localhost:8092`), loop di raccolta dati e sc
 
 Apri `http://localhost:3000` (admin/admin) - La dashboard è già importata e configurata!
 
+#### 5. Download Storico (Opzionale)
+
+Se vuoi scaricare tutti i dati storici del tuo impianto:
+
+```bash
+cd /opt/Solaredge_ScanWriter
+python3 main.py --history
+```
+
+**Caratteristiche**:
+- 🔄 **Esecuzione parallela**: Gira insieme al loop senza interferenze
+- 📅 **Suddivisione mensile**: Scarica automaticamente mese per mese
+- 💾 **Cache intelligente**: Evita duplicati, riprende da interruzioni
+- 📊 **Visualizzazione immediata**: I dati appaiono in Grafana ogni 5 secondi
+
+**Durata tipica**: 5-15 minuti per impianti fino a 5 anni (con endpoint di default)
+
 ## ⚙️ Configurazione
 
 ### Struttura File
@@ -289,6 +306,8 @@ sudo systemctl start solaredge-scanwriter  # Con systemd
 docker-compose up -d
 docker-compose logs -f solaredge-scanwriter
 ```
+
+
 
 ## 📊 Dashboard Grafana
 
