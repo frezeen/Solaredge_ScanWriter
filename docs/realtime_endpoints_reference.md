@@ -486,10 +486,21 @@ from(bucket: "Solaredge_Realtime")
   }))
 ```
 
-### Pattern Completo: Autoconsumo Giornaliero
+### Pattern Completo: Calcoli Energetici Giornalieri
 
-**Calcolo**: `Autoconsumo = Produzione - Export`
+#### IMPORTANTE: Usare SEMPRE lo stesso metodo per tutti i contatori
 
+**❌ ERRORE COMUNE**: Usare metodi diversi (dailyDeltaWh vs reduce vs join) per contatori diversi porta a risultati inconsistenti.
+
+**✅ SOLUZIONE**: Usare il metodo specifico testato per ogni tipo di contatore.
+
+---
+
+### Autoconsumo Giornaliero
+
+**Formula**: `Autoconsumo = Produzione - Export`
+
+**Query Completa**:
 ```flux
 import "timezone"
 import "date"
@@ -497,59 +508,249 @@ import "date"
 option location = timezone.location(name: "Europe/Rome")
 
 start = date.truncate(t: now(), unit: 1d)
-stop  = date.add(d: 1d, to: start)
 
-// Produzione giornaliera (ultimo - primo)
+dailyDeltaWh = (tables=<-) => {
+  f = tables
+    |> first()
+    |> keep(columns: ["device_id", "_value"])
+    |> set(key: "kind", value: "start")
+  
+  l = tables
+    |> last()
+    |> keep(columns: ["device_id", "_value"])
+    |> set(key: "kind", value: "end")
+  
+  return union(tables: [f, l])
+    |> pivot(rowKey: ["device_id"], columnKey: ["kind"], valueColumn: "_value")
+    |> map(fn: (r) => ({ r with _value: float(v: r.end) - float(v: r.start) }))
+    |> map(fn: (r) => ({ r with _value: if r._value < 0.0 then 0.0 else r._value }))
+    |> group(columns: [])
+    |> sum(column: "_value")
+}
+
+// Produzione (usa dailyDeltaWh)
 prod = from(bucket: "Solaredge_Realtime")
-  |> range(start: start, stop: stop)
+  |> range(start: start)
   |> filter(fn: (r) =>
       r._measurement == "realtime" and
       r._field == "Inverter" and
       r.endpoint == "Total Energy" and
       r.unit == "Wh"
   )
-  |> group()
-  |> reduce(
-      identity: {first: 0.0, last: 0.0},
-      fn: (r, accumulator) => ({
-          first: if accumulator.first == 0.0 then r._value else accumulator.first,
-          last: r._value
-      })
-  )
-  |> map(fn: (r) => ({_value: r.last - r.first}))
+  |> group(columns: ["device_id"])
+  |> dailyDeltaWh()
+  |> map(fn: (r) => ({_time: now(), _value: r._value, _field: "prod"}))
 
-// Export giornaliero (ultimo - primo)
-exp = from(bucket: "Solaredge_Realtime")
-  |> range(start: start, stop: stop)
+// Export (usa join - metodo testato)
+first_exp = from(bucket: "Solaredge_Realtime")
+  |> range(start: start)
   |> filter(fn: (r) =>
       r._measurement == "realtime" and
       r._field == "Meter" and
       r.endpoint == "Export Energy" and
       r.unit == "Wh"
   )
-  |> group()
+  |> group(columns: [])
+  |> first()
+  |> keep(columns: ["_value"])
+  |> rename(columns: {_value: "start_wh"})
+  |> set(key: "k", value: "x")
+
+last_exp = from(bucket: "Solaredge_Realtime")
+  |> range(start: start)
+  |> filter(fn: (r) =>
+      r._measurement == "realtime" and
+      r._field == "Meter" and
+      r.endpoint == "Export Energy" and
+      r.unit == "Wh"
+  )
+  |> group(columns: [])
+  |> last()
+  |> keep(columns: ["_value"])
+  |> rename(columns: {_value: "end_wh"})
+  |> set(key: "k", value: "x")
+
+exp = join(tables: {first: first_exp, last: last_exp}, on: ["k"])
+  |> map(fn: (r) => ({_time: now(), _value: float(v: r.end_wh) - float(v: r.start_wh), _field: "exp"}))
+
+// Calcolo con PIVOT (NON sum!)
+union(tables: [prod, exp])
+  |> pivot(rowKey: ["_time"], columnKey: ["_field"], valueColumn: "_value")
+  |> map(fn: (r) => ({
+      _time: r._time,
+      _value: r.prod - r.exp
+  }))
+  |> map(fn: (r) => ({
+      _time: r._time,
+      _value: if r._value < 0.0 then 0.0 else r._value
+  }))
+  |> rename(columns: {_value: "autoconsumo_oggi_wh"})
+  |> yield(name: "autoconsumo_oggi_Wh")
+```
+
+---
+
+### Consumo Totale Giornaliero
+
+**Formula CORRETTA**: `Consumo = Import + (Produzione - Export)`
+
+**Spiegazione**:
+- **Import** = Energia prelevata dalla rete (kWh)
+- **Produzione - Export** = Autoconsumo (energia autoprodotta e consumata)
+- **Consumo Totale** = Energia dalla rete + Energia autoprodotta consumata
+
+**Query Completa TESTATA**:
+```flux
+import "timezone"
+import "date"
+
+option location = timezone.location(name: "Europe/Rome")
+
+start = date.truncate(t: now(), unit: 1d)
+
+dailyDeltaWh = (tables=<-) => {
+  f = tables
+    |> first()
+    |> keep(columns: ["device_id", "_value"])
+    |> set(key: "kind", value: "start")
+  
+  l = tables
+    |> last()
+    |> keep(columns: ["device_id", "_value"])
+    |> set(key: "kind", value: "end")
+  
+  return union(tables: [f, l])
+    |> pivot(rowKey: ["device_id"], columnKey: ["kind"], valueColumn: "_value")
+    |> map(fn: (r) => ({ r with _value: float(v: r.end) - float(v: r.start) }))
+    |> map(fn: (r) => ({ r with _value: if r._value < 0.0 then 0.0 else r._value }))
+    |> group(columns: [])
+    |> sum(column: "_value")
+}
+
+// PRODUZIONE (usa dailyDeltaWh)
+prod = from(bucket: "Solaredge_Realtime")
+  |> range(start: start)
+  |> filter(fn: (r) =>
+      r._measurement == "realtime" and
+      r._field == "Inverter" and
+      r.endpoint == "Total Energy" and
+      r.unit == "Wh"
+  )
+  |> group(columns: ["device_id"])
+  |> dailyDeltaWh()
+  |> map(fn: (r) => ({_time: now(), _value: r._value, _field: "prod"}))
+
+// IMPORT (usa reduce - metodo testato)
+imp = from(bucket: "Solaredge_Realtime")
+  |> range(start: start)
+  |> filter(fn: (r) =>
+      r._measurement == "realtime" and
+      r._field == "Meter" and
+      r.endpoint == "Import Energy"
+  )
+  |> filter(fn: (r) => exists r._value)
+  |> sort(columns: ["_time"])
   |> reduce(
-      identity: {first: 0.0, last: 0.0},
+      identity: {first: 0.0, last: 0.0, count: 0},
       fn: (r, accumulator) => ({
-          first: if accumulator.first == 0.0 then r._value else accumulator.first,
-          last: r._value
+          first: if accumulator.count == 0 then r._value else accumulator.first,
+          last: r._value,
+          count: accumulator.count + 1
       })
   )
-  |> map(fn: (r) => ({_value: r.last - r.first}))
+  |> map(fn: (r) => ({_time: now(), _value: r.last - r.first, _field: "imp"}))
 
-// Autoconsumo = Produzione - Export (clamp ≥ 0)
-union(tables: [
-  prod,
-  exp |> map(fn: (r) => ({_value: -r._value}))
-])
-|> sum()
-|> map(fn: (r) => ({
-    _time: now(),
-    _value: if r._value < 0.0 then 0.0 else r._value,
-    _field: "autoconsumo_oggi_wh"
-}))
-|> yield(name: "autoconsumo")
+// EXPORT (usa join - metodo testato)
+first_exp = from(bucket: "Solaredge_Realtime")
+  |> range(start: start)
+  |> filter(fn: (r) =>
+      r._measurement == "realtime" and
+      r._field == "Meter" and
+      r.endpoint == "Export Energy" and
+      r.unit == "Wh"
+  )
+  |> group(columns: [])
+  |> first()
+  |> keep(columns: ["_value"])
+  |> rename(columns: {_value: "start_wh"})
+  |> set(key: "k", value: "x")
+
+last_exp = from(bucket: "Solaredge_Realtime")
+  |> range(start: start)
+  |> filter(fn: (r) =>
+      r._measurement == "realtime" and
+      r._field == "Meter" and
+      r.endpoint == "Export Energy" and
+      r.unit == "Wh"
+  )
+  |> group(columns: [])
+  |> last()
+  |> keep(columns: ["_value"])
+  |> rename(columns: {_value: "end_wh"})
+  |> set(key: "k", value: "x")
+
+exp = join(tables: {first: first_exp, last: last_exp}, on: ["k"])
+  |> map(fn: (r) => ({_time: now(), _value: float(v: r.end_wh) - float(v: r.start_wh), _field: "exp"}))
+
+// CALCOLO CONSUMO con PIVOT (CRITICO!)
+union(tables: [imp, prod, exp])
+  |> pivot(rowKey: ["_time"], columnKey: ["_field"], valueColumn: "_value")
+  |> map(fn: (r) => ({
+      _time: r._time,
+      _value: r.imp + r.prod - r.exp
+  }))
+  |> rename(columns: {_value: "consumo_oggi_wh"})
+  |> yield(name: "consumo_totale_oggi_Wh")
 ```
+
+**Esempio Numerico**:
+- Produzione: 7160 Wh
+- Import: 4160 Wh
+- Export: 4020 Wh
+- **Consumo** = 4160 + 7160 - 4020 = **7300 Wh** ✅
+
+---
+
+### ERRORI COMUNI DA EVITARE
+
+#### ❌ Errore 1: Usare sum() invece di pivot()
+```flux
+// SBAGLIATO - dà risultati errati
+union(tables: [imp, prod, exp |> map(fn: (r) => ({_value: -r._value}))])
+  |> sum()  // ❌ Somma tutto insieme in modo errato
+```
+
+**Problema**: `sum()` somma tutti i valori senza distinguere tra Import, Produzione ed Export.
+
+#### ❌ Errore 2: Usare metodi diversi per contatori diversi
+```flux
+// SBAGLIATO - inconsistente
+prod = ... |> dailyDeltaWh()  // Metodo A
+imp = ... |> reduce()          // Metodo B  
+exp = ... |> dailyDeltaWh()    // Metodo A di nuovo
+```
+
+**Problema**: Metodi diversi possono gestire device_id in modo diverso, causando valori inconsistenti.
+
+#### ❌ Errore 3: Formula sbagliata
+```flux
+// SBAGLIATO
+consumo = Import - Export + Produzione  // ❌ Ordine errato
+```
+
+**Corretto**: `Consumo = Import + Produzione - Export` oppure `Consumo = Import + (Produzione - Export)`
+
+---
+
+### METODI TESTATI PER OGNI CONTATORE
+
+| Contatore | Metodo Testato | Motivo |
+|-----------|----------------|--------|
+| **Total Energy** (Inverter) | `dailyDeltaWh` con `group(columns: ["device_id"])` | Gestisce correttamente più inverter |
+| **Import Energy** (Meter) | `reduce()` con `sort()` | Più affidabile per singolo meter |
+| **Export Energy** (Meter) | `join()` di first/last | Evita problemi con pivot su meter |
+
+**REGOLA D'ORO**: Usa SEMPRE `pivot()` per combinare i risultati finali, MAI `sum()` diretto!
 
 ### Debug: Verificare Presenza Dati
 
