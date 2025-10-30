@@ -4696,6 +4696,33 @@
                 "value": "right"
               }
             ]
+          },
+          {
+            "__systemRef": "hideSeriesFrom",
+            "matcher": {
+              "id": "byNames",
+              "options": {
+                "mode": "exclude",
+                "names": [
+                  "21830A42-F0",
+                  "2183101D-D1",
+                  "21831859-15",
+                  "218317DB-96"
+                ],
+                "prefix": "All except:",
+                "readOnly": true
+              }
+            },
+            "properties": [
+              {
+                "id": "custom.hideFrom",
+                "value": {
+                  "legend": false,
+                  "tooltip": true,
+                  "viz": true
+                }
+              }
+            ]
           }
         ]
       },
@@ -4741,7 +4768,7 @@
             "uid": "ff27vpmruzxtsc"
           },
           "hide": false,
-          "query": "import \"timezone\"\r\nimport \"date\"\r\n\r\noption location = timezone.location(name: \"Europe/Rome\")\r\n\r\nstart_of_day = date.truncate(t: v.timeRangeStart, unit: 1d)\r\nend_of_day = date.add(d: 1d, to: start_of_day)\r\n\r\n// Dati reali\r\nreal_data = from(bucket: \"Solaredge\")\r\n  |> range(start: start_of_day, stop: end_of_day)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"web\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"Optimizer group\")\r\n  |> filter(fn: (r) => r[\"endpoint\"] == \"PRODUCTION_POWER\")\r\n  |> aggregateWindow(every: 15m, fn: last, createEmpty: false)\r\n\r\n// Trova primo dato e ultimo dato\r\nfirst_time = real_data |> first() |> findRecord(fn: (key) => true, idx: 0)\r\nlast_time = real_data |> last() |> findRecord(fn: (key) => true, idx: 0)\r\n\r\n// Controlla se l'ultimo dato è zero (produzione finita naturalmente)\r\nlast_is_zero = last_time._value <= 0.0\r\n\r\n// Timeline completa\r\nfrom(bucket: \"Solaredge\")\r\n  |> range(start: start_of_day, stop: end_of_day)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"web\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"Optimizer group\")\r\n  |> filter(fn: (r) => r[\"endpoint\"] == \"PRODUCTION_POWER\")\r\n  |> aggregateWindow(every: 15m, fn: last, createEmpty: true)\r\n  |> map(fn: (r) => ({\r\n      _time: r._time,\r\n      _value: if r._time < first_time._time then 0.0  // Zero prima produzione\r\n              else if r._time > last_time._time and last_is_zero then 0.0  // Zero dopo se ultimo è zero\r\n              else r._value,  // Altrimenti valore reale o null (troncato)\r\n      device_id: r.device_id\r\n  }))\r\n  |> filter(fn: (r) => exists r._value)\r\n  |> map(fn: (r) => ({_time: r._time, _value: r._value, _field: r.device_id}))\r\n  |> pivot(rowKey: [\"_time\"], columnKey: [\"_field\"], valueColumn: \"_value\")\r\n",
+          "query": "import \"timezone\"\r\nimport \"date\"\r\n\r\noption location = timezone.location(name: \"Europe/Rome\")\r\n\r\nstart_of_day = date.truncate(t: v.timeRangeStart, unit: 1d)\r\nend_of_day = date.add(d: 1d, to: start_of_day)\r\n\r\n// Dati reali\r\nreal_data = from(bucket: \"Solaredge\")\r\n  |> range(start: start_of_day, stop: end_of_day)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"web\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"Optimizer group\")\r\n  |> filter(fn: (r) => r[\"endpoint\"] == \"PRODUCTION_POWER\")\r\n  |> aggregateWindow(every: 15m, fn: last, createEmpty: false)\r\n\r\n// Trova primo e ultimo dato\r\nfirst_time = real_data |> first() |> findRecord(fn: (key) => true, idx: 0)\r\nlast_time = real_data |> last() |> findRecord(fn: (key) => true, idx: 0)\r\n\r\n// Se l'ultimo dato è più vecchio di 30 minuti, produzione finita\r\nnow_time = now()\r\nproduction_ended = int(v: now_time) - int(v: last_time._time) > 1800000000000  // 30 minuti in nanosecondi\r\n\r\n// Timeline completa\r\nfrom(bucket: \"Solaredge\")\r\n  |> range(start: start_of_day, stop: end_of_day)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"web\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"Optimizer group\")\r\n  |> filter(fn: (r) => r[\"endpoint\"] == \"PRODUCTION_POWER\")\r\n  |> aggregateWindow(every: 15m, fn: last, createEmpty: true)\r\n  |> map(fn: (r) => {\r\n      value = if r._time < first_time._time then 0.0\r\n              else if r._time > last_time._time and production_ended then 0.0\r\n              else r._value\r\n      \r\n      return {\r\n          _time: r._time,\r\n          _value: value,\r\n          device_id: r.device_id\r\n      }\r\n  })\r\n  |> filter(fn: (r) => exists r._value)\r\n  |> map(fn: (r) => ({_time: r._time, _value: r._value, _field: r.device_id}))\r\n  |> pivot(rowKey: [\"_time\"], columnKey: [\"_field\"], valueColumn: \"_value\")\r\n",
           "refId": "B"
         }
       ],
@@ -5386,6 +5413,6 @@
   "timezone": "",
   "title": "Solaredge 3.0",
   "uid": "afb91a6f-d8f7-43ae-8a98-67eab1bb4baa",
-  "version": 154,
+  "version": 158,
   "weekStart": "monday"
 }
