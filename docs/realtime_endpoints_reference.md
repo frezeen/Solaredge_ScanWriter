@@ -432,3 +432,174 @@ Mantenere sempre le unità originali senza conversioni:
 5. **Filtrare risultati finali** con `> 0` per valori sensati
 6. **Testare sempre con range estesi** (-3d) se oggi non ha dati sufficienti
 7. **Evitare parole riservate** (`import`, `export`) come nomi di tabelle nel join
+
+---
+
+## CALCOLI GIORNALIERI DA CONTATORI CRESCENTI
+
+### Problema Comune: Calcolare Delta Giornaliero
+I contatori di energia (Total Energy, Import Energy, Export Energy) sono **sempre crescenti**. Per calcolare l'energia giornaliera serve fare: `ultimo_valore - primo_valore`.
+
+### Pattern CORRETTO per Delta Giornaliero
+
+**❌ SBAGLIATO - Usando difference() + sum()**:
+```flux
+// Questo NON funziona correttamente con contatori crescenti
+from(bucket: "Solaredge_Realtime")
+  |> range(start: start, stop: stop)
+  |> filter(fn: (r) => r.endpoint == "Total Energy")
+  |> difference()  // Calcola differenze tra punti consecutivi
+  |> sum()         // Somma tutte le differenze - ERRATO se ci sono reset
+```
+**Problema**: Se il contatore si resetta o ci sono gap nei dati, il risultato è sbagliato.
+
+**✅ CORRETTO - Usando reduce() per primo/ultimo**:
+```flux
+import "timezone"
+import "date"
+
+option location = timezone.location(name: "Europe/Rome")
+
+start = date.truncate(t: now(), unit: 1d)
+stop  = date.add(d: 1d, to: start)
+
+from(bucket: "Solaredge_Realtime")
+  |> range(start: start, stop: stop)
+  |> filter(fn: (r) =>
+      r._measurement == "realtime" and
+      r._field == "Inverter" and
+      r.endpoint == "Total Energy" and
+      r.unit == "Wh"
+  )
+  |> group()  // Raggruppa tutti i device insieme
+  |> reduce(
+      identity: {first: 0.0, last: 0.0},
+      fn: (r, accumulator) => ({
+          first: if accumulator.first == 0.0 then r._value else accumulator.first,
+          last: r._value
+      })
+  )
+  |> map(fn: (r) => ({
+      _time: now(),
+      _value: r.last - r.first,
+      _field: "energia_giornaliera_wh"
+  }))
+```
+
+### Pattern Completo: Autoconsumo Giornaliero
+
+**Calcolo**: `Autoconsumo = Produzione - Export`
+
+```flux
+import "timezone"
+import "date"
+
+option location = timezone.location(name: "Europe/Rome")
+
+start = date.truncate(t: now(), unit: 1d)
+stop  = date.add(d: 1d, to: start)
+
+// Produzione giornaliera (ultimo - primo)
+prod = from(bucket: "Solaredge_Realtime")
+  |> range(start: start, stop: stop)
+  |> filter(fn: (r) =>
+      r._measurement == "realtime" and
+      r._field == "Inverter" and
+      r.endpoint == "Total Energy" and
+      r.unit == "Wh"
+  )
+  |> group()
+  |> reduce(
+      identity: {first: 0.0, last: 0.0},
+      fn: (r, accumulator) => ({
+          first: if accumulator.first == 0.0 then r._value else accumulator.first,
+          last: r._value
+      })
+  )
+  |> map(fn: (r) => ({_value: r.last - r.first}))
+
+// Export giornaliero (ultimo - primo)
+exp = from(bucket: "Solaredge_Realtime")
+  |> range(start: start, stop: stop)
+  |> filter(fn: (r) =>
+      r._measurement == "realtime" and
+      r._field == "Meter" and
+      r.endpoint == "Export Energy" and
+      r.unit == "Wh"
+  )
+  |> group()
+  |> reduce(
+      identity: {first: 0.0, last: 0.0},
+      fn: (r, accumulator) => ({
+          first: if accumulator.first == 0.0 then r._value else accumulator.first,
+          last: r._value
+      })
+  )
+  |> map(fn: (r) => ({_value: r.last - r.first}))
+
+// Autoconsumo = Produzione - Export (clamp ≥ 0)
+union(tables: [
+  prod,
+  exp |> map(fn: (r) => ({_value: -r._value}))
+])
+|> sum()
+|> map(fn: (r) => ({
+    _time: now(),
+    _value: if r._value < 0.0 then 0.0 else r._value,
+    _field: "autoconsumo_oggi_wh"
+}))
+|> yield(name: "autoconsumo")
+```
+
+### Debug: Verificare Presenza Dati
+
+Prima di eseguire calcoli complessi, verifica che i dati esistano:
+
+```flux
+import "timezone"
+import "date"
+
+option location = timezone.location(name: "Europe/Rome")
+
+start = date.truncate(t: now(), unit: 1d)
+stop  = date.add(d: 1d, to: start)
+
+// Conta quanti punti dati ci sono oggi
+from(bucket: "Solaredge_Realtime")
+  |> range(start: start, stop: stop)
+  |> filter(fn: (r) =>
+      r._measurement == "realtime" and
+      r._field == "Inverter" and
+      r.endpoint == "Total Energy" and
+      r.unit == "Wh"
+  )
+  |> count()
+```
+
+**Risultato atteso**: Un numero > 0 (es: 15861 punti per una giornata completa)
+
+### Problemi Comuni e Soluzioni
+
+#### Problema: "No Data" con contatori crescenti
+**Causa**: Uso di `difference()` + `sum()` invece di `reduce()` per primo/ultimo
+**Soluzione**: Usare sempre il pattern `reduce()` mostrato sopra
+
+#### Problema: Pivot fallisce con più device_id
+**Causa**: La funzione `pivot()` non gestisce bene device multipli
+**Soluzione**: Usare `group()` per aggregare tutti i device prima del calcolo
+
+#### Problema: Valori negativi nell'autoconsumo
+**Causa**: Export > Produzione (possibile con batterie o errori dati)
+**Soluzione**: Sempre usare clamp: `if r._value < 0.0 then 0.0 else r._value`
+
+#### Problema: Query funzionava ieri, oggi "no data"
+**Causa**: Nessun dato ancora scritto oggi (es: query eseguita alle 00:01)
+**Soluzione**: Verificare con query di count prima di calcolare delta
+
+### Note Tecniche Importanti
+
+1. **Contatori crescenti**: Total Energy, Import Energy, Export Energy sono SEMPRE crescenti
+2. **Reset contatori**: Raramente i contatori si resettano, ma il pattern reduce() gestisce anche questo caso
+3. **Primo valore del giorno**: Può essere != 0 (è il valore cumulativo dall'installazione)
+4. **Granularità dati**: Realtime arriva ogni 5 secondi, quindi ~17280 punti/giorno
+5. **Performance**: `reduce()` è più efficiente di `first()` + `last()` separati per grandi dataset
