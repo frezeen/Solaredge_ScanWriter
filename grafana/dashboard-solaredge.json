@@ -1917,7 +1917,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "Consumo"
+              "options": "Consumo_W"
             },
             "properties": [
               {
@@ -2059,7 +2059,7 @@
             "uid": "ff27vpmruzxtsc"
           },
           "hide": false,
-          "query": "import \"timezone\"\r\nimport \"date\"\r\n\r\noption location = timezone.location(name: \"Europe/Rome\")\r\n\r\ntoday_start = date.truncate(t: now(), unit: 1d)\r\n\r\nproduzione = from(bucket: \"Solaredge_Realtime\")\r\n  |> range(start: today_start)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"realtime\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"Inverter\")\r\n  |> filter(fn: (r) => r[\"endpoint\"] == \"Power\")\r\n  |> filter(fn: (r) => exists r._value)\r\n  |> aggregateWindow(every: 1m, fn: mean, createEmpty: false)\r\n  |> map(fn: (r) => ({ r with _field: \"produzione\" }))\r\n\r\nmeter = from(bucket: \"Solaredge_Realtime\")\r\n  |> range(start: today_start)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"realtime\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"Meter\")\r\n  |> filter(fn: (r) => r[\"endpoint\"] == \"Power\")\r\n  |> filter(fn: (r) => exists r._value)\r\n  |> aggregateWindow(every: 1m, fn: mean, createEmpty: false)\r\n  |> map(fn: (r) => ({ r with _field: \"meter\" }))\r\n\r\njoin(tables: {prod: produzione, met: meter}, on: [\"_time\"])\r\n  |> map(fn: (r) => ({\r\n    _time: r._time,\r\n    \"Consumo\": r._value_prod - r._value_met\r\n  }))\r\n  |> filter(fn: (r) => r.Consumo >= 0)\r\n",
+          "query": "import \"timezone\"\r\nimport \"date\"\r\n\r\noption location = timezone.location(name: \"Europe/Rome\")\r\n\r\ntoday_start = date.truncate(t: now(), unit: 1d)\r\n\r\nproduzione = from(bucket: \"Solaredge_Realtime\")\r\n  |> range(start: today_start)\r\n  |> filter(fn: (r) => \r\n      r._measurement == \"realtime\" and\r\n      r._field == \"Inverter\" and\r\n      r.endpoint == \"Power\"\r\n  )\r\n  |> filter(fn: (r) => exists r._value)\r\n  |> aggregateWindow(every: 1m, fn: mean, createEmpty: false)\r\n  |> map(fn: (r) => ({_time: r._time, _value: r._value, _field: \"prod\"}))\r\n\r\nmeter = from(bucket: \"Solaredge_Realtime\")\r\n  |> range(start: today_start)\r\n  |> filter(fn: (r) => \r\n      r._measurement == \"realtime\" and\r\n      r._field == \"Meter\" and\r\n      r.endpoint == \"Power\"\r\n  )\r\n  |> filter(fn: (r) => exists r._value)\r\n  |> aggregateWindow(every: 1m, fn: mean, createEmpty: false)\r\n  |> map(fn: (r) => ({_time: r._time, _value: r._value, _field: \"meter\"}))\r\n\r\n// Join e calcola consumo con formula corretta\r\njoin(tables: {prod: produzione, met: meter}, on: [\"_time\"])\r\n  |> map(fn: (r) => ({\r\n      _time: r._time,\r\n      _value: if r._value_met >= 0.0 \r\n              then r._value_prod - r._value_met  // Immissione: Prod - Meter\r\n              else r._value_prod + (r._value_met * -1.0)  // Prelievo: Prod + |Meter|\r\n  }))\r\n  |> filter(fn: (r) => r._value >= 0.0)\r\n  |> rename(columns: {_value: \"Consumo_W\"})\r\n  |> yield(name: \"consumo_istantaneo\")\r\n",
           "refId": "Consumo"
         },
         {
@@ -2179,7 +2179,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "Consumo"
+              "options": "Consumo_W"
             },
             "properties": [
               {
@@ -2310,7 +2310,7 @@
             "uid": "ff27vpmruzxtsc"
           },
           "hide": false,
-          "query": "import \"timezone\"\r\nimport \"date\"\r\n\r\noption location = timezone.location(name: \"Europe/Rome\")\r\n\r\nyesterday_start = date.truncate(t: date.sub(d: 1d, from: now()), unit: 1d)\r\nyesterday_end = date.add(d: 1d, to: yesterday_start)\r\n\r\nproduzione = from(bucket: \"Solaredge_Realtime\")\r\n  |> range(start: yesterday_start, stop: yesterday_end)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"realtime\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"Inverter\")\r\n  |> filter(fn: (r) => r[\"endpoint\"] == \"Power\")\r\n  |> filter(fn: (r) => exists r._value)\r\n  |> aggregateWindow(every: 1m, fn: mean, createEmpty: false)\r\n  |> map(fn: (r) => ({ r with _field: \"produzione\" }))\r\n\r\nmeter = from(bucket: \"Solaredge_Realtime\")\r\n  |> range(start: yesterday_start, stop: yesterday_end)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"realtime\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"Meter\")\r\n  |> filter(fn: (r) => r[\"endpoint\"] == \"Power\")\r\n  |> filter(fn: (r) => exists r._value)\r\n  |> aggregateWindow(every: 1m, fn: mean, createEmpty: false)\r\n  |> map(fn: (r) => ({ r with _field: \"meter\" }))\r\n\r\njoin(tables: {prod: produzione, met: meter}, on: [\"_time\"])\r\n  |> map(fn: (r) => ({\r\n    _time: r._time,\r\n    \"Consumo\": r._value_prod - r._value_met\r\n  }))\r\n  |> filter(fn: (r) => r.Consumo >= 0)\r\n",
+          "query": "import \"timezone\"\r\nimport \"date\"\r\n\r\noption location = timezone.location(name: \"Europe/Rome\")\r\n\r\nyesterday_start = date.truncate(t: date.sub(d: 1d, from: now()), unit: 1d)\r\nyesterday_end = date.add(d: 1d, to: yesterday_start)\r\n\r\nproduzione = from(bucket: \"Solaredge_Realtime\")\r\n  |> range(start: yesterday_start, stop: yesterday_end)\r\n  |> filter(fn: (r) => \r\n      r._measurement == \"realtime\" and\r\n      r._field == \"Inverter\" and\r\n      r.endpoint == \"Power\"\r\n  )\r\n  |> filter(fn: (r) => exists r._value)\r\n  |> aggregateWindow(every: 1m, fn: mean, createEmpty: false)\r\n  |> map(fn: (r) => ({_time: r._time, _value: r._value, _field: \"prod\"}))\r\n\r\nmeter = from(bucket: \"Solaredge_Realtime\")\r\n  |> range(start: yesterday_start, stop: yesterday_end)\r\n  |> filter(fn: (r) => \r\n      r._measurement == \"realtime\" and\r\n      r._field == \"Meter\" and\r\n      r.endpoint == \"Power\"\r\n  )\r\n  |> filter(fn: (r) => exists r._value)\r\n  |> aggregateWindow(every: 1m, fn: mean, createEmpty: false)\r\n  |> map(fn: (r) => ({_time: r._time, _value: r._value, _field: \"meter\"}))\r\n\r\n// Join e calcola consumo con formula corretta\r\njoin(tables: {prod: produzione, met: meter}, on: [\"_time\"])\r\n  |> map(fn: (r) => ({\r\n      _time: r._time,\r\n      _value: if r._value_met >= 0.0 \r\n              then r._value_prod - r._value_met\r\n              else r._value_prod + (r._value_met * -1.0)\r\n  }))\r\n  |> filter(fn: (r) => r._value >= 0.0)\r\n  |> rename(columns: {_value: \"Consumo_W\"})\r\n  |> yield(name: \"consumo_istantaneo_ieri\")\r\n",
           "refId": "Consumo"
         },
         {
@@ -5413,6 +5413,6 @@
   "timezone": "",
   "title": "Solaredge 3.0",
   "uid": "afb91a6f-d8f7-43ae-8a98-67eab1bb4baa",
-  "version": 169,
+  "version": 171,
   "weekStart": "monday"
 }
