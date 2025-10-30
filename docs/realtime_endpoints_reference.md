@@ -200,32 +200,56 @@ from(bucket: "Solaredge")
   |> aggregateWindow(every: 5m, fn: mean)
 ```
 
-### Pattern per Combinare Inverter + Meter (CRITICO)
+### Pattern per Consumo Istantaneo (CRITICO)
+
+**Query TESTATA per Consumo Istantaneo**:
 ```flux
-// Per calcoli che richiedono sia produzione che flusso rete
-inverter_data = from(bucket: "Solaredge")
-  |> range(start: today_start)
-  |> filter(fn: (r) => r["_measurement"] == "realtime")
-  |> filter(fn: (r) => r["_field"] == "Inverter")
-  |> filter(fn: (r) => r["endpoint"] == "Power")
-  |> filter(fn: (r) => exists r._value)
-  |> aggregateWindow(every: 30s, fn: mean, createEmpty: false)
+import "timezone"
+import "date"
 
-meter_data = from(bucket: "Solaredge")
-  |> range(start: today_start)
-  |> filter(fn: (r) => r["_measurement"] == "realtime")
-  |> filter(fn: (r) => r["_field"] == "Meter")
-  |> filter(fn: (r) => r["endpoint"] == "Power")
-  |> filter(fn: (r) => exists r._value)
-  |> aggregateWindow(every: 30s, fn: mean, createEmpty: false)
+option location = timezone.location(name: "Europe/Rome")
 
-// USARE JOIN invece di PIVOT per maggiore affidabilità
-join(tables: {inverter: inverter_data, meter: meter_data}, on: ["_time"])
+today_start = date.truncate(t: now(), unit: 1d)
+
+produzione = from(bucket: "Solaredge_Realtime")
+  |> range(start: today_start)
+  |> filter(fn: (r) => 
+      r._measurement == "realtime" and
+      r._field == "Inverter" and
+      r.endpoint == "Power"
+  )
+  |> filter(fn: (r) => exists r._value)
+  |> aggregateWindow(every: 1m, fn: mean, createEmpty: false)
+  |> map(fn: (r) => ({_time: r._time, _value: r._value, _field: "prod"}))
+
+meter = from(bucket: "Solaredge_Realtime")
+  |> range(start: today_start)
+  |> filter(fn: (r) => 
+      r._measurement == "realtime" and
+      r._field == "Meter" and
+      r.endpoint == "Power"
+  )
+  |> filter(fn: (r) => exists r._value)
+  |> aggregateWindow(every: 1m, fn: mean, createEmpty: false)
+  |> map(fn: (r) => ({_time: r._time, _value: r._value, _field: "meter"}))
+
+// Join e calcola consumo con formula corretta
+join(tables: {prod: produzione, met: meter}, on: ["_time"])
   |> map(fn: (r) => ({
-    _time: r._time,
-    consumo_reale: if r._value_meter >= 0.0 then r._value_inverter - r._value_meter else r._value_inverter + (r._value_meter * -1.0)
+      _time: r._time,
+      _value: if r._value_met >= 0.0 
+              then r._value_prod - r._value_met  // Immissione
+              else r._value_prod + (r._value_met * -1.0)  // Prelievo
   }))
+  |> filter(fn: (r) => r._value >= 0.0)
+  |> rename(columns: {_value: "Consumo_W"})
+  |> yield(name: "consumo_istantaneo")
 ```
+
+**Note Importanti**:
+- ✅ Usa `aggregateWindow(every: 1m)` per sincronizzare timestamp
+- ✅ Formula condizionale gestisce correttamente immissione e prelievo
+- ✅ Filter finale rimuove eventuali valori negativi anomali
 
 ### Pattern per Somme Trifase
 ```flux
@@ -257,30 +281,39 @@ from(bucket: "Solaredge")
 
 ### Calcoli Derivati Fondamentali
 
-#### Consumo Reale Istantaneo
-```
-Se Meter.Power >= 0 (immissione):
-  Consumo_Reale = Inverter.Power - Meter.Power
+#### Consumo Istantaneo (Potenza)
 
-Se Meter.Power < 0 (prelievo):
-  Consumo_Reale = Inverter.Power + |Meter.Power|
+**Formula CORRETTA**:
+```
+Se Meter.Power >= 0 (immissione in rete):
+  Consumo = Produzione - Meter.Power
+
+Se Meter.Power < 0 (prelievo dalla rete):
+  Consumo = Produzione + |Meter.Power|
 ```
 
-#### Logica del Bilancio Energetico
-- **Meter.Power**: Misura solo il flusso netto verso/dalla rete
+**Logica del Bilancio Energetico**:
+- **Meter.Power > 0**: Immissione in rete (produzione > consumo)
+- **Meter.Power < 0**: Prelievo dalla rete (consumo > produzione)
 - **Inverter.Power**: Produzione fotovoltaica istantanea
 - **Consumo casa**: Non misurato direttamente, va calcolato
 
-#### Esempi Pratici
+**Esempi Pratici**:
 ```
 Esempio 1: Produzione 2000W, Consumo casa 1000W
 → Meter.Power = +1000W (immissione)
-→ Consumo_Reale = 2000W - 1000W = 1000W
+→ Consumo = 2000W - 1000W = 1000W ✅
 
 Esempio 2: Produzione 500W, Consumo casa 1500W  
 → Meter.Power = -1000W (prelievo)
-→ Consumo_Reale = 500W + 1000W = 1500W
+→ Consumo = 500W + 1000W = 1500W ✅
+
+Esempio 3: Notte, Produzione 0W, Consumo casa 800W
+→ Meter.Power = -800W (prelievo)
+→ Consumo = 0W + 800W = 800W ✅
 ```
+
+**Nota Matematica**: La formula `Produzione - Meter.Power` funziona anche con meter negativi perché `A - (-B) = A + B`, ma è meglio usare la formula esplicita con `if` per chiarezza.
 
 ### Percentuali Chiave (FORMULE CORRETTE)
 
@@ -404,12 +437,13 @@ I dati realtime arrivano ogni 5 secondi. Per performance usare `aggregateWindow(
 **Causa**: Normale, nessuna produzione fotovoltaica notturna
 **Soluzione**: Per calcoli consumo, filtrare `r._value > 0` dopo il calcolo finale
 
-#### Problema: Calcoli consumo errati
-**Causa**: Non considerare la direzione del flusso meter
-**Soluzione**: Sempre usare la formula condizionale:
+#### Problema: Calcoli consumo istantaneo errati
+**Causa**: Non considerare la direzione del flusso meter o usare formula sbagliata
+**Soluzione**: Usare SEMPRE la formula condizionale testata:
 ```flux
-consumo_reale = if meter >= 0.0 then produzione - meter else produzione + |meter|
+consumo = if meter >= 0.0 then produzione - meter else produzione + (meter * -1.0)
 ```
+**Nota**: La formula `produzione - meter` funziona matematicamente anche senza `if`, ma è meno chiara e manutenibile.
 
 #### Problema: % Autoconsumo confusa
 **Causa**: Esistono due definizioni diverse di "% autoconsumo"
