@@ -1187,17 +1187,20 @@ class SimpleWebGUI:
                 api_keywords = [
                     'api flow', 'collector_api', 'api_parser', 'flusso api', 
                     'endpoint', 'raccolta api', 'raccolti dati da', 'endpoint equipment',
-                    'endpoint site', 'parser api', 'influxdb points da api'
+                    'endpoint site', 'parser api', 'influxdb points da api',
+                    '[api_ufficiali]'  # Cache logs con tag source
                 ]
                 web_keywords = [
                     'web flow', 'collector_web', 'web_parser', 'flusso web', 
                     'web scraping', 'raccolta web', 'raccogliendo dati web',
-                    'parser web', 'influxdb points da web', 'dispositivo', 'measurements'
+                    'parser web', 'influxdb points da web', 'dispositivo', 'measurements',
+                    '[web]'  # Cache logs con tag source
                 ]
                 realtime_keywords = [
                     'realtime', 'modbus', 'collector_realtime', 'parser_realtime', 
                     'flusso realtime', 'raccolta realtime', 'inverter', 'meter',
-                    'metriche abilitate', 'parsing completato'
+                    'metriche abilitate', 'parsing completato',
+                    '[realtime]'  # Cache logs con tag source
                 ]
                 
                 if any(keyword in message_lower for keyword in api_keywords):
