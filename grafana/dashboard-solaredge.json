@@ -4745,7 +4745,7 @@
           "refId": "Potenza Pannelli Istantanea"
         }
       ],
-      "title": "Potenza Pannelli",
+      "title": "Potenza Pannelli (Range Selezionato)",
       "transformations": [
         {
           "id": "organize",
@@ -4899,7 +4899,7 @@
           "refId": "B"
         }
       ],
-      "title": "Potenza Picco Pannelli",
+      "title": "Potenza Picco Pannelli (Range Selezionato)",
       "transformations": [
         {
           "id": "organize",
@@ -5379,13 +5379,13 @@
     ]
   },
   "time": {
-    "from": "now-7d",
-    "to": "now"
+    "from": "now/d",
+    "to": "now/d"
   },
   "timepicker": {},
   "timezone": "",
   "title": "Solaredge 3.0",
   "uid": "afb91a6f-d8f7-43ae-8a98-67eab1bb4baa",
-  "version": 173,
+  "version": 175,
   "weekStart": "monday"
 }

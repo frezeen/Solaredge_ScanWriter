@@ -25,6 +25,7 @@ Raccogli, analizza e visualizza i dati del tuo impianto fotovoltaico con dashboa
 ### 🔄 Raccolta Dati Multi-Sorgente Completa
 
 **22 Endpoint API Ufficiali SolarEdge**
+
 - 📊 **Produzione Energetica**: Dati giornalieri, orari e 15-minutali con storico completo
 - 🏠 **Bilancio Energetico**: Produzione, consumo, autoconsumo, prelievo e immissione rete
 - ⚡ **Telemetria Inverter**: Tensioni AC/DC, correnti, frequenza, temperatura, modalità operative
@@ -33,12 +34,14 @@ Raccogli, analizza e visualizza i dati del tuo impianto fotovoltaico con dashboa
 - 📋 **Inventario Hardware**: Lista completa inverter, contatori, sensori con dettagli tecnici
 
 **Web Scraping Avanzato (Risoluzione 15 minuti)**
+
 - 🔧 **Optimizer Individuali**: Performance di ogni singolo pannello fotovoltaico
 - 🌡️ **Sensori Ambientali**: Irradianza, temperatura ambiente, velocità vento
 - 📈 **Curve di Produzione**: Analisi dettagliata prestazioni per ottimizzazione impianto
 - 🔍 **Diagnostica Avanzata**: Identificazione pannelli sottoperformanti o guasti
 
 **Modbus TCP Realtime (5 secondi)**
+
 - ⚡ **Telemetria Live**: Potenza istantanea, tensioni, correnti in tempo reale
 - 🌡️ **Monitoraggio Termico**: Temperature inverter, dissipatori, componenti critici
 - 🔧 **Stato Operativo**: Modalità funzionamento, allarmi, controlli di sicurezza
@@ -47,12 +50,14 @@ Raccogli, analizza e visualizza i dati del tuo impianto fotovoltaico con dashboa
 ### 🧠 Elaborazione Intelligente e Affidabile
 
 **Pipeline Modulare Robusta**
+
 - 🔄 **Architettura Scalabile**: Collector → Parser → Filter → Writer per massima flessibilità
 - 🛡️ **Validazione Dati**: Controllo automatico range, rimozione outlier, sanity check
 - 🔄 **Retry Intelligente**: Gestione automatica errori temporanei e rate limiting
 - 📝 **Logging Dettagliato**: Tracciabilità completa per debugging e monitoraggio
 
 **Sistema Cache Avanzato**
+
 - ⚡ **Performance Ottimizzate**: TTL intelligente per ridurre chiamate API del 90%
 - 💾 **Persistenza Dati**: Cache su disco per sopravvivere a riavvii sistema
 - 🔄 **Invalidazione Smart**: Aggiornamento automatico solo quando necessario
@@ -61,12 +66,14 @@ Raccogli, analizza e visualizza i dati del tuo impianto fotovoltaico con dashboa
 ### 📊 Storage e Visualizzazione Professionale
 
 **Database Time-Series InfluxDB 2.x**
+
 - ⚡ **Performance Elevate**: Ottimizzato per milioni di punti dati temporali
 - 🗜️ **Compressione Avanzata**: Riduzione spazio disco fino al 95%
 - 🔄 **Retention Policy**: Gestione automatica lifecycle dati (alta risoluzione → aggregati)
 - 🔍 **Query Potenti**: Flux query language per analisi complesse
 
 **Dashboard Grafana Pre-Configurate**
+
 - 📈 **Metriche Chiave**: Produzione, consumo, autoconsumo, bilancio energetico
 - 💰 **Calcoli Economici**: ROI, risparmio SSP, costi energia, payback period
 - 🌍 **Impatto Ambientale**: CO2 evitata, equivalente combustibili fossili
@@ -77,24 +84,28 @@ Raccogli, analizza e visualizza i dati del tuo impianto fotovoltaico con dashboa
 ### 🎛️ Modalità Operative Flessibili
 
 **GUI Dashboard Web Intuitiva**
+
 - 🖥️ **Controllo Centralizzato**: Start/stop processi, configurazione endpoint, monitoraggio live
 - 📝 **Editor Configurazione**: Syntax highlighting per modifiche YAML in tempo reale
 - 📊 **Statistiche Live**: Contatori richieste, errori, performance cache
 - 🔧 **Gestione Device**: Abilitazione/disabilitazione singoli endpoint e sensori
 
 **Automazione 24/7 Completa**
+
 - 🔄 **Loop Continuo**: Raccolta automatica senza intervento manuale
 - 🛡️ **Resilienza Errori**: Continua operazioni anche con fallimenti parziali
 - 📅 **Scheduling Intelligente**: Rispetto rate limit API, ottimizzazione orari
 - 🔄 **Auto-Recovery**: Riavvio automatico processi in caso di problemi
 
 **History Mode Professionale**
+
 - 📜 **Download Completo**: Scarica tutto lo storico disponibile (anche anni di dati)
 - 📅 **Suddivisione Mensile**: Gestione automatica grandi volumi senza timeout
 - 💾 **Resume Capability**: Riprende da interruzioni senza perdere progressi
 - ⚡ **Parallelizzazione**: Esecuzione contemporanea con loop normale
 
 **Testing e Debug Avanzati**
+
 - 🧪 **Single Run Mode**: Test singoli endpoint per validazione configurazione
 - 📊 **Modalità Scan**: Auto-discovery device per configurazione automatica
 - 🔍 **Diagnostica Dettagliata**: Log granulari per troubleshooting rapido
@@ -234,6 +245,7 @@ REALTIME_MODBUS_PORT=1502
 ```
 
 **Note**:
+
 - ✅ **Con install.sh**: Il token InfluxDB è già configurato automaticamente
 - ⚙️ **Modbus**: Configura IP/porta solo se vuoi telemetria realtime dall'inverter
 - 🔧 **Abilitare/Disabilitare Modbus**: Usa la GUI (`http://localhost:8092` o IP della macchina) → Modbus Realtime → Toggle
@@ -276,6 +288,7 @@ python3 main.py --history
 ```
 
 **Caratteristiche**:
+
 - 🔄 **Run-once**: Esecuzione singola con output dettagliato in console
 - 📅 **Suddivisione mensile**: Processa automaticamente mese per mese
 - 💾 **Cache intelligente**: Skip mesi già scaricati, riprende da interruzioni
@@ -360,8 +373,6 @@ sudo systemctl start solaredge-scanwriter  # Con systemd
 docker-compose up -d
 docker-compose logs -f solaredge-scanwriter
 ```
-
-
 
 ## 📊 Dashboard Grafana
 
