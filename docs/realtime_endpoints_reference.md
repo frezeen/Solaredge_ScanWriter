@@ -174,30 +174,25 @@ Le batterie hanno metriche variabili che dipendono dal modello. Esempi comuni:
 ## QUERY PATTERNS PER GRAFANA
 
 ### Pattern Base per Contatori Crescenti
-```flux
-// Per energie cumulative (Import/Export Energy, Total Energy)
-from(bucket: "Solaredge")
-  |> range(start: today_start)
-  |> filter(fn: (r) => r["_measurement"] == "realtime")
-  |> filter(fn: (r) => r["_field"] == "Meter" or r["_field"] == "Inverter")
-  |> filter(fn: (r) => r["endpoint"] == "NOME_ENDPOINT")
-  |> reduce(fn: (r, accumulator) => ({
-      first: if accumulator.count == 0 then r._value else accumulator.first,
-      last: r._value,
-      count: accumulator.count + 1
-    }))
-  |> map(fn: (r) => ({ _value: (r.last - r.first) / 1000.0 }))
-```
+
+**Vedi sezione "CALCOLI GIORNALIERI DA CONTATORI CRESCENTI" per pattern completi e testati.**
 
 ### Pattern per Valori Istantanei
+
+**Per consumo istantaneo, vedi sezione "Pattern per Consumo Istantaneo (CRITICO)" qui sotto.**
+
+**Per altre potenze istantanee**:
 ```flux
-// Per potenze istantanee (Power)
-from(bucket: "Solaredge")
+// Esempio: Potenza produzione ultima ora
+from(bucket: "Solaredge_Realtime")
   |> range(start: -1h)
-  |> filter(fn: (r) => r["_measurement"] == "realtime")
-  |> filter(fn: (r) => r["_field"] == "Meter" or r["_field"] == "Inverter")
-  |> filter(fn: (r) => r["endpoint"] == "Power")
-  |> aggregateWindow(every: 5m, fn: mean)
+  |> filter(fn: (r) => 
+      r._measurement == "realtime" and
+      r._field == "Inverter" and
+      r.endpoint == "Power"
+  )
+  |> filter(fn: (r) => exists r._value)
+  |> aggregateWindow(every: 1m, fn: mean)
 ```
 
 ### Pattern per Consumo Istantaneo (CRITICO)
@@ -254,10 +249,15 @@ join(tables: {prod: produzione, met: meter}, on: ["_time"])
 ### Pattern per Somme Trifase
 ```flux
 // Per sommare L1 + L2 + L3
-from(bucket: "Solaredge")
+from(bucket: "Solaredge_Realtime")
   |> range(start: -1h)
-  |> filter(fn: (r) => r["endpoint"] =~ /L[123] Power/)
-  |> aggregateWindow(every: 5m, fn: mean)
+  |> filter(fn: (r) => 
+      r._measurement == "realtime" and
+      r._field == "Meter" and
+      r.endpoint =~ /L[123] Power/
+  )
+  |> filter(fn: (r) => exists r._value)
+  |> aggregateWindow(every: 1m, fn: mean)
   |> group(columns: ["_time"])
   |> sum()
 ```
@@ -272,12 +272,11 @@ from(bucket: "Solaredge")
 - **Efficienza**: `Inverter.DC Power` vs `Inverter.Power`
 
 ### Consumi e Bilanci
-- **Prelievo rete**: `Meter.Import Energy` (differenza primo/ultimo)
-- **Immissione rete**: `Meter.Export Energy` (differenza primo/ultimo)
-- **Immissione netta**: `Meter.Power` (positivo) = Produzione > Consumo
-- **Prelievo netto**: `Meter.Power` (negativo) = Consumo > Produzione
-- **Consumo reale**: `Inverter.Power + |Meter.Power|` (quando Meter.Power < 0)
-- **Consumo reale**: `Inverter.Power - Meter.Power` (quando Meter.Power > 0)
+- **Prelievo rete giornaliero**: `Meter.Import Energy` (differenza primo/ultimo)
+- **Immissione rete giornaliera**: `Meter.Export Energy` (differenza primo/ultimo)
+- **Flusso rete istantaneo**: `Meter.Power` (positivo=immissione, negativo=prelievo)
+- **Consumo istantaneo**: Vedi formula nella sezione "Consumo Istantaneo (Potenza)"
+- **Consumo giornaliero**: Vedi formula nella sezione "Consumo Totale Giornaliero"
 
 ### Calcoli Derivati Fondamentali
 
@@ -424,9 +423,9 @@ I dati realtime arrivano ogni 5 secondi. Per performance usare `aggregateWindow(
 
 ### Problemi Comuni e Soluzioni
 
-#### Problema: "No Data" con PIVOT
+#### Problema: "No Data" con JOIN per consumo istantaneo
 **Causa**: Timestamp non perfettamente allineati tra Inverter e Meter
-**Soluzione**: Usare `join()` invece di `pivot()` + `aggregateWindow(every: 30s)`
+**Soluzione**: Usare `aggregateWindow(every: 1m)` prima del `join()` per sincronizzare timestamp
 
 #### Problema: JOIN con più di 2 tabelle
 **Causa**: Flux `join()` supporta solo 2 tabelle alla volta
@@ -435,7 +434,7 @@ I dati realtime arrivano ogni 5 secondi. Per performance usare `aggregateWindow(
 
 #### Problema: Inverter Power = 0 di notte
 **Causa**: Normale, nessuna produzione fotovoltaica notturna
-**Soluzione**: Per calcoli consumo, filtrare `r._value > 0` dopo il calcolo finale
+**Soluzione**: Nessuna azione necessaria. La formula del consumo gestisce correttamente questo caso (Consumo = 0 + |Meter.Power|)
 
 #### Problema: Calcoli consumo istantaneo errati
 **Causa**: Non considerare la direzione del flusso meter o usare formula sbagliata
@@ -460,11 +459,11 @@ Mantenere sempre le unità originali senza conversioni:
 
 ### Best Practices Operative
 1. **Sempre usare `exists r._value`** per evitare valori null
-2. **Per 2 datasets**: Preferire `join()` a `pivot()`
-3. **Per 3+ datasets**: Usare `union()` + `pivot()` invece di join multipli
-4. **Usare `aggregateWindow(every: 30s)`** per sincronizzare timestamp
-5. **Filtrare risultati finali** con `> 0` per valori sensati
-6. **Testare sempre con range estesi** (-3d) se oggi non ha dati sufficienti
+2. **Per consumo istantaneo**: Usare `join()` con `aggregateWindow(every: 1m)` per sincronizzare timestamp
+3. **Per calcoli giornalieri (3+ contatori)**: Usare `union()` + `pivot()` invece di join multipli
+4. **Per contatori crescenti**: Usare sempre `reduce()` per calcolare delta (ultimo - primo)
+5. **Bucket corretto**: `Solaredge_Realtime` per dati Modbus, `Solaredge` per dati API
+6. **Filtrare risultati finali** con `>= 0` per rimuovere valori anomali
 7. **Evitare parole riservate** (`import`, `export`) come nomi di tabelle nel join
 
 ---
