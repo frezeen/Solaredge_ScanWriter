@@ -82,44 +82,39 @@ from(bucket: "Solaredge")
 | `Temperature` | `Temperature` | °C | Temperatura optimizer |
 
 #### Query Pattern Optimizer
+
+**IMPORTANTE**: Per query universali che funzionano su qualsiasi impianto, NON filtrare per `device_id` specifico. Il sistema gestisce automaticamente tutti gli optimizer configurati.
+
 ```flux
-// Potenza di tutti gli optimizer
+// Potenza di tutti gli optimizer (UNIVERSALE)
 from(bucket: "Solaredge")
-  |> range(start: -1h)
-  |> filter(fn: (r) => r["_measurement"] == "web")
-  |> filter(fn: (r) => r["_field"] == "Power")
-  |> filter(fn: (r) => r["endpoint"] == "Power")
-  |> filter(fn: (r) => r["device_id"] =~ /^[0-9A-F]{12}$/)  // Pattern optimizer
-  |> aggregateWindow(every: 5m, fn: mean)
+  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)
+  |> filter(fn: (r) => 
+      r._measurement == "web" and
+      r._field == "Optimizer group" and
+      r.endpoint == "PRODUCTION_POWER"
+  )
+  |> filter(fn: (r) => exists r._value)
+  |> aggregateWindow(every: 15m, fn: last, createEmpty: false)
+  |> map(fn: (r) => ({_time: r._time, _value: r._value, _field: r.device_id}))
+  |> pivot(rowKey: ["_time"], columnKey: ["_field"], valueColumn: "_value")
 ```
 
 ```flux
-// Optimizer con potenza più bassa (possibile problema)
+// Optimizer con potenza più bassa (possibile problema) - UNIVERSALE
 from(bucket: "Solaredge")
   |> range(start: -15m)
-  |> filter(fn: (r) => r["_measurement"] == "web")
-  |> filter(fn: (r) => r["_field"] == "Power")
-  |> filter(fn: (r) => r["endpoint"] == "Power")
-  |> filter(fn: (r) => r["device_id"] =~ /^[0-9A-F]{12}$/)
+  |> filter(fn: (r) => 
+      r._measurement == "web" and
+      r._field == "Optimizer group" and
+      r.endpoint == "PRODUCTION_POWER"
+  )
+  |> filter(fn: (r) => exists r._value)
   |> group(columns: ["device_id"])
   |> mean()
   |> group()
   |> sort(columns: ["_value"], desc: false)
   |> limit(n: 5)
-```
-
-```flux
-// Temperatura massima tra optimizer
-from(bucket: "Solaredge")
-  |> range(start: -1h)
-  |> filter(fn: (r) => r["_measurement"] == "web")
-  |> filter(fn: (r) => r["_field"] == "Temperature")
-  |> filter(fn: (r) => r["endpoint"] == "Temperature")
-  |> filter(fn: (r) => r["device_id"] =~ /^[0-9A-F]{12}$/)
-  |> group(columns: ["device_id"])
-  |> max()
-  |> group()
-  |> max()
 ```
 
 ---
@@ -301,25 +296,29 @@ from(bucket: "Solaredge")
 
 ## CALCOLI DERIVATI
 
-### Efficienza Optimizer
+### Efficienza Optimizer (UNIVERSALE)
 ```flux
 // Confronto potenza optimizer vs media
 avg_power = from(bucket: "Solaredge")
   |> range(start: -15m)
-  |> filter(fn: (r) => r["_measurement"] == "web")
-  |> filter(fn: (r) => r["_field"] == "Power")
-  |> filter(fn: (r) => r["endpoint"] == "Power")
-  |> filter(fn: (r) => r["device_id"] =~ /^[0-9A-F]{12}$/)
+  |> filter(fn: (r) => 
+      r._measurement == "web" and
+      r._field == "Optimizer group" and
+      r.endpoint == "PRODUCTION_POWER"
+  )
+  |> filter(fn: (r) => exists r._value)
   |> mean()
   |> group()
   |> mean()
 
 optimizer_power = from(bucket: "Solaredge")
   |> range(start: -15m)
-  |> filter(fn: (r) => r["_measurement"] == "web")
-  |> filter(fn: (r) => r["_field"] == "Power")
-  |> filter(fn: (r) => r["endpoint"] == "Power")
-  |> filter(fn: (r) => r["device_id"] =~ /^[0-9A-F]{12}$/)
+  |> filter(fn: (r) => 
+      r._measurement == "web" and
+      r._field == "Optimizer group" and
+      r.endpoint == "PRODUCTION_POWER"
+  )
+  |> filter(fn: (r) => exists r._value)
   |> group(columns: ["device_id"])
   |> mean()
 
@@ -395,13 +394,17 @@ option location = timezone.location(name: "Europe/Rome")
 - **Dati web**: Intervallo 15 minuti (sincronizzato con API)
 - **Granularità**: Dipende dalla frequenza di scraping configurata
 
-### Device ID
-- **Inverter**: Serial number (es: "7F123456")
-- **Optimizer**: Serial number 12 caratteri hex (es: "0123456789AB")
-- **Meter**: ID numerico (es: "400123456")
+### Device ID e Field Types
+
+**IMPORTANTE PER QUERY UNIVERSALI**:
+- **Optimizer**: Usare `_field == "Optimizer group"` e `endpoint == "PRODUCTION_POWER"` invece di filtrare per `device_id`
+- **Inverter**: Serial number (es: "7F123456") - filtrare per device_id specifico
+- **Meter**: ID numerico (es: "400123456") - filtrare per device_id specifico
 - **Weather**: Sempre "weather_default"
 - **Battery**: Contiene "BAT" nel serial
 - **String**: ID numerico semplice (es: "1", "2")
+
+**Nota**: Per optimizer, il sistema salva i dati con `_field == "Optimizer group"` che permette query universali senza conoscere i serial specifici.
 
 ### Gestione Errori
 Alcuni valori possono essere `null`. Usare sempre:
@@ -419,13 +422,13 @@ Alcuni valori possono essere `null`. Usare sempre:
 - **Irraggiamento**: W/m²
 
 ### Best Practices
-1. **Usare `exists r._value`** per evitare valori null
-2. **Filtrare per device_id** quando si lavora con dispositivi specifici
-3. **Usare pattern regex** per filtrare gruppi di dispositivi (es: tutti gli optimizer)
-4. **Aggregare con `aggregateWindow()`** per ridurre granularità
+1. **Sempre usare `exists r._value`** per evitare valori null
+2. **Query universali optimizer**: Usare `_field == "Optimizer group"` invece di filtrare per `device_id`
+3. **Range Grafana**: Usare `v.timeRangeStart` e `v.timeRangeStop` per compatibilità con qualsiasi periodo
+4. **Aggregare con `aggregateWindow()`** per ridurre granularità (15m per optimizer)
 5. **Per contatori energia**: Usare `reduce()` per calcolare differenza primo/ultimo
 6. **Monitorare optimizer**: Confrontare con media per identificare problemi
-7. **Combinare con dati realtime**: Per analisi più dettagliate
+7. **Pivot per visualizzazione**: Usare `pivot()` per mostrare ogni optimizer come serie separata
 
 ### Problemi Comuni e Soluzioni
 
