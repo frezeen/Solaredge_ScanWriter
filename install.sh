@@ -280,9 +280,12 @@ REQS
         log "📅 Configuring Grafana date formats..."
         GRAFANA_INI="/etc/grafana/grafana.ini"
         if [[ -f "$GRAFANA_INI" ]]; then
-            # Check if date_formats section exists
-            if ! grep -q "\[date_formats\]" "$GRAFANA_INI"; then
-                # Add date_formats section at the end of the file
+            # Check if full_date is already configured correctly
+            if ! grep -q "^full_date = DD/MM/YYYY HH:mm:ss" "$GRAFANA_INI"; then
+                # Remove existing [date_formats] section if present (including commented lines)
+                sed -i '/^\[date_formats\]/,/^\[/{/^\[date_formats\]/d; /^[^[].*=/d; /^#.*date.*format/d;}' "$GRAFANA_INI"
+                
+                # Add new date_formats section at the end
                 cat >> "$GRAFANA_INI" << 'DATEFORMATS'
 
 [date_formats]
@@ -296,10 +299,14 @@ interval_hour = HH:mm
 interval_day = DD MMMM dddd
 interval_month = MMMM YYYY
 interval_year = YYYY
+# Experimental feature
+;use_browser_locale = false
+# Default timezone for user preferences. Options are 'browser' for the browser local timezone or a timezone name from IANA Time Zone database, e.g. 'UTC' or 'Europe/Amsterdam' etc.
+;default_timezone = browser
 DATEFORMATS
                 log "✅ Grafana date formats configured"
             else
-                log "ℹ️ Grafana date_formats section already exists, skipping"
+                log "ℹ️ Grafana date formats already correctly configured"
             fi
         else
             warn "Grafana configuration file not found at $GRAFANA_INI"
