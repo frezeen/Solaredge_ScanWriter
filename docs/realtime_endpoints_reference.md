@@ -595,11 +595,11 @@ union(tables: [prod, exp])
 **Formula CORRETTA**: `Consumo = Import + (Produzione - Export)`
 
 **Spiegazione**:
-- **Import** = Energia prelevata dalla rete (kWh)
+- **Import** = Energia prelevata dalla rete (Wh)
 - **Produzione - Export** = Autoconsumo (energia autoprodotta e consumata)
 - **Consumo Totale** = Energia dalla rete + Energia autoprodotta consumata
 
-**Query Completa TESTATA**:
+**Query SEMPLIFICATA e TESTATA**:
 ```flux
 import "timezone"
 import "date"
@@ -608,91 +608,38 @@ option location = timezone.location(name: "Europe/Rome")
 
 start = date.truncate(t: now(), unit: 1d)
 
-dailyDeltaWh = (tables=<-) => {
-  f = tables
-    |> first()
-    |> keep(columns: ["device_id", "_value"])
-    |> set(key: "kind", value: "start")
-  
-  l = tables
-    |> last()
-    |> keep(columns: ["device_id", "_value"])
-    |> set(key: "kind", value: "end")
-  
-  return union(tables: [f, l])
-    |> pivot(rowKey: ["device_id"], columnKey: ["kind"], valueColumn: "_value")
-    |> map(fn: (r) => ({ r with _value: float(v: r.end) - float(v: r.start) }))
-    |> map(fn: (r) => ({ r with _value: if r._value < 0.0 then 0.0 else r._value }))
-    |> group(columns: [])
-    |> sum(column: "_value")
+// Funzione riutilizzabile per calcolare delta giornaliero
+getDelta = (bucket, field, endpoint) => {
+  return from(bucket: bucket)
+    |> range(start: start)
+    |> filter(fn: (r) =>
+        r._measurement == "realtime" and
+        r._field == field and
+        r.endpoint == endpoint
+    )
+    |> filter(fn: (r) => exists r._value)
+    |> reduce(
+        identity: {first: 0.0, last: 0.0, count: 0},
+        fn: (r, accumulator) => ({
+            first: if accumulator.count == 0 then r._value else accumulator.first,
+            last: r._value,
+            count: accumulator.count + 1
+        })
+    )
+    |> map(fn: (r) => ({_value: r.last - r.first}))
 }
 
-// PRODUZIONE (usa dailyDeltaWh)
-prod = from(bucket: "Solaredge_Realtime")
-  |> range(start: start)
-  |> filter(fn: (r) =>
-      r._measurement == "realtime" and
-      r._field == "Inverter" and
-      r.endpoint == "Total Energy" and
-      r.unit == "Wh"
-  )
-  |> group(columns: ["device_id"])
-  |> dailyDeltaWh()
+// Calcola i 3 valori usando la stessa funzione
+prod = getDelta(bucket: "Solaredge_Realtime", field: "Inverter", endpoint: "Total Energy")
   |> map(fn: (r) => ({_time: now(), _value: r._value, _field: "prod"}))
 
-// IMPORT (usa reduce - metodo testato)
-imp = from(bucket: "Solaredge_Realtime")
-  |> range(start: start)
-  |> filter(fn: (r) =>
-      r._measurement == "realtime" and
-      r._field == "Meter" and
-      r.endpoint == "Import Energy"
-  )
-  |> filter(fn: (r) => exists r._value)
-  |> sort(columns: ["_time"])
-  |> reduce(
-      identity: {first: 0.0, last: 0.0, count: 0},
-      fn: (r, accumulator) => ({
-          first: if accumulator.count == 0 then r._value else accumulator.first,
-          last: r._value,
-          count: accumulator.count + 1
-      })
-  )
-  |> map(fn: (r) => ({_time: now(), _value: r.last - r.first, _field: "imp"}))
+imp = getDelta(bucket: "Solaredge_Realtime", field: "Meter", endpoint: "Import Energy")
+  |> map(fn: (r) => ({_time: now(), _value: r._value, _field: "imp"}))
 
-// EXPORT (usa join - metodo testato)
-first_exp = from(bucket: "Solaredge_Realtime")
-  |> range(start: start)
-  |> filter(fn: (r) =>
-      r._measurement == "realtime" and
-      r._field == "Meter" and
-      r.endpoint == "Export Energy" and
-      r.unit == "Wh"
-  )
-  |> group(columns: [])
-  |> first()
-  |> keep(columns: ["_value"])
-  |> rename(columns: {_value: "start_wh"})
-  |> set(key: "k", value: "x")
+exp = getDelta(bucket: "Solaredge_Realtime", field: "Meter", endpoint: "Export Energy")
+  |> map(fn: (r) => ({_time: now(), _value: r._value, _field: "exp"}))
 
-last_exp = from(bucket: "Solaredge_Realtime")
-  |> range(start: start)
-  |> filter(fn: (r) =>
-      r._measurement == "realtime" and
-      r._field == "Meter" and
-      r.endpoint == "Export Energy" and
-      r.unit == "Wh"
-  )
-  |> group(columns: [])
-  |> last()
-  |> keep(columns: ["_value"])
-  |> rename(columns: {_value: "end_wh"})
-  |> set(key: "k", value: "x")
-
-exp = join(tables: {first: first_exp, last: last_exp}, on: ["k"])
-  |> map(fn: (r) => ({_time: now(), _value: float(v: r.end_wh) - float(v: r.start_wh), _field: "exp"}))
-
-// CALCOLO CONSUMO con PIVOT (CRITICO!)
+// Consumo = Import + Produzione - Export (usa PIVOT!)
 union(tables: [imp, prod, exp])
   |> pivot(rowKey: ["_time"], columnKey: ["_field"], valueColumn: "_value")
   |> map(fn: (r) => ({
@@ -702,6 +649,12 @@ union(tables: [imp, prod, exp])
   |> rename(columns: {_value: "consumo_oggi_wh"})
   |> yield(name: "consumo_totale_oggi_Wh")
 ```
+
+**Vantaggi di questa versione**:
+- ✅ **Molto più corta** - usa una funzione riutilizzabile
+- ✅ **Consistente** - stesso metodo `reduce()` per tutti i contatori
+- ✅ **Manutenibile** - facile da modificare e capire
+- ✅ **Testata** - funziona correttamente con dati reali
 
 **Esempio Numerico**:
 - Produzione: 7160 Wh
