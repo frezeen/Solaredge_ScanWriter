@@ -299,6 +299,19 @@ class SmartUpdater:
     def check_for_updates(self) -> Tuple[bool, int]:
         """Controlla se ci sono aggiornamenti disponibili"""
         try:
+            # Verifica se è un repository git
+            git_dir = self.project_root / ".git"
+            if not git_dir.exists():
+                self.log("Not a git repository - attempting to initialize...", "WARNING")
+                
+                # Prova a inizializzare il repository
+                if self._initialize_git_repository():
+                    self.log("Git repository initialized successfully", "SUCCESS")
+                else:
+                    self.log("Could not initialize git repository", "ERROR")
+                    self.log("Manual installation detected - updates disabled", "INFO")
+                    return False, 0
+            
             self.run_command(["git", "fetch", "origin"])
             
             result = self.run_command([
@@ -318,6 +331,36 @@ class SmartUpdater:
         except Exception as e:
             self.log(f"Failed to check for updates: {e}", "ERROR")
             return False, 0
+    
+    def _initialize_git_repository(self) -> bool:
+        """Inizializza repository git se mancante (per installazioni manuali)"""
+        try:
+            self.log("Initializing git repository...", "INFO")
+            
+            # 1. Init repository
+            self.run_command(["git", "init"])
+            
+            # 2. Add remote
+            self.run_command([
+                "git", "remote", "add", "origin",
+                "https://github.com/frezeen/Solaredge_ScanWriter.git"
+            ])
+            
+            # 3. Fetch remote
+            self.run_command(["git", "fetch", "origin"])
+            
+            # 4. Reset to remote main
+            self.run_command(["git", "reset", "--hard", "origin/main"])
+            
+            # 5. Set tracking branch
+            self.run_command(["git", "branch", "--set-upstream-to=origin/main", "main"])
+            
+            self.log("Git repository initialized and synced with remote", "SUCCESS")
+            return True
+            
+        except Exception as e:
+            self.log(f"Failed to initialize git repository: {e}", "ERROR")
+            return False
             
     def apply_git_update(self) -> bool:
         """Applica aggiornamento Git in modo sicuro con timeout configurabile"""
