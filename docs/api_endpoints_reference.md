@@ -76,6 +76,27 @@ from(bucket: "Solaredge")
   |> keep(columns: ["_time", "_value", "_field"])
 ```
 
+**Per bar chart continui** (visualizzare anche giorni senza produzione con 0):
+
+```flux
+import "timezone"
+option location = timezone.location(name: "Europe/Rome")
+
+from(bucket: "Solaredge")
+  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)
+  |> filter(fn: (r) => r["_measurement"] == "api")
+  |> filter(fn: (r) => r["_field"] == "Meter")
+  |> filter(fn: (r) => r["endpoint"] == "site_energy_details")
+  |> filter(fn: (r) => r["metric"] == "Production")
+  |> aggregateWindow(every: 1d, fn: sum, createEmpty: true)
+  |> timeShift(duration: -1s, columns: ["_time"])
+  |> fill(value: 0.0)
+  |> map(fn: (r) => ({ r with _field: "Produzione" }))
+  |> keep(columns: ["_time", "_value", "_field"])
+```
+
+**Nota**: `createEmpty: true`, `timeShift(duration: -1s)` e `fill(value: 0.0)` garantiscono che il bar chart mostri tutti i giorni del range, inclusi quelli senza dati (es: giorni futuri o periodi offline).
+
 ---
 
 ### site_power_details
@@ -422,6 +443,227 @@ union(tables: [import_energy, production_energy, export_energy])
     "Perc_Prelievo": (r.imported / (r.imported + (r.produced - r.exported))) * 100.0
   }))
 ```
+
+---
+
+## AGGREGAZIONI TEMPORALI (MENSILI/ANNUALI)
+
+### Produzione Storica per Mese e Anno
+
+**IMPORTANTE**: La scelta del metodo di aggregazione dipende dal range temporale:
+
+- **Range singolo anno** (anno corrente o precedente): Usare `aggregateWindow(every: 1mo)` con `createEmpty: true` e `offset: -1s` per garantire tutti i 12 mesi
+- **Range multi-anno** (storico completo): Usare `group()` + `sum()` con estrazione esplicita di anno e mese per evitare finestre non allineate
+
+#### Query Multi-Anno - Tabella Pivot Mese/Anno (Storico Completo)
+
+```flux
+import "timezone"
+import "date"
+
+option location = timezone.location(name: "Europe/Rome")
+
+from(bucket: "Solaredge")
+  |> range(start: 0, stop: now())
+  |> filter(fn: (r) => r["_measurement"] == "api")
+  |> filter(fn: (r) => r["_field"] == "Inverter")
+  |> filter(fn: (r) => r["endpoint"] == "site_energy_day")
+  |> filter(fn: (r) => exists r._value)
+  |> map(fn: (r) => ({ 
+      r with 
+      year: string(v: date.year(t: r._time)),
+      month: date.month(t: r._time)
+  }))
+  |> group(columns: ["year", "month"])
+  |> sum(column: "_value")
+  |> map(fn: (r) => ({
+      r with
+      month_name: if r.month == 1 then "Gennaio"
+        else if r.month == 2 then "Febbraio"
+        else if r.month == 3 then "Marzo"
+        else if r.month == 4 then "Aprile"
+        else if r.month == 5 then "Maggio"
+        else if r.month == 6 then "Giugno"
+        else if r.month == 7 then "Luglio"
+        else if r.month == 8 then "Agosto"
+        else if r.month == 9 then "Settembre"
+        else if r.month == 10 then "Ottobre"
+        else if r.month == 11 then "Novembre"
+        else "Dicembre"
+  }))
+  |> group()
+  |> pivot(rowKey: ["month", "month_name"], columnKey: ["year"], valueColumn: "_value")
+  |> sort(columns: ["month"])
+  |> drop(columns: ["month"])
+```
+
+**Risultato**: Tabella con righe per ogni mese (nome italiano) e colonne per ogni anno con i valori di produzione in Wh.
+
+**Quando usare**: Range multi-anno (es: `start: 0` per tutto lo storico).
+
+#### Query Anno Singolo - Aggregazione Mensile (Anno Corrente/Precedente)
+
+```flux
+import "timezone"
+import "date"
+
+option location = timezone.location(name: "Europe/Rome")
+
+startOfYear = date.truncate(t: now(), unit: 1y)
+endOfYear = date.add(d: 1y, to: startOfYear)
+
+from(bucket: "Solaredge")
+  |> range(start: startOfYear, stop: endOfYear)
+  |> filter(fn: (r) => 
+      r._measurement == "api" and 
+      r._field == "Meter" and 
+      r.endpoint == "site_energy_details" and
+      r.metric == "Production"
+  )
+  |> aggregateWindow(every: 1mo, fn: sum, createEmpty: true, offset: -1s)
+  |> fill(value: 0.0)
+  |> map(fn: (r) => ({ r with _field: "Produzione" }))
+  |> keep(columns: ["_time", "_value", "_field"])
+```
+
+**Risultato**: Serie temporale con 12 punti (uno per mese), inclusi mesi senza dati (riempiti con 0).
+
+**Quando usare**: Range di un anno singolo (anno corrente o precedente). I parametri `createEmpty: true`, `offset: -1s` e `fill(value: 0.0)` garantiscono che tutti i 12 mesi siano visualizzati, inclusi gennaio e dicembre.
+
+**Per anno precedente**, modificare il range:
+```flux
+startOfLastYear = date.sub(d: 1y, from: date.truncate(t: now(), unit: 1y))
+endOfLastYear = date.truncate(t: now(), unit: 1y)
+
+from(bucket: "Solaredge")
+  |> range(start: startOfLastYear, stop: endOfLastYear)
+  // ... resto della query identico
+```
+
+#### Query Alternativa - Serie Temporale Mensile
+
+```flux
+import "timezone"
+import "date"
+
+option location = timezone.location(name: "Europe/Rome")
+
+from(bucket: "Solaredge")
+  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)
+  |> filter(fn: (r) => r["_measurement"] == "api")
+  |> filter(fn: (r) => r["_field"] == "Inverter")
+  |> filter(fn: (r) => r["endpoint"] == "site_energy_day")
+  |> filter(fn: (r) => exists r._value)
+  |> map(fn: (r) => ({ 
+      r with 
+      year: date.year(t: r._time),
+      month: date.month(t: r._time)
+  }))
+  |> group(columns: ["year", "month"])
+  |> sum(column: "_value")
+  |> map(fn: (r) => ({
+      _time: date.truncate(t: r._time, unit: 1mo),
+      _value: r._value / 1000.0,  // Converti in kWh
+      _field: "Produzione_kWh"
+  }))
+  |> group()
+  |> sort(columns: ["_time"])
+```
+
+**Risultato**: Serie temporale con un punto per mese, valori in kWh.
+
+#### Query Totali Annuali
+
+```flux
+import "timezone"
+import "date"
+
+option location = timezone.location(name: "Europe/Rome")
+
+from(bucket: "Solaredge")
+  |> range(start: 0, stop: now())
+  |> filter(fn: (r) => r["_measurement"] == "api")
+  |> filter(fn: (r) => r["_field"] == "Inverter")
+  |> filter(fn: (r) => r["endpoint"] == "site_energy_day")
+  |> filter(fn: (r) => exists r._value)
+  |> map(fn: (r) => ({ 
+      r with 
+      year: string(v: date.year(t: r._time))
+  }))
+  |> group(columns: ["year"])
+  |> sum(column: "_value")
+  |> map(fn: (r) => ({
+      _time: r._time,
+      _value: r._value / 1000.0,  // Converti in kWh
+      _field: r.year
+  }))
+  |> group()
+  |> sort(columns: ["_time"])
+```
+
+**Risultato**: Totale produzione per anno in kWh.
+
+#### Query Multi-Metrica Anno Corrente (Produzione, Consumo, Bilanci)
+
+```flux
+import "timezone"
+import "date"
+
+option location = timezone.location(name: "Europe/Rome")
+
+startOfYear = date.truncate(t: now(), unit: 1y)
+endOfYear = date.add(d: 1y, to: startOfYear)
+
+from(bucket: "Solaredge")
+  |> range(start: startOfYear, stop: endOfYear)
+  |> filter(fn: (r) => 
+      r._measurement == "api" and 
+      r._field == "Meter" and 
+      r.endpoint == "site_energy_details" and
+      (r.metric == "Production" or 
+       r.metric == "Consumption" or 
+       r.metric == "SelfConsumption" or 
+       r.metric == "Purchased" or 
+       r.metric == "FeedIn")
+  )
+  |> aggregateWindow(every: 1mo, fn: sum, createEmpty: true, offset: -1s)
+  |> fill(value: 0.0)
+  |> map(fn: (r) => ({
+      _time: r._time,
+      _value: r._value,
+      _field: if r.metric == "Production" then "Produzione"
+        else if r.metric == "Consumption" then "Consumo"
+        else if r.metric == "SelfConsumption" then "Autoconsumo"
+        else if r.metric == "Purchased" then "Prelievo"
+        else "Immissione"
+  }))
+  |> pivot(rowKey: ["_time"], columnKey: ["_field"], valueColumn: "_value")
+```
+
+**Risultato**: Tabella con timestamp mensili e colonne per ogni metrica energetica (Produzione, Consumo, Autoconsumo, Prelievo, Immissione).
+
+**Quando usare**: Dashboard mensili con più metriche per l'anno corrente o precedente.
+
+### Quando Usare Quale Metodo
+
+| Scenario | Metodo | Motivo |
+|----------|--------|--------|
+| **Storico completo multi-anno** | `group()` + `sum()` | Evita finestre non allineate tra anni diversi |
+| **Anno corrente** | `aggregateWindow(every: 1mo)` | Più veloce, garantisce tutti i 12 mesi con `createEmpty: true` |
+| **Anno precedente** | `aggregateWindow(every: 1mo)` | Più veloce, garantisce tutti i 12 mesi con `createEmpty: true` |
+| **Confronto anni (pivot)** | `group()` + `sum()` + `pivot()` | Crea tabella con mesi come righe e anni come colonne |
+| **Bar chart con zeri** | `aggregateWindow()` + `fill()` | Visualizza periodi senza produzione (es: notte, mesi mancanti) |
+
+### Best Practices Aggregazioni
+
+1. **Impostare timezone** con `option location = timezone.location(name: "Europe/Rome")` all'inizio di ogni query
+2. **Range multi-anno**: Usare `group(columns: ["year", "month"])` + `sum()` per precisione
+3. **Range anno singolo**: Usare `aggregateWindow(every: 1mo, fn: sum, createEmpty: true, offset: -1s)` per velocità
+4. **Bar chart continui**: Aggiungere `fill(value: 0.0)` dopo `aggregateWindow()` per visualizzare periodi senza dati
+5. **Convertire in kWh** dividendo per 1000 se necessario per leggibilità
+6. **Usare `pivot()`** per creare tabelle mese/anno o multi-metrica leggibili
+7. **Filtrare valori null** con `exists r._value` prima delle aggregazioni
+8. **Range precisi**: Per anno corrente/precedente, usare `date.truncate()` e `date.add()`/`date.sub()` per limiti esatti
 
 ---
 
