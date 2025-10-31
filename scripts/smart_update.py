@@ -338,7 +338,7 @@ class SmartUpdater:
             self.log("Initializing git repository...", "INFO")
             
             # 1. Init repository
-            self.run_command(["git", "init"])
+            self.run_command(["git", "init", "-b", "main"])
             
             # 2. Add remote
             self.run_command([
@@ -349,7 +349,7 @@ class SmartUpdater:
             # 3. Fetch remote
             self.run_command(["git", "fetch", "origin"])
             
-            # 4. Reset to remote main
+            # 4. Reset to remote main (questo crea il branch locale)
             self.run_command(["git", "reset", "--hard", "origin/main"])
             
             # 5. Set tracking branch
