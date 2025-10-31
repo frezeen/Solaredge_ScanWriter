@@ -128,7 +128,10 @@ class SimpleWebGUI:
         """Carica la configurazione YAML dal main.yaml (senza sources)"""
         try:
             if self.config_file.exists():
-                content = self.config_file.read_text(encoding='utf-8')
+                # Usa aiofiles per I/O non bloccante
+                import aiofiles
+                async with aiofiles.open(self.config_file, 'r', encoding='utf-8') as f:
+                    content = await f.read()
                 
                 # Sostituisci variabili d'ambiente come fa config_manager
                 from config.config_manager import get_config_manager
@@ -144,8 +147,11 @@ class SimpleWebGUI:
     async def save_config(self):
         """Salva la configurazione YAML principale"""
         try:
-            with open(self.config_file, 'w', encoding='utf-8') as f:
-                yaml.dump(self.config, f, default_flow_style=False, allow_unicode=True, indent=2)
+            # Usa aiofiles per I/O non bloccante
+            import aiofiles
+            content = yaml.dump(self.config, default_flow_style=False, allow_unicode=True, indent=2)
+            async with aiofiles.open(self.config_file, 'w', encoding='utf-8') as f:
+                await f.write(content)
             return True
         except Exception as e:
             self.logger.error(f"[GUI] Errore salvataggio config: {e}")
@@ -326,8 +332,10 @@ class SimpleWebGUI:
             # Crea la directory se non esiste
             file_path.parent.mkdir(parents=True, exist_ok=True)
             
-            # Salva il file
-            file_path.write_text(content, encoding='utf-8')
+            # Salva il file (usa aiofiles per I/O non bloccante)
+            import aiofiles
+            async with aiofiles.open(file_path, 'w', encoding='utf-8') as f:
+                await f.write(content)
             
             self.logger.info(f"[GUI] Salvato file YAML: {file_path}")
             
@@ -349,12 +357,14 @@ class SimpleWebGUI:
             
             await self.load_config()
             
+            # Esegui in executor per evitare blocking I/O
+            import asyncio
             if source_type == 'web':
-                sources = self._get_web_devices()
+                sources = await asyncio.get_event_loop().run_in_executor(None, self._get_web_devices)
             elif source_type == 'api':
-                sources = self._get_api_endpoints()
+                sources = await asyncio.get_event_loop().run_in_executor(None, self._get_api_endpoints)
             elif source_type == 'modbus':
-                sources = self._get_modbus_endpoints()
+                sources = await asyncio.get_event_loop().run_in_executor(None, self._get_modbus_endpoints)
             else:
                 return web.json_response({"error": "Tipo sorgente non valido"}, status=400)
             
@@ -1304,20 +1314,24 @@ class SimpleWebGUI:
                 if current_time - last_api_web_run >= api_web_interval:
                     self.logger.info("[GUI] 🌐 Esecuzione raccolta API/Web...")
                     
-                    # Esegui Web flow
+                    # Esegui Web flow (in thread separato per non bloccare GUI)
                     self.loop_stats['web_stats']['executed'] += 1
                     try:
-                        run_web_flow(log, cache)
+                        await asyncio.get_event_loop().run_in_executor(
+                            None, run_web_flow, log, cache
+                        )
                         self.loop_stats['web_stats']['success'] += 1
                         self.logger.info("[GUI] ✅ Raccolta web completata")
                     except Exception as e:
                         self.loop_stats['web_stats']['failed'] += 1
                         self.logger.error(f"[GUI] ❌ Errore raccolta web: {e}")
                     
-                    # Esegui API flow
+                    # Esegui API flow (in thread separato per non bloccare GUI)
                     self.loop_stats['api_stats']['executed'] += 1
                     try:
-                        run_api_flow(log, cache, config)
+                        await asyncio.get_event_loop().run_in_executor(
+                            None, run_api_flow, log, cache, config
+                        )
                         self.loop_stats['api_stats']['success'] += 1
                         self.logger.info("[GUI] ✅ Raccolta API completata")
                     except Exception as e:
@@ -1332,11 +1346,14 @@ class SimpleWebGUI:
                     next_api_web_run = current_time + api_web_interval
                     self.loop_stats['next_api_web_run'] = next_api_web_run
                 
-                # Esegui Realtime ogni 5 secondi
+                # Esegui Realtime ogni 5 secondi (in thread separato per non bloccare GUI)
                 if current_time - last_realtime_run >= realtime_interval:
                     self.loop_stats['realtime_stats']['executed'] += 1
                     try:
-                        run_realtime_flow(log, cache, config)
+                        # Esegui in thread separato per evitare blocco su timeout Modbus
+                        await asyncio.get_event_loop().run_in_executor(
+                            None, run_realtime_flow, log, cache, config
+                        )
                         self.loop_stats['realtime_stats']['success'] += 1
                         self.logger.debug("[GUI] ✅ Raccolta realtime completata")
                     except Exception as e:
