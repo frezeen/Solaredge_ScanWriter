@@ -32,6 +32,26 @@ class CollectorAPI:
         self.base_url = self._api_config.base_url
         
         self.config = self._config_manager.get_raw_config()
+        
+        # HTTP Session pooling per ottimizzazione connessioni
+        self._session = requests.Session()
+        self._session.headers.update({
+            'User-Agent': 'SolarEdge-Collector/1.0',
+            'Accept': 'application/json'
+        })
+    
+    def close(self):
+        """Chiude la sessione HTTP per liberare risorse"""
+        if hasattr(self, '_session'):
+            self._session.close()
+    
+    def __enter__(self):
+        """Context manager support"""
+        return self
+    
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Context manager cleanup"""
+        self.close()
 
     def _get_enabled_endpoints(self) -> Dict[str, Any]:
         """Ottieni endpoint abilitati dal YAML"""
@@ -87,7 +107,8 @@ class CollectorAPI:
         """Chiamata API con scheduler timing"""
         def _http_call():
             try:
-                response = requests.get(url, params=params, timeout=self._api_config.timeout_seconds)
+                # Usa session pooling invece di requests.get diretto
+                response = self._session.get(url, params=params, timeout=self._api_config.timeout_seconds)
                 response.raise_for_status()
                 return response.json()
             except requests.exceptions.HTTPError as e:
@@ -176,7 +197,8 @@ class CollectorAPI:
             url = f"{self.base_url}/site/{self.site_id}/dataPeriod"
             params = {'api_key': self.api_key}
             
-            response = requests.get(url, params=params, timeout=self._api_config.timeout_seconds)
+            # Usa session pooling per dataPeriod
+            response = self._session.get(url, params=params, timeout=self._api_config.timeout_seconds)
             response.raise_for_status()
             data = response.json()
             

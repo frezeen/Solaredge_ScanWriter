@@ -1,19 +1,18 @@
 #!/usr/bin/env python3
 """main.py - Orchestratore semplificato dopo refactor"""
 
-import sys, argparse, os, asyncio, webbrowser, re, signal
+import sys, argparse, os, asyncio, webbrowser, re
 from pathlib import Path
 from typing import Any, Dict
 import yaml
 from datetime import datetime, timedelta
 import time
-import threading
 
 from config.env_loader import load_env
 from app_logging import configure_logging, get_logger
 from cache.cache_manager import CacheManager
 from config.config_manager import get_config_manager
-from scheduler.scheduler_loop import SchedulerLoop, SchedulerConfig, SourceType
+from scheduler.scheduler_loop import SchedulerLoop, SchedulerConfig
 from utils.color_logger import color
 
 load_env()
@@ -44,18 +43,19 @@ def load_config_with_env_substitution(config_path: str) -> Dict[str, Any]:
         return {}
 
 
-def setup_logging(args, config: Dict[str, Any]) -> str:
+def setup_logging(args, config: Dict[str, Any]) -> None:
     """Configura logging basato su modalità"""
     logging_config = config.get('logging', {})
     os.environ["LOG_LEVEL"] = logging_config.get('level', 'INFO')
     os.environ["LOG_DIR"] = logging_config.get('log_directory', 'logs')
     
+    # Log files configurabili tramite environment
     log_files = {
-        'scan': 'scanner.log',
-        'web': 'web_flow.log',
-        'api': 'api_flow.log',
-        'realtime': 'realtime_flow.log',
-        'gui': 'loop_mode.log'
+        'scan': os.getenv('LOG_FILE_SCAN', 'scanner.log'),
+        'web': os.getenv('LOG_FILE_WEB', 'web_flow.log'),
+        'api': os.getenv('LOG_FILE_API', 'api_flow.log'),
+        'realtime': os.getenv('LOG_FILE_REALTIME', 'realtime_flow.log'),
+        'gui': os.getenv('LOG_FILE_GUI', 'loop_mode.log')
     }
     
     mode = 'scan' if args.scan else ('web' if args.web else 'api' if args.api else 'realtime' if args.realtime else 'gui')
@@ -65,8 +65,6 @@ def setup_logging(args, config: Dict[str, Any]) -> str:
         configure_logging(log_file=log_file, script_name="main")
     else:
         configure_logging(script_name="main")
-    
-    return log_file
 
 
 def handle_scan_mode(log) -> int:
@@ -89,50 +87,60 @@ def handle_scan_mode(log) -> int:
 
 
 def kill_process_on_port(port: int, log) -> bool:
-    """Killa il processo che occupa una porta specifica (Windows)"""
+    """Killa il processo che occupa una porta specifica (Debian/Linux)"""
     import subprocess
     
     try:
-        # Trova il PID del processo sulla porta
+        # Trova il PID del processo sulla porta usando ss (sostituto moderno di netstat)
         result = subprocess.run(
-            ['netstat', '-ano', '-p', 'TCP'],
+            ['ss', '-tlnp', f'sport = :{port}'],
             capture_output=True,
             text=True,
-            timeout=5
+            timeout=int(os.getenv('GLOBAL_TIMEOUT_SECONDS', '30'))
         )
         
         if result.returncode != 0:
+            log.warning(f"⚠️ Comando ss fallito per porta {port}")
             return False
         
-        # Cerca la riga con la porta
+        # Cerca il PID nella output di ss
         for line in result.stdout.split('\n'):
-            if f':{port}' in line and 'LISTENING' in line:
-                # Estrai il PID (ultima colonna)
-                parts = line.split()
-                if len(parts) >= 5:
-                    pid = parts[-1]
+            if f':{port}' in line and 'LISTEN' in line:
+                # Formato ss: ... users:(("processo",pid=1234,fd=5))
+                import re
+                pid_match = re.search(r'pid=(\d+)', line)
+                if pid_match:
+                    pid = pid_match.group(1)
                     log.info(f"🔍 Trovato processo PID {pid} sulla porta {port}")
                     
-                    # Killa il processo
+                    # Killa il processo usando kill (Linux)
                     kill_result = subprocess.run(
-                        ['taskkill', '/F', '/PID', pid],
+                        ['kill', '-9', pid],
                         capture_output=True,
                         text=True,
-                        timeout=5
+                        timeout=int(os.getenv('GLOBAL_TIMEOUT_SECONDS', '30'))
                     )
                     
                     if kill_result.returncode == 0:
                         log.info(f"✅ Processo PID {pid} terminato")
-                        time.sleep(1)  # Aspetta che la porta si liberi
+                        # Usa timeout configurabile invece di hardcoded
+                        time.sleep(int(os.getenv('SCHEDULER_API_DELAY_SECONDS', '1')))
                         return True
                     else:
-                        log.warning(f"⚠️ Impossibile terminare processo PID {pid}")
+                        log.warning(f"⚠️ Impossibile terminare processo PID {pid}: {kill_result.stderr}")
                         return False
         
+        log.info(f"ℹ️ Nessun processo trovato sulla porta {port}")
         return False
         
+    except subprocess.TimeoutExpired:
+        log.error(f"❌ Timeout durante ricerca processo su porta {port}")
+        return False
+    except FileNotFoundError:
+        log.error(f"❌ Comando 'ss' non trovato. Installa iproute2: sudo apt install iproute2")
+        return False
     except Exception as e:
-        log.error(f"Errore durante kill processo: {e}")
+        log.error(f"❌ Errore durante kill processo su porta {port}: {e}")
         return False
 
 
@@ -144,13 +152,12 @@ def run_gui_mode(log, cache, config) -> int:
     gui = SimpleWebGUI(cache=cache, auto_start_loop=True)
     
     async def run_gui():
-        port = 8092
+        port = int(os.getenv('GUI_PORT', '8092'))
         runner = None
-        site = None
         
         # Prova ad avviare sulla porta 8092 (usa default host='127.0.0.1')
         try:
-            runner, site = await gui.start(port=port)
+            runner, _ = await gui.start(port=port)
             log.info(f"✅ Server GUI avviato su porta {port}")
         except OSError as e:
             error_msg = str(e).lower()
@@ -161,16 +168,22 @@ def run_gui_mode(log, cache, config) -> int:
                 if kill_process_on_port(port, log):
                     log.info("🔄 Riprovo ad avviare il server...")
                     try:
-                        runner, site = await gui.start(port=port)
+                        runner, _ = await gui.start(port=port)
                         log.info(f"✅ Server GUI avviato su porta {port}")
+                    except OSError as retry_error:
+                        log.error(f"❌ Porta {port} ancora occupata dopo kill: {retry_error}")
+                        return 1
                     except Exception as retry_error:
-                        log.error(f"❌ Impossibile avviare GUI dopo kill: {retry_error}")
+                        log.error(f"❌ Errore imprevisto durante riavvio GUI: {retry_error}")
                         return 1
                 else:
-                    log.error(f"❌ Impossibile liberare porta {port}")
+                    log.error(f"❌ Impossibile liberare porta {port}. Verifica manualmente: sudo ss -tlnp | grep {port}")
                     return 1
+            elif "permission denied" in error_msg:
+                log.error(f"❌ Permessi insufficienti per porta {port}. Usa porta > 1024 o esegui come root")
+                return 1
             else:
-                log.error(f"❌ Errore avvio GUI: {e}")
+                log.error(f"❌ Errore di rete durante avvio GUI su porta {port}: {e}")
                 raise
         
         # Apri browser SUBITO dopo che il server è avviato
@@ -180,8 +193,8 @@ def run_gui_mode(log, cache, config) -> int:
         log.info("Loop avviato automaticamente - usa la GUI per controllarlo")
         log.info("Premi Ctrl+C per fermare la GUI")
         
-        # Aspetta un attimo che il server sia pronto
-        await asyncio.sleep(0.5)
+        # Aspetta che il server sia pronto (usa delay configurabile)
+        await asyncio.sleep(float(os.getenv('SCHEDULER_API_DELAY_SECONDS', '1')))
         
         try:
             webbrowser.open(url)
@@ -189,9 +202,10 @@ def run_gui_mode(log, cache, config) -> int:
             pass
         
         try:
-            # Loop infinito con gestione interruzioni
+            # Loop infinito con gestione interruzioni (usa intervallo configurabile)
+            gui_check_interval = int(os.getenv('SCHEDULER_REALTIME_DELAY_SECONDS', '5'))
             while True:
-                await asyncio.sleep(1)
+                await asyncio.sleep(gui_check_interval)
         except KeyboardInterrupt:
             log.info("🛑 Interruzione ricevuta, chiusura GUI...")
         except asyncio.CancelledError:
@@ -208,9 +222,16 @@ def run_gui_mode(log, cache, config) -> int:
         asyncio.run(run_gui())
     except KeyboardInterrupt:
         # Questo è normale quando si preme Ctrl+C
+        log.info("👋 GUI chiusa dall'utente")
         pass
+    except asyncio.CancelledError:
+        log.info("🛑 Task GUI cancellato")
+        pass
+    except ImportError as e:
+        log.error(f"❌ Modulo GUI mancante: {e}. Installa: pip install aiohttp")
+        return 1
     except Exception as e:
-        log.error(f"Errore GUI: {e}")
+        log.error(f"❌ Errore imprevisto nella GUI: {e}")
         return 1
     
     return 0
@@ -229,14 +250,12 @@ def run_web_flow(log, cache, start_date=None, end_date=None) -> int:
     from collector.collector_web import CollectorWeb
     from parser.web_parser import parse_web
     from storage.writer_influx import InfluxWriter
-    from datetime import datetime, timedelta
-    import yaml
-    from pathlib import Path
     
     log.info(color.bold("🚀 Avvio flusso web"))
     
     # Carica configurazione completa (inclusi i file sources) per passarla al parser e scheduler
-    config_manager = get_config_manager("config/main.yaml")
+    config_path = os.getenv('CONFIG_PATH', 'config/main.yaml')
+    config_manager = get_config_manager(config_path)
     config = config_manager.get_raw_config()
     
     # Inizializza scheduler
@@ -270,33 +289,47 @@ def run_web_flow(log, cache, start_date=None, end_date=None) -> int:
         dates_to_process = [today]
         log.info(color.info(f"🔄 Web scraping per oggi: {today}"))
     
-    # Raccolta dati per ogni giorno
-    all_influx_points = []
+    # Raccolta e scrittura streaming per ottimizzare memoria
+    total_points_written = 0
     
     try:
-        for date in dates_to_process:
-            log.info(color.dim(f"   📅 Raccogliendo dati web per {date}"))
-            
-            # Raccolta dati per questa data specifica
-            measurements_raw = collector.fetch_measurements_for_date(device_reqs, date)
-            
-            # Parsing + Filtro + Conversione -> InfluxDB Points pronti (con config)
-            influx_points = parse_web(measurements_raw, config)
-            log.info(color.dim(f"   Parser web generato {len(influx_points)} InfluxDB Points per {date}"))
-            
-            all_influx_points.extend(influx_points)
+        # Apri writer una volta per tutte le date (più efficiente)
+        with InfluxWriter() as writer:
+            for date in dates_to_process:
+                log.info(color.dim(f"   📅 Raccogliendo dati web per {date}"))
+                
+                # Raccolta dati per questa data specifica
+                measurements_raw = collector.fetch_measurements_for_date(device_reqs, date)
+                
+                # Parsing + Filtro + Conversione -> InfluxDB Points pronti (con config)
+                influx_points = parse_web(measurements_raw, config)
+                log.info(color.dim(f"   Parser web generato {len(influx_points)} InfluxDB Points per {date}"))
+                
+                # Scrittura immediata invece di accumulo (ottimizzazione memoria)
+                if influx_points:
+                    writer.write_points(influx_points, measurement_type="web")
+                    total_points_written += len(influx_points)
+                    log.info(color.dim(f"   ✅ Scritti {len(influx_points)} punti per {date}"))
+                else:
+                    log.warning(color.warning(f"   ⚠️ Nessun punto generato per {date}"))
             
     except KeyboardInterrupt:
-        log.info(color.warning("🛑 Interruzione durante raccolta web"))
+        log.info(color.warning("🛑 Interruzione utente durante raccolta web"))
+        if total_points_written > 0:
+            log.info(color.info(f"📊 Punti scritti prima dell'interruzione: {total_points_written}"))
         raise  # Propaga l'interruzione
+    except ImportError as e:
+        log.error(color.error(f"❌ Modulo web scraping mancante: {e}. Verifica installazione"))
+        raise
+    except ConnectionError as e:
+        log.error(color.error(f"❌ Errore connessione web SolarEdge: {e}. Verifica rete e login"))
+        raise
     
-    # Storage di tutti i punti raccolti
-    if all_influx_points:
-        with InfluxWriter() as writer:
-            writer.write_points(all_influx_points, measurement_type="web")
-            log.info(color.success(f"✅ Pipeline web completata con successo"))
+    # Log finale con statistiche
+    if total_points_written > 0:
+        log.info(color.success(f"✅ Pipeline web completata: {total_points_written} punti scritti per {len(dates_to_process)} giorni"))
     else:
-        log.warning(color.warning("Nessun punto da scrivere"))
+        log.warning(color.warning("⚠️ Nessun punto scritto - verifica configurazione e connettività"))
     
     return 0
 
@@ -318,48 +351,54 @@ def run_api_flow(log, cache, config, start_date=None, end_date=None) -> int:
     scheduler_config = SchedulerConfig.from_config(config)
     scheduler = SchedulerLoop(scheduler_config)
     
-    # Raccolta dati con scheduler
-    collector = CollectorAPI(cache=cache, scheduler=scheduler)
-    
-    # Raccolta dati (scheduler gestito internamente dal collector)
-    try:
-        if start_date and end_date:
-            # Modalità history con date specifiche
-            raw_data = collector.collect_with_dates(start_date, end_date)
+    # Raccolta dati con scheduler (usa context manager per session pooling)
+    with CollectorAPI(cache=cache, scheduler=scheduler) as collector:
+        
+        # Raccolta dati (scheduler gestito internamente dal collector)
+        try:
+            if start_date and end_date:
+                # Modalità history con date specifiche
+                raw_data = collector.collect_with_dates(start_date, end_date)
+            else:
+                # Modalità normale (oggi)
+                raw_data = collector.collect()
+        except KeyboardInterrupt:
+            log.info("🛑 Interruzione utente durante raccolta dati API")
+            raise  # Propaga l'interruzione
+        except ImportError as e:
+            log.error(f"❌ Modulo API mancante: {e}. Verifica installazione dipendenze")
+            raise
+        except ConnectionError as e:
+            log.error(f"❌ Errore connessione API SolarEdge: {e}. Verifica rete e credenziali")
+            raise
+        
+        log.info(color.dim(f"   Raccolti dati da {len(raw_data)} endpoint"))
+        
+        # Log dettagliato per debugging cache hits
+        for endpoint, data in raw_data.items():
+            if data:
+                log.info(color.dim(f"   📊 Endpoint {endpoint}: {len(str(data))} caratteri di dati raccolti"))
+            else:
+                log.warning(color.warning(f"   ⚠️ Endpoint {endpoint}: nessun dato raccolto"))
+        
+        # Parsing + Filtro + Conversione -> InfluxDB Points pronti
+        parser = create_parser()
+        influx_points = parser.parse(raw_data, collector.site_id)
+        log.info(color.dim(f"   Parser API generato {len(influx_points)} InfluxDB Points pronti"))
+        
+        # Log per verificare se i punti vengono generati anche da cache
+        if influx_points:
+            log.info(color.dim(f"   🔄 Processando {len(influx_points)} punti (da API o cache) per scrittura DB"))
         else:
-            # Modalità normale (oggi)
-            raw_data = collector.collect()
-    except KeyboardInterrupt:
-        log.info("🛑 Interruzione durante raccolta dati")
-        raise  # Propaga l'interruzione
-    
-    log.info(color.dim(f"   Raccolti dati da {len(raw_data)} endpoint"))
-    
-    # Log dettagliato per debugging cache hits
-    for endpoint, data in raw_data.items():
-        if data:
-            log.info(color.dim(f"   📊 Endpoint {endpoint}: {len(str(data))} caratteri di dati raccolti"))
+            log.warning(color.warning("   ⚠️ Nessun punto generato dal parser - possibile problema con dati da cache"))
+        
+        # Storage diretto - nessuna elaborazione nel writer
+        if influx_points:
+            with InfluxWriter() as writer:
+                writer.write_points(influx_points, measurement_type="api")
+                log.info(color.success("✅ Pipeline API completata con successo"))
         else:
-            log.warning(color.warning(f"   ⚠️ Endpoint {endpoint}: nessun dato raccolto"))
-    
-    # Parsing + Filtro + Conversione -> InfluxDB Points pronti
-    parser = create_parser()
-    influx_points = parser.parse(raw_data, collector.site_id)
-    log.info(color.dim(f"   Parser API generato {len(influx_points)} InfluxDB Points pronti"))
-    
-    # Log per verificare se i punti vengono generati anche da cache
-    if influx_points:
-        log.info(color.dim(f"   🔄 Processando {len(influx_points)} punti (da API o cache) per scrittura DB"))
-    else:
-        log.warning(color.warning("   ⚠️ Nessun punto generato dal parser - possibile problema con dati da cache"))
-    
-    # Storage diretto - nessuna elaborazione nel writer
-    if influx_points:
-        with InfluxWriter() as writer:
-            writer.write_points(influx_points, measurement_type="api")
-            log.info(color.success("✅ Pipeline API completata con successo"))
-    else:
-        log.warning(color.warning("   Nessun punto da scrivere"))
+            log.warning(color.warning("   Nessun punto da scrivere"))
     
     return 0
 
@@ -409,128 +448,43 @@ def run_realtime_flow(log, cache, config) -> int:
         
         return 0
         
+    except KeyboardInterrupt:
+        log.info("🛑 Interruzione utente durante raccolta realtime")
+        raise
+    except ImportError as e:
+        log.error(f"❌ Modulo realtime mancante: {e}. Verifica installazione pymodbus")
+        raise
+    except ConnectionError as e:
+        log.error(f"❌ Errore connessione Modbus: {e}. Verifica IP inverter e rete")
+        raise
     except Exception as e:
-        log.error(f"Errore pipeline realtime: {e}")
+        log.error(f"❌ Errore imprevisto pipeline realtime: {e}")
         raise RuntimeError(f"Pipeline realtime fallita: {e}") from e
 
 
-def run_loop_mode(log, cache, config, should_continue=None) -> int:
-    """Modalità loop 24/7: api/web ogni 15 minuti, realtime ogni 5 secondi + GUI."""
-    log.info("🔄 Avvio modalità loop 24/7 con GUI integrata")
-    log.info("📊 API/Web: ogni 15 minuti | ⚡ Realtime: ogni 5 secondi")
-    log.info("🌐 GUI Dashboard disponibile su http://0.0.0.0:8092")
-    
-    # Timestamp per tracking esecuzioni
-    last_api_web_run = datetime.min
-    
-    # Leggi intervalli dal file .env
-    api_interval_minutes = int(os.getenv('LOOP_API_INTERVAL_MINUTES', '15'))
-    web_interval_minutes = int(os.getenv('LOOP_WEB_INTERVAL_MINUTES', '15'))
-    realtime_interval_seconds = int(os.getenv('LOOP_REALTIME_INTERVAL_SECONDS', '5'))
-    
-    api_web_interval = timedelta(minutes=max(api_interval_minutes, web_interval_minutes))
-    realtime_interval = timedelta(seconds=realtime_interval_seconds)
-    
-    # Contatori per statistiche (eseguite/successi/fallimenti)
-    api_stats = {'executed': 0, 'success': 0, 'failed': 0}
-    web_stats = {'executed': 0, 'success': 0, 'failed': 0}
-    realtime_stats = {'executed': 0, 'success': 0, 'failed': 0}
-    start_time = datetime.now()
-    
-    try:
-        while True:
-            # Controlla se deve continuare (per controllo GUI)
-            if should_continue and not should_continue():
-                log.info("🛑 Loop fermato dal controllo esterno")
-                break
-                
-            current_time = datetime.now()
-            
-            # Esegui API e Web ogni 15 minuti
-            if current_time - last_api_web_run >= api_web_interval:
-                log.info(f"🚀 Esecuzione API/Web schedulata - {current_time.strftime('%H:%M:%S')}")
-                
-                # Esegui API flow
-                api_stats['executed'] += 1
-                try:
-                    run_api_flow(log, cache, config)
-                    api_stats['success'] += 1
-                    log.info("✅ API flow completato")
-                except Exception as e:
-                    api_stats['failed'] += 1
-                    log.error(f"❌ Errore API flow: {e}")
-                
-                # Esegui Web flow
-                web_stats['executed'] += 1
-                try:
-                    run_web_flow(log, cache)
-                    web_stats['success'] += 1
-                    log.info("✅ Web flow completato")
-                except Exception as e:
-                    web_stats['failed'] += 1
-                    log.error(f"❌ Errore Web flow: {e}")
-                
-                last_api_web_run = current_time
-                
-                # Statistiche ogni ora
-                uptime = current_time - start_time
-                if uptime.total_seconds() % 3600 < 60:  # Ogni ora circa
-                    api_fmt = f"{api_stats['executed']}/{api_stats['success']}/{api_stats['failed']}"
-                    web_fmt = f"{web_stats['executed']}/{web_stats['success']}/{web_stats['failed']}"
-                    realtime_fmt = f"{realtime_stats['executed']}/{realtime_stats['success']}/{realtime_stats['failed']}"
-                    log.info(f"📈 Statistiche - Uptime: {uptime}, API: {api_fmt}, Web: {web_fmt}, Realtime: {realtime_fmt}")
-            
-            # Esegui Realtime ogni 5 secondi
-            realtime_stats['executed'] += 1
-            try:
-                run_realtime_flow(log, cache, config)
-                realtime_stats['success'] += 1
-            except Exception as e:
-                realtime_stats['failed'] += 1
-                log.error(f"❌ Errore Realtime flow: {e}")
-            
-            # Pausa di 5 secondi
-            time.sleep(5)
-            
-    except KeyboardInterrupt:
-        uptime = datetime.now() - start_time
-        log.info(f"🛑 Loop interrotto dall'utente")
-        api_fmt = f"{api_stats['executed']}/{api_stats['success']}/{api_stats['failed']}"
-        web_fmt = f"{web_stats['executed']}/{web_stats['success']}/{web_stats['failed']}"
-        realtime_fmt = f"{realtime_stats['executed']}/{realtime_stats['success']}/{realtime_stats['failed']}"
-        log.info(f"📊 Statistiche finali - Uptime: {uptime}, API: {api_fmt}, Web: {web_fmt}, Realtime: {realtime_fmt}")
-        return 0
-    except Exception as e:
-        log.error(f"💥 Errore critico nel loop: {e}")
-        return 1
 
 
-def run_history_mode(log, cache, config) -> int:
-    """Modalità history: scarica storico completo con suddivisione mensile"""
-    from collector.collector_api import CollectorAPI
-    from datetime import datetime
-    import calendar
-    
-    log.info(color.bold("📜 Avvio modalità History - Scaricamento storico completo"))
-    log.info(color.success("✅ ABILITANDO CACHE per history mode - skip mesi già scaricati"))
-    
-    # Inizializza collector CON cache per evitare chiamate API duplicate
-    collector = CollectorAPI(cache=cache, scheduler=None)
-    
-    # Ottieni range temporale dall'API dataPeriod
+
+def _get_date_range_from_api(collector, log):
+    """Recupera range temporale dall'API dataPeriod"""
     log.info(color.info("🔍 Recupero range temporale da API dataPeriod..."))
     date_range = collector.get_production_date_range()
     
     if not date_range:
         log.error(color.error("❌ Impossibile recuperare range temporale"))
-        return 1
+        return None
     
     start_date = date_range['start']
     end_date = date_range['end']
-    
     log.info(color.highlight(f"📅 Range temporale: {start_date} → {end_date}"))
     
-    # Genera lista di mesi da processare
+    return start_date, end_date
+
+
+def _generate_months_list(start_date: str, end_date: str, log):
+    """Genera lista di mesi da processare"""
+    import calendar
+    
     months = []
     current = datetime.strptime(start_date, '%Y-%m-%d')
     end = datetime.strptime(end_date, '%Y-%m-%d')
@@ -563,8 +517,11 @@ def run_history_mode(log, cache, config) -> int:
             current = datetime(year, month + 1, 1)
     
     log.info(color.highlight(f"📊 Totale mesi da processare: {len(months)}"))
-    
-    # Processa ogni mese con gestione interruzione pulita
+    return months
+
+
+def _process_months(months, end_date: str, log, cache, config):
+    """Processa tutti i mesi con gestione interruzioni"""
     success_count = 0
     failed_count = 0
     web_success = False
@@ -588,7 +545,6 @@ def run_history_mode(log, cache, config) -> int:
                 web_result = 0
                 if idx == len(months) and not web_executed:
                     # Calcola gli ultimi 7 giorni dalla data di fine
-                    from datetime import datetime, timedelta
                     end_dt = datetime.strptime(end_date, '%Y-%m-%d')
                     start_dt = end_dt - timedelta(days=6)  # 7 giorni totali (incluso end_date)
                     
@@ -634,14 +590,19 @@ def run_history_mode(log, cache, config) -> int:
         log.info(color.warning("🛑 Interruzione richiesta dall'utente (Ctrl+C)"))
         log.info(color.dim(f"📊 Processati {success_count + failed_count}/{len(months)} mesi prima dell'interruzione"))
     
-    # Statistiche finali
+    return success_count, failed_count, web_success, web_failed, interrupted, web_executed
+
+
+def _print_final_statistics(success_count, failed_count, web_success, web_failed, 
+                           interrupted, web_executed, total_months, log):
+    """Stampa statistiche finali del history mode"""
     log.info(color.bold("=" * 60))
     if interrupted:
         log.info(color.warning("📈 History Mode Interrotto"))
-        log.info(color.success(f"✅ API: {success_count}/{len(months)} mesi"))
+        log.info(color.success(f"✅ API: {success_count}/{total_months} mesi"))
         if failed_count > 0:
-            log.info(color.error(f"❌ Fallimenti API: {failed_count}/{len(months)}"))
-        log.info(color.dim(f"⏸️ Rimanenti: {len(months) - success_count - failed_count}/{len(months)}"))
+            log.info(color.error(f"❌ Fallimenti API: {failed_count}/{total_months}"))
+        log.info(color.dim(f"⏸️ Rimanenti: {total_months - success_count - failed_count}/{total_months}"))
         if web_executed:
             if web_success:
                 log.info(color.success(f"✅ Web: 7/7 giorni"))
@@ -650,15 +611,52 @@ def run_history_mode(log, cache, config) -> int:
         log.info(color.highlight("💡 Riavvia con --history per continuare dal punto di interruzione"))
     else:
         log.info(color.success("📈 History Mode Completato"))
-        log.info(color.success(f"✅ API: {success_count}/{len(months)} mesi"))
+        log.info(color.success(f"✅ API: {success_count}/{total_months} mesi"))
         if failed_count > 0:
-            log.info(color.error(f"❌ Fallimenti API: {failed_count}/{len(months)}"))
+            log.info(color.error(f"❌ Fallimenti API: {failed_count}/{total_months}"))
         if web_executed:
             if web_success:
                 log.info(color.success(f"✅ Web: 7/7 giorni"))
             elif web_failed:
                 log.info(color.error(f"❌ Web: 0/7 giorni (fallito)"))
     log.info(color.bold("=" * 60))
+
+
+def run_history_mode(log, cache, config) -> int:
+    """Modalità history: scarica storico completo con suddivisione mensile"""
+    from collector.collector_api import CollectorAPI
+    
+    log.info(color.bold("📜 Avvio modalità History - Scaricamento storico completo"))
+    log.info(color.success("✅ ABILITANDO CACHE per history mode - skip mesi già scaricati"))
+    
+    # Inizializza collector CON cache per evitare chiamate API duplicate
+    collector = CollectorAPI(cache=cache, scheduler=None)
+    
+    # Inizializza variabili per gestione return
+    interrupted = False
+    failed_count = 0
+    
+    try:
+        # 1. Recupera range temporale dall'API
+        date_range_result = _get_date_range_from_api(collector, log)
+        if not date_range_result:
+            return 1
+        start_date, end_date = date_range_result
+        
+        # 2. Genera lista di mesi da processare
+        months = _generate_months_list(start_date, end_date, log)
+        
+        # 3. Processa tutti i mesi
+        success_count, failed_count, web_success, web_failed, interrupted, web_executed = \
+            _process_months(months, end_date, log, cache, config)
+        
+        # 4. Stampa statistiche finali
+        _print_final_statistics(success_count, failed_count, web_success, web_failed,
+                               interrupted, web_executed, len(months), log)
+        
+    finally:
+        # Chiudi sessione HTTP per liberare risorse
+        collector.close()
     
     # Ritorna 0 se interrotto pulitamente o completato con successo
     if interrupted:
@@ -667,206 +665,7 @@ def run_history_mode(log, cache, config) -> int:
         return 0 if failed_count == 0 else 1
 
 
-def run_loop_mode_with_gui(log, cache, config) -> int:
-    """Modalità loop 24/7 con GUI integrata."""
-    
-    async def run_combined():
-        # Avvia la GUI in background
-        from gui.simple_web_gui import SimpleWebGUI
-        gui = SimpleWebGUI()
-        
-        # Configura la GUI per il loop mode
-        gui.loop_mode = True
-        gui.loop_stats = {
-            'api_stats': {'executed': 0, 'success': 0, 'failed': 0},
-            'web_stats': {'executed': 0, 'success': 0, 'failed': 0},
-            'realtime_stats': {'executed': 0, 'success': 0, 'failed': 0},
-            'start_time': datetime.now(),
-            'last_api_web_run': datetime.min,
-            'status': 'running'
-        }
-        
-        # Avvia il server GUI sulla porta 8092
-        port = 8092
-        runner = None
-        site = None
-        
-        try:
-            runner, site = await gui.start(port=port)
-            log.info(f"✅ Server GUI avviato su porta {port}")
-        except OSError as e:
-            error_msg = str(e).lower()
-            
-            # Porta occupata - prova a killare
-            if "address already in use" in error_msg:
-                log.warning(f"⚠️ Porta {port} occupata, tento di liberarla...")
-                if kill_process_on_port(port, log):
-                    log.info("🔄 Riprovo ad avviare il server...")
-                    try:
-                        runner, site = await gui.start(port=port)
-                        log.info(f"✅ Server GUI avviato su porta {port}")
-                    except Exception as retry_error:
-                        log.error(f"❌ Impossibile avviare GUI dopo kill: {retry_error}")
-                        return 1
-                else:
-                    log.error(f"❌ Impossibile liberare porta {port}")
-                    return 1
-            else:
-                log.error(f"❌ Errore avvio GUI: {e}")
-                raise
-        
-        # Apri il browser
-        try:
-            import webbrowser
-            webbrowser.open(f'http://127.0.0.1:{port}')
-        except Exception:
-            pass
-        
-        log.info("🔄 Avvio modalità loop 24/7 con GUI integrata")
-        log.info("📊 API/Web: ogni 15 minuti | ⚡ Realtime: ogni 5 secondi")
-        log.info(f"🌐 GUI Dashboard disponibile su http://127.0.0.1:{port}")
-        log.info(f"📡 Accesso rete locale: http://{gui.real_ip}:{port} (se firewall permette)")
-        
-        # Aggiungi log di avvio alla GUI
-        gui.add_log_entry("info", "🔄 Avvio modalità loop 24/7 con GUI integrata")
-        gui.add_log_entry("info", "📊 API/Web: ogni 15 minuti | ⚡ Realtime: ogni 5 secondi")
-        gui.add_log_entry("success", f"🌐 GUI Dashboard disponibile su http://127.0.0.1:{port}")
-        gui.add_log_entry("info", f"📡 Accesso rete locale: http://{gui.real_ip}:{port}")
-        
-        # Imposta il loop come attivo
-        gui.loop_running = True
-        
-        # Timestamp per tracking esecuzioni
-        last_api_web_run = datetime.min
-        
-        # Leggi intervalli dal file .env
-        api_interval_minutes = int(os.getenv('LOOP_API_INTERVAL_MINUTES', '15'))
-        web_interval_minutes = int(os.getenv('LOOP_WEB_INTERVAL_MINUTES', '15'))
-        realtime_interval_seconds = int(os.getenv('LOOP_REALTIME_INTERVAL_SECONDS', '5'))
-        
-        api_web_interval = timedelta(minutes=max(api_interval_minutes, web_interval_minutes))
-        realtime_interval = timedelta(seconds=realtime_interval_seconds)
-        
-        # Contatori per statistiche (eseguite/successi/fallimenti)
-        api_stats = {'executed': 0, 'success': 0, 'failed': 0}
-        web_stats = {'executed': 0, 'success': 0, 'failed': 0}
-        realtime_stats = {'executed': 0, 'success': 0, 'failed': 0}
-        start_time = datetime.now()
-        
 
-        
-        try:
-            # Loop principale che può essere riavviato
-            while True:
-                # Aspetta che il loop sia attivo
-                while not gui.loop_running:
-                    await asyncio.sleep(1)
-                    # Non uscire mai completamente, mantieni la GUI attiva
-                
-                # Reset contatori se il loop è stato riavviato
-                if gui.stop_requested:
-                    gui.stop_requested = False
-                    api_stats = {'executed': 0, 'success': 0, 'failed': 0}
-                    web_stats = {'executed': 0, 'success': 0, 'failed': 0}
-                    realtime_stats = {'executed': 0, 'success': 0, 'failed': 0}
-                    start_time = datetime.now()
-                    last_api_web_run = datetime.min
-                    log.info("🔄 Loop riavviato")
-                
-                # Loop di esecuzione
-                while gui.loop_running and not gui.stop_requested:
-                    
-                    current_time = datetime.now()
-                    
-                    # Calcola timing per API/Web
-                    next_api_web = last_api_web_run + api_web_interval if last_api_web_run != datetime.min else current_time + api_web_interval
-                    api_last_run = last_api_web_run.strftime('%H:%M:%S') if last_api_web_run != datetime.min else '--'
-                    api_next_run = next_api_web.strftime('%H:%M:%S')
-                    
-                    # Aggiorna statistiche GUI
-                    gui.loop_stats.update({
-                        'api_stats': api_stats,
-                        'web_stats': web_stats,
-                        'realtime_stats': realtime_stats,
-                        'uptime': current_time - start_time,
-                        'last_update': current_time,
-                        'api_last_run': api_last_run,
-                        'api_next_run': api_next_run,
-                        'web_last_run': api_last_run,  # API e Web vengono eseguiti insieme
-                        'web_next_run': api_next_run
-                    })
-                    
-                    # Esegui API e Web ogni 15 minuti
-                    if current_time - last_api_web_run >= api_web_interval:
-                        log.info(f"🚀 Esecuzione API/Web schedulata - {current_time.strftime('%H:%M:%S')}")
-                        
-                        # Esegui API flow
-                        api_stats['executed'] += 1
-                        try:
-                            run_api_flow(log, cache, config)
-                            api_stats['success'] += 1
-                            log.info("✅ API flow completato")
-                        except Exception as e:
-                            api_stats['failed'] += 1
-                            log.error(f"❌ Errore API flow: {e}")
-                        
-                        # Esegui Web flow
-                        web_stats['executed'] += 1
-                        try:
-                            run_web_flow(log, cache)
-                            web_stats['success'] += 1
-                            log.info("✅ Web flow completato")
-                        except Exception as e:
-                            web_stats['failed'] += 1
-                            log.error(f"❌ Errore Web flow: {e}")
-                        
-                        last_api_web_run = current_time
-                    
-                    # Esegui Realtime ogni 5 secondi
-                    realtime_stats['executed'] += 1
-                    try:
-                        run_realtime_flow(log, cache, config)
-                        realtime_stats['success'] += 1
-                        # Rimuoviamo i log frequenti di realtime completato
-                    except Exception as e:
-                        realtime_stats['failed'] += 1
-                        log.error(f"❌ Errore Realtime flow: {e}")
-                        gui.add_log_entry("error", f"❌ Errore Realtime flow: {e}")
-                    
-                    # Pausa asincrona di 5 secondi
-                    await asyncio.sleep(5)
-                
-                # Il loop interno è finito (stop richiesto)
-                log.info("🛑 Loop fermato, GUI rimane attiva per riavvio")
-                gui.loop_stats.update({
-                    'api_stats': api_stats,
-                    'web_stats': web_stats,
-                    'realtime_stats': realtime_stats,
-                    'uptime': datetime.now() - start_time,
-                    'last_update': datetime.now()
-                })
-                
-        except (KeyboardInterrupt, asyncio.CancelledError):
-            uptime = datetime.now() - start_time
-            log.info(f"🛑 Loop interrotto dall'utente")
-            api_fmt = f"{api_stats['executed']}/{api_stats['success']}/{api_stats['failed']}"
-            web_fmt = f"{web_stats['executed']}/{web_stats['success']}/{web_stats['failed']}"
-            realtime_fmt = f"{realtime_stats['executed']}/{realtime_stats['success']}/{realtime_stats['failed']}"
-            log.info(f"📊 Statistiche finali - Uptime: {uptime}, API: {api_fmt}, Web: {web_fmt}, Realtime: {realtime_fmt}")
-        finally:
-            log.info("🔄 Chiusura server GUI...")
-            await runner.cleanup()
-            log.info("✅ Loop e GUI chiusi correttamente")
-    
-    try:
-        asyncio.run(run_combined())
-        return 0
-    except KeyboardInterrupt:
-        log.info("🛑 Loop interrotto dall'utente")
-        return 0
-    except Exception as e:
-        log.error(f"💥 Errore critico nel loop: {e}")
-        return 1
 
 
 def main() -> int:
@@ -884,7 +683,8 @@ def main() -> int:
     args = ap.parse_args()
     
     # Carica configurazione con sostituzione variabili d'ambiente
-    config = load_config_with_env_substitution("config/main.yaml")
+    config_path = os.getenv('CONFIG_PATH', 'config/main.yaml')
+    config = load_config_with_env_substitution(config_path)
     
     setup_logging(args, config)
     log = get_logger("main")
