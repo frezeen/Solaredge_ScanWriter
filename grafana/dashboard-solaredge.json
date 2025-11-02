@@ -4636,6 +4636,7 @@
           },
           "mappings": [],
           "min": 0,
+          "noValue": "Modalita Notturna Nessuna Produzione",
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -4709,9 +4710,7 @@
       "interval": "15m",
       "options": {
         "legend": {
-          "calcs": [
-            "mean"
-          ],
+          "calcs": [],
           "displayMode": "table",
           "placement": "right",
           "showLegend": true
@@ -4741,7 +4740,7 @@
             "uid": "ff27vpmruzxtsc"
           },
           "hide": false,
-          "query": "import \"timezone\"\r\nimport \"date\"\r\n\r\noption location = timezone.location(name: \"Europe/Rome\")\r\n\r\n// Dati reali\r\nreal_data = from(bucket: \"Solaredge\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"web\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"Optimizer group\")\r\n  |> filter(fn: (r) => r[\"endpoint\"] == \"PRODUCTION_POWER\")\r\n  |> aggregateWindow(every: 15m, fn: last, createEmpty: false)\r\n\r\n// Trova primo e ultimo dato\r\nfirst_time = real_data |> first() |> findRecord(fn: (key) => true, idx: 0)\r\nlast_time = real_data |> last() |> findRecord(fn: (key) => true, idx: 0)\r\n\r\n// Se l'ultimo dato è più vecchio di 30 minuti, produzione finita\r\nnow_time = now()\r\nproduction_ended = int(v: now_time) - int(v: last_time._time) > 1800000000000  // 30 minuti in nanosecondi\r\n\r\n// Timeline completa\r\nfrom(bucket: \"Solaredge\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"web\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"Optimizer group\")\r\n  |> filter(fn: (r) => r[\"endpoint\"] == \"PRODUCTION_POWER\")\r\n  |> aggregateWindow(every: 15m, fn: last, createEmpty: true)\r\n  |> map(fn: (r) => {\r\n      value = if r._time < first_time._time then 0.0\r\n              else if r._time > last_time._time and production_ended then 0.0\r\n              else r._value\r\n      \r\n      return {\r\n          _time: r._time,\r\n          _value: value,\r\n          device_id: r.device_id\r\n      }\r\n  })\r\n  |> filter(fn: (r) => exists r._value)\r\n  |> map(fn: (r) => ({_time: r._time, _value: r._value, _field: r.device_id}))\r\n  |> pivot(rowKey: [\"_time\"], columnKey: [\"_field\"], valueColumn: \"_value\")\r\n",
+          "query": "import \"timezone\"\r\nimport \"date\"\r\n\r\noption location = timezone.location(name: \"Europe/Rome\")\r\n\r\n// Dati reali\r\nreal_data = from(bucket: \"Solaredge\")\r\n    |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n    |> filter(fn: (r) => r[\"_measurement\"] == \"web\")\r\n    |> filter(fn: (r) => r[\"_field\"] == \"Optimizer group\")\r\n    |> filter(fn: (r) => r[\"endpoint\"] == \"PRODUCTION_POWER\")\r\n    |> aggregateWindow(every: 15m, fn: last, createEmpty: false)\r\n\r\n// Trova primo e ultimo dato con gestione sicura\r\nfirst_record = real_data |> first() |> findRecord(fn: (key) => true, idx: 0)\r\nlast_record = real_data |> last() |> findRecord(fn: (key) => true, idx: 0)\r\n\r\n// Gestione sicura del controllo produzione finita\r\nnow_time = now()\r\nproduction_ended = if exists last_record._time then\r\n    int(v: now_time) - int(v: last_record._time) > 1800000000000  // 30 minuti\r\nelse\r\n    true  // Se non ci sono dati, considera produzione finita\r\n\r\n// Timeline completa\r\nfrom(bucket: \"Solaredge\")\r\n    |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n    |> filter(fn: (r) => r[\"_measurement\"] == \"web\")\r\n    |> filter(fn: (r) => r[\"_field\"] == \"Optimizer group\")\r\n    |> filter(fn: (r) => r[\"endpoint\"] == \"PRODUCTION_POWER\")\r\n    |> aggregateWindow(every: 15m, fn: last, createEmpty: true)\r\n    |> map(fn: (r) => {\r\n        value = if not exists first_record._time then\r\n            0.0  // Nessun dato disponibile\r\n        else if r._time < first_record._time then\r\n            0.0  // Prima del primo dato\r\n        else if exists last_record._time and r._time > last_record._time and production_ended then\r\n            0.0  // Dopo l'ultimo dato e produzione finita\r\n        else\r\n            r._value\r\n        \r\n        return {\r\n            _time: r._time,\r\n            _value: value,\r\n            device_id: r.device_id\r\n        }\r\n    })\r\n    |> filter(fn: (r) => exists r._value)\r\n    |> map(fn: (r) => ({\r\n        _time: r._time, \r\n        _value: r._value, \r\n        _field: r.device_id\r\n    }))\r\n    |> pivot(rowKey: [\"_time\"], columnKey: [\"_field\"], valueColumn: \"_value\")\r\n",
           "refId": "Potenza Pannelli Istantanea"
         }
       ],
@@ -4834,6 +4833,7 @@
           "mappings": [],
           "max": 400,
           "min": 0,
+          "noValue": "Modalita Notturna Nessuna Produzione",
           "thresholds": {
             "mode": "percentage",
             "steps": [
@@ -4895,7 +4895,7 @@
             "uid": "ff27vpmruzxtsc"
           },
           "hide": false,
-          "query": "import \"timezone\"\r\nimport \"date\"\r\nimport \"array\"\r\noption location = timezone.location(name: \"Europe/Rome\")\r\n\r\n// Conta dati grezzi prima di aggregare\r\nraw_data = from(bucket: \"Solaredge\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"web\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"Optimizer group\")\r\n  |> filter(fn: (r) => r[\"endpoint\"] == \"PRODUCTION_POWER\")\r\n\r\ncount_check = raw_data \r\n  |> count() \r\n  |> group()\r\n  |> sum()\r\n  |> findRecord(fn: (key) => true, idx: 0)\r\n\r\n// Query dati aggregati\r\ndata = raw_data\r\n  |> aggregateWindow(every: 15m, fn: last, createEmpty: true)\r\n  |> fill(column: \"_value\", value: 0.0)\r\n\r\n// Se non ci sono dati, crea un punto fittizio a 0\r\ndummy = array.from(rows: [{\r\n  _time: v.timeRangeStart,\r\n  _value: 0.0,\r\n  device_id: \"dummy\",\r\n  _field: \"Optimizer group\",\r\n  endpoint: \"PRODUCTION_POWER\"\r\n}])\r\n\r\n// Usa dati reali se esistono, altrimenti dummy\r\nresult = if exists count_check._value and count_check._value > 0 then data else dummy\r\n\r\nresult\r\n  |> map(fn: (r) => ({\r\n      _time: r._time,\r\n      _value: r._value,\r\n      _field: r.device_id\r\n  }))\r\n  |> group()\r\n  |> pivot(rowKey: [\"_time\"], columnKey: [\"_field\"], valueColumn: \"_value\")\r\n",
+          "query": "import \"timezone\"\r\nimport \"date\"\r\n\r\noption location = timezone.location(name: \"Europe/Rome\")\r\n\r\n// Conta dati grezzi prima di aggregare\r\nraw_data = from(bucket: \"Solaredge\")\r\n    |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n    |> filter(fn: (r) => r[\"_measurement\"] == \"web\")\r\n    |> filter(fn: (r) => r[\"_field\"] == \"Optimizer group\")\r\n    |> filter(fn: (r) => r[\"endpoint\"] == \"PRODUCTION_POWER\")\r\n\r\ncount_check = raw_data \r\n    |> count() \r\n    |> group()\r\n    |> sum()\r\n    |> findRecord(fn: (key) => true, idx: 0)\r\n\r\n// Query dati aggregati solo se esistono\r\ndata = if exists count_check._value and count_check._value > 0 then\r\n    raw_data\r\n        |> aggregateWindow(every: 15m, fn: last, createEmpty: true)\r\n        |> fill(column: \"_value\", value: 0.0)\r\nelse\r\n    // Dataset vuoto invece di dummy\r\n    raw_data |> limit(n: 0)\r\n\r\n// Processa solo se ci sono dati\r\ndata\r\n    |> filter(fn: (r) => exists r._value)  // Filtra eventuali valori null\r\n    |> map(fn: (r) => ({\r\n        _time: r._time,\r\n        _value: r._value,\r\n        _field: r.device_id\r\n    }))\r\n    |> group()\r\n    |> pivot(rowKey: [\"_time\"], columnKey: [\"_field\"], valueColumn: \"_value\")\r\n",
           "refId": "B"
         }
       ],
@@ -5386,6 +5386,6 @@
   "timezone": "",
   "title": "Solaredge 3.0",
   "uid": "afb91a6f-d8f7-43ae-8a98-67eab1bb4baa",
-  "version": 180,
+  "version": 187,
   "weekStart": "monday"
 }

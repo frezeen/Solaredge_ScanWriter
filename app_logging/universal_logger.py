@@ -22,14 +22,27 @@ def _get_logging_config():
     """Ottieni configurazione logging con lazy loading."""
     global _config_manager, _logging_config, _DEFAULT_LEVEL, _DEFAULT_DIR
     if _config_manager is None:
-        _config_manager = get_config_manager()
-        _logging_config = _config_manager.get_logging_config()
-        _DEFAULT_LEVEL = _logging_config.level
-        _DEFAULT_DIR = Path(_logging_config.log_directory)
+        try:
+            _config_manager = get_config_manager()
+            _logging_config = _config_manager.get_logging_config()
+            _DEFAULT_LEVEL = _logging_config.level
+            _DEFAULT_DIR = Path(_logging_config.log_directory)
+        except RuntimeError:
+            # Durante l'inizializzazione del config manager, usa valori di default
+            # per evitare dipendenza circolare
+            _logging_config = None
+            _DEFAULT_LEVEL = "INFO"
+            _DEFAULT_DIR = Path("logs")
     return _logging_config
 
 
 def configure_logging(level: str | None = None, log_file: str | None = None, script_name: str | None = None) -> None:
+    global _configured
+    
+    # Evita riconfigurazioni multiple
+    if _configured and level is None and log_file is None:
+        return
+    
     # Carica configurazione lazy
     _get_logging_config()
     
@@ -62,6 +75,8 @@ def configure_logging(level: str | None = None, log_file: str | None = None, scr
         fh.setLevel(lvl)
         fh.setFormatter(_logging.Formatter(fmt))
         root_logger.addHandler(fh)
+    
+    _configured = True
 
 def get_logger(name: str):
     # La configurazione viene chiamata al bisogno o esplicitamente
