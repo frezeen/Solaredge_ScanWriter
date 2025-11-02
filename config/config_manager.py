@@ -110,24 +110,7 @@ class ConfigManager:
         
         return re.sub(r'\$\{([^}]+)\}', replace_var, text)
     
-    def _create_empty_web_endpoints(self, web_file: Path) -> None:
-        """Crea un file web_endpoints.yaml vuoto con struttura base."""
-        # Assicurati che la directory esista
-        web_file.parent.mkdir(parents=True, exist_ok=True)
-        
-        empty_content = """# Web endpoints configuration
-# Questo file è stato creato automaticamente
-# Esegui 'python main.py --scan' per popolarlo con gli endpoint reali
 
-web_scraping:
-  # Gli endpoint verranno aggiunti automaticamente dalla scansione
-  # Esempio di struttura:
-  # - endpoint: "/solaredge-web/p/sites/12345/dashboard"
-  #   name: "dashboard"
-  #   enabled: true
-"""
-        
-        web_file.write_text(empty_content, encoding='utf-8')
     
     def _load_config(self) -> None:
         """Carica configurazione YAML con sostituzione variabili d'ambiente."""
@@ -182,9 +165,9 @@ web_scraping:
             if 'web_scraping' in web_data:
                 sources['web_scraping'] = web_data['web_scraping']
         else:
-            # File web_endpoints.yaml mancante - crea file vuoto
-            self._create_empty_web_endpoints(web_file)
-            # Il file vuoto non avrà sezione web_scraping, quindi sources['web_scraping'] rimane vuoto
+            # File web_endpoints.yaml mancante - usa configurazione vuota
+            # L'utente deve eseguire 'python main.py --scan' per generarlo
+            pass
         
         # Merge sources nel config principale
         if sources:
