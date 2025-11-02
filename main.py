@@ -706,7 +706,7 @@ def main() -> int:
         elif args.realtime:
             return run_realtime_flow(log, cache, config)
         elif args.scan:
-            return handle_scan_mode(log)handle_scan_mode(log)
+            return handle_scan_mode(log)
         elif args.history:
             return run_history_mode(log, cache, config)
     except KeyboardInterrupt:
