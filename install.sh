@@ -137,7 +137,16 @@ REQS
         
         # Install Python dependencies system-wide
         log "🐍 Installing Python dependencies..."
-        pip3 install -r "$APP_DIR/requirements.txt" >/dev/null 2>&1
+        if ! pip3 install -r "$APP_DIR/requirements.txt"; then
+            warn "Failed to install Python dependencies with standard pip3"
+            log "Trying with --break-system-packages flag (Python 3.11+)..."
+            if ! pip3 install -r "$APP_DIR/requirements.txt" --break-system-packages; then
+                error "Failed to install Python dependencies"
+                echo "Please run manually: cd $APP_DIR && pip3 install -r requirements.txt"
+                echo "Or try: pip3 install -r requirements.txt --break-system-packages"
+                exit 1
+            fi
+        fi
         
         # Install InfluxDB
         log "🗄️ Installing InfluxDB..."
