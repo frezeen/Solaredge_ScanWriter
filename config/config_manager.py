@@ -110,6 +110,25 @@ class ConfigManager:
         
         return re.sub(r'\$\{([^}]+)\}', replace_var, text)
     
+    def _create_empty_web_endpoints(self, web_file: Path) -> None:
+        """Crea un file web_endpoints.yaml vuoto con struttura base."""
+        # Assicurati che la directory esista
+        web_file.parent.mkdir(parents=True, exist_ok=True)
+        
+        empty_content = """# Web endpoints configuration
+# Questo file è stato creato automaticamente
+# Esegui 'python main.py --scan' per popolarlo con gli endpoint reali
+
+web_scraping:
+  # Gli endpoint verranno aggiunti automaticamente dalla scansione
+  # Esempio di struttura:
+  # - endpoint: "/solaredge-web/p/sites/12345/dashboard"
+  #   name: "dashboard"
+  #   enabled: true
+"""
+        
+        web_file.write_text(empty_content, encoding='utf-8')
+    
     def _load_config(self) -> None:
         """Carica configurazione YAML con sostituzione variabili d'ambiente."""
         try:
@@ -163,43 +182,9 @@ class ConfigManager:
             if 'web_scraping' in web_data:
                 sources['web_scraping'] = web_data['web_scraping']
         else:
-            # File web_endpoints.yaml mancante - genera automaticamente
-            from app_logging import get_logger
-            logger = get_logger(__name__)
-            logger.warning("⚠️ File web_endpoints.yaml non trovato. Avvio scansione automatica...")
-            
-            try:
-                # Importa e esegui lo scanner
-                from tools.yawl_manager import YawlManager
-                from collector.web_tree_scanner import WebTreeScanner
-                
-                # Esegui scan del web tree
-                scanner = WebTreeScanner()
-                scanner.scan()
-                
-                # Genera il file web_endpoints.yaml
-                ym = YawlManager()
-                if ym.generate_web_endpoints_only():
-                    logger.info("✅ File web_endpoints.yaml generato automaticamente")
-                    
-                    # Ricarica il file appena creato
-                    if web_file.exists():
-                        web_content = web_file.read_text(encoding='utf-8')
-                        web_content = self._substitute_env_vars(web_content)
-                        web_data = yaml.safe_load(web_content) or {}
-                        if 'web_scraping' in web_data:
-                            sources['web_scraping'] = web_data['web_scraping']
-                    else:
-                        logger.critical("❌ ERRORE CRITICO: File web_endpoints.yaml non creato dopo scansione")
-                        raise RuntimeError("Impossibile generare web_endpoints.yaml - file non trovato dopo scansione")
-                else:
-                    logger.critical("❌ ERRORE CRITICO: Generazione automatica web_endpoints.yaml fallita")
-                    raise RuntimeError("Impossibile generare web_endpoints.yaml - scansione fallita")
-            except Exception as e:
-                logger.critical(f"❌ ERRORE CRITICO durante scansione automatica: {e}")
-                logger.info("💡 Verifica credenziali in .env e connessione al portale SolarEdge")
-                raise RuntimeError(f"Impossibile generare web_endpoints.yaml: {e}") from e
-                logger.info("💡 Puoi generarlo manualmente con: python main.py --scan")
+            # File web_endpoints.yaml mancante - crea file vuoto
+            self._create_empty_web_endpoints(web_file)
+            # Il file vuoto non avrà sezione web_scraping, quindi sources['web_scraping'] rimane vuoto
         
         # Merge sources nel config principale
         if sources:

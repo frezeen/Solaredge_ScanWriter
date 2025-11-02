@@ -70,19 +70,39 @@ def setup_logging(args, config: Dict[str, Any]) -> None:
 def handle_scan_mode(log) -> int:
     """Gestisce modalità scan per scansione web tree"""
     log.info("🔍 Modalità scan: scansione web tree")
-    from tools.web_tree_scanner import WebTreeScanner
-    from tools.yawl_manager import YawlManager
     
-    scanner = WebTreeScanner()
-    scanner.scan()
+    # Verifica se il file web_endpoints.yaml esiste
+    web_endpoints_file = Path("config/sources/web_endpoints.yaml")
+    if not web_endpoints_file.exists():
+        log.info("📝 File web_endpoints.yaml non trovato, verrà creato durante la scansione")
     
-    # Aggiorna solo il file web_endpoints.yaml
-    log.info("Aggiornando file web_endpoints.yaml...")
-    ym = YawlManager()
-    if ym.generate_web_endpoints_only():
-        log.info("✅ File web_endpoints.yaml aggiornato")
-    else:
-        log.error("❌ Errore aggiornamento web_endpoints.yaml")
+    try:
+        from tools.web_tree_scanner import WebTreeScanner
+        from tools.yawl_manager import YawlManager
+        
+        # Esegui scansione
+        scanner = WebTreeScanner()
+        scanner.scan()
+        
+        # Genera/aggiorna il file web_endpoints.yaml
+        log.info("📝 Generando file web_endpoints.yaml...")
+        ym = YawlManager()
+        if ym.generate_web_endpoints_only():
+            log.info("✅ File web_endpoints.yaml generato/aggiornato con successo")
+            log.info(f"📁 File salvato in: {web_endpoints_file.absolute()}")
+        else:
+            log.error("❌ Errore durante generazione web_endpoints.yaml")
+            return 1
+            
+    except ImportError as e:
+        log.error(f"❌ Modulo mancante per scansione: {e}")
+        log.info("💡 Verifica che tutte le dipendenze siano installate")
+        return 1
+    except Exception as e:
+        log.error(f"❌ Errore durante scansione: {e}")
+        log.info("💡 Verifica credenziali in .env e connessione al portale SolarEdge")
+        return 1
+    
     return 0
 
 
@@ -706,7 +726,7 @@ def main() -> int:
         elif args.realtime:
             return run_realtime_flow(log, cache, config)
         elif args.scan:
-            return handle_scan_mode(log)
+            return handle_scan_mode(log)handle_scan_mode(log)
         elif args.history:
             return run_history_mode(log, cache, config)
     except KeyboardInterrupt:
