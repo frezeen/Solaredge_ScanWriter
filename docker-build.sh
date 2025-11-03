@@ -87,12 +87,23 @@ fi
 
 echo ""
 
-# Start services automatically
-log_info "🚀 Starting Docker services..."
+# Check if services are already running
+SERVICES_RUNNING=false
+if docker compose ps | grep -q "Up"; then
+    SERVICES_RUNNING=true
+    log_info "🔄 Services already running, updating..."
+else
+    log_info "🚀 Starting Docker services..."
+fi
+
 docker compose up -d
 
 if [[ $? -eq 0 ]]; then
-    log_success "✅ Services started successfully"
+    if [[ "$SERVICES_RUNNING" == "true" ]]; then
+        log_success "✅ Services updated successfully"
+    else
+        log_success "✅ Services started successfully"
+    fi
     
     # Wait for services to be ready
     log_info "⏳ Waiting for services to be ready..."
@@ -108,6 +119,16 @@ if [[ $? -eq 0 ]]; then
         fi
         sleep 2
     done
+    
+    # Check if already configured
+    EXISTING_DATASOURCES=$(curl -s http://localhost:3000/api/datasources -u "admin:admin" 2>/dev/null)
+    SOLAREDGE_EXISTS=$(echo "$EXISTING_DATASOURCES" | jq -r '.[] | select(.name=="Solaredge") | .name' 2>/dev/null)
+    
+    if [[ "$SOLAREDGE_EXISTS" == "Solaredge" ]]; then
+        log_info "🔄 Grafana already configured, updating dashboard..."
+    else
+        log_info "🆕 First time setup, configuring Grafana..."
+    fi
     
     # Configure Sun and Moon data source
     log_info "☀️ Configuring Sun and Moon data source..."
