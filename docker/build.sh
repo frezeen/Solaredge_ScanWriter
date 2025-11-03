@@ -102,7 +102,9 @@ test_image() {
     local env_args=""
     if [ -f ".env" ]; then
         echo -e "${BLUE}📋 Using .env file for test${NC}"
-        env_args="--env-file .env"
+        # Carica variabili da .env
+        source .env 2>/dev/null || true
+        env_args="-e SOLAREDGE_SITE_ID=${SOLAREDGE_SITE_ID:-123456} -e SOLAREDGE_API_KEY=${SOLAREDGE_API_KEY:-test-key}"
     else
         echo -e "${BLUE}📋 Using default test values${NC}"
         env_args="-e SOLAREDGE_SITE_ID=123456 -e SOLAREDGE_API_KEY=test-key"
