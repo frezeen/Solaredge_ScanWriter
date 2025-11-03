@@ -98,15 +98,28 @@ test_image() {
     echo -e "${BLUE}📋 Container info:${NC}"
     docker run --rm --platform "$PLATFORM" "${IMAGE_NAME}:${IMAGE_TAG}" uname -a
     
-    # Test configurazione
+    # Test configurazione (usa .env se esiste)
+    local env_args=""
+    if [ -f ".env" ]; then
+        echo -e "${BLUE}📋 Using .env file for test${NC}"
+        env_args="--env-file .env"
+    else
+        echo -e "${BLUE}📋 Using default test values${NC}"
+        env_args="-e SOLAREDGE_SITE_ID=123456 -e SOLAREDGE_API_KEY=test-key"
+    fi
+    
     docker run --rm --platform "$PLATFORM" \
-        -e SOLAREDGE_SITE_ID=123456 \
-        -e SOLAREDGE_API_KEY=test-key \
+        $env_args \
         "${IMAGE_NAME}:${IMAGE_TAG}" python -c "
 import os, platform
 print(f'✅ Python: {platform.python_version()}')
 print(f'✅ Platform: {platform.platform()}')
-print(f'✅ Site ID: {os.getenv(\"SOLAREDGE_SITE_ID\")}')
+site_id = os.getenv('SOLAREDGE_SITE_ID', 'NOT_SET')
+print(f'✅ Site ID: {site_id}')
+if site_id != 'NOT_SET' and site_id != '123456':
+    print('✅ Real credentials detected - test successful!')
+else:
+    print('ℹ️ Using test credentials')
 "
     
     echo -e "${GREEN}✅ Tests passed${NC}"
