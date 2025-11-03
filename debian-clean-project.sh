@@ -75,12 +75,8 @@ if command -v docker &> /dev/null; then
         docker compose down --remove-orphans --volumes 2>/dev/null || true
     fi
     
-    # Pulizia selettiva (solo immagini dangling e container fermati)
-    log_info "Pulizia selettiva Docker..."
-    docker container prune -f 2>/dev/null || true
-    docker image prune -f 2>/dev/null || true
-    docker volume prune -f 2>/dev/null || true
-    docker network prune -f 2>/dev/null || true
+    # Pulizia completata (solo risorse SolarEdge specifiche)
+    log_info "Pulizia SolarEdge completata (altri container preservati)"
     
     log_success "✅ Risorse Docker SolarEdge pulite"
 else

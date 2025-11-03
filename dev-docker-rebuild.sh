@@ -92,9 +92,8 @@ docker volume ls --filter "name=solaredge" --format "{{.Name}}" | xargs -r docke
 log_info "Rimuovendo network SolarEdge..."
 docker network ls --filter "name=solaredge" --format "{{.Name}}" | xargs -r docker network rm 2>/dev/null || true
 
-# Pulizia generale Docker
-log_info "Pulizia generale Docker..."
-docker system prune -f --volumes 2>/dev/null || true
+# Pulizia selettiva completata (solo SolarEdge)
+log_info "Pulizia selettiva SolarEdge completata"
 
 log_success "✅ Pulizia Docker completata"
 echo ""
