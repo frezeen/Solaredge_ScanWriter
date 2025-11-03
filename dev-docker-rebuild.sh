@@ -104,24 +104,52 @@ log_info "🔍 Verifica configurazione..."
 
 if [[ ! -f ".env" ]]; then
     if [[ -f ".env.example" ]]; then
-        log_warning "File .env non trovato, copiando da .env.example"
+        log_warning "File .env non trovato, copiando TUTTO il contenuto da .env.example"
         cp .env.example .env
-        log_warning "⚠️  IMPORTANTE: Configura .env con le tue credenziali SolarEdge!"
+        log_success "✅ Copiato file .env completo con tutte le configurazioni"
         echo ""
-        echo -e "${YELLOW}Credenziali richieste in .env:${NC}"
-        echo -e "${CYAN}SOLAREDGE_SITE_ID=123456${NC}"
-        echo -e "${CYAN}SOLAREDGE_API_KEY=your_api_key${NC}"
-        echo -e "${CYAN}SOLAREDGE_USERNAME=your.email@example.com${NC}"
-        echo -e "${CYAN}SOLAREDGE_PASSWORD=your_password${NC}"
+        log_warning "⚠️  IMPORTANTE: Configura le credenziali SolarEdge nel file .env"
         echo ""
-        log_info "📝 Aprendo nano per modificare .env..."
-        sleep 2
+        echo -e "${YELLOW}Variabili OBBLIGATORIE da modificare:${NC}"
+        echo -e "${CYAN}SOLAREDGE_SITE_ID=123456${NC} → Il tuo Site ID"
+        echo -e "${CYAN}SOLAREDGE_API_KEY=YOUR_API_KEY_HERE${NC} → La tua API Key"
+        echo -e "${CYAN}SOLAREDGE_USERNAME=your.email@example.com${NC} → La tua email"
+        echo -e "${CYAN}SOLAREDGE_PASSWORD=YOUR_PASSWORD_HERE${NC} → La tua password"
+        echo ""
+        echo -e "${GREEN}Tutte le altre configurazioni sono già ottimizzate per Docker!${NC}"
+        echo ""
+        log_info "📝 Aprendo nano per modificare SOLO le credenziali..."
+        sleep 3
         nano .env
         echo ""
         log_info "✅ Configurazione .env completata"
     else
         log_error "❌ File .env.example non trovato!"
         exit 1
+    fi
+else
+    log_info "File .env già esistente, verifico che sia completo..."
+    
+    # Verifica che il .env contenga tutte le variabili del .env.example
+    missing_vars=()
+    while IFS= read -r line; do
+        if [[ "$line" =~ ^[A-Z_]+=.* ]]; then
+            var_name=$(echo "$line" | cut -d'=' -f1)
+            if ! grep -q "^$var_name=" .env; then
+                missing_vars+=("$var_name")
+            fi
+        fi
+    done < .env.example
+    
+    if [[ ${#missing_vars[@]} -gt 0 ]]; then
+        log_warning "⚠️  Il file .env esistente è incompleto!"
+        log_warning "Variabili mancanti: ${missing_vars[*]}"
+        log_info "Ricreo .env completo da .env.example..."
+        cp .env.example .env
+        log_info "📝 Apri nano per riconfigurare le credenziali..."
+        nano .env
+    else
+        log_success "✅ File .env completo trovato"
     fi
 fi
 

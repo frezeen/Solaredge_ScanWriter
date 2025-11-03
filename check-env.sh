@@ -26,6 +26,29 @@ if [[ ! -f ".env" ]]; then
     exit 1
 fi
 
+# Verifica che .env contenga tutte le variabili di .env.example
+log_info "Verifica completezza file .env..."
+missing_vars=()
+while IFS= read -r line; do
+    if [[ "$line" =~ ^[A-Z_]+=.* ]]; then
+        var_name=$(echo "$line" | cut -d'=' -f1)
+        if ! grep -q "^$var_name=" .env; then
+            missing_vars+=("$var_name")
+        fi
+    fi
+done < .env.example
+
+if [[ ${#missing_vars[@]} -gt 0 ]]; then
+    log_error "❌ File .env incompleto! Variabili mancanti:"
+    for var in "${missing_vars[@]}"; do
+        echo -e "   ${RED}- $var${NC}"
+    done
+    log_info "💡 Ricrea .env completo: cp .env.example .env"
+    exit 1
+fi
+
+log_success "✅ File .env completo con tutte le variabili"
+
 # Carica variabili .env
 source .env
 
