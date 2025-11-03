@@ -89,8 +89,19 @@ chmod +x docker-build.sh
 ```
 
 ### Su Windows (PowerShell)
+
+**Se ottieni errore "execution policy":**
 ```powershell
+# Abilita l'esecuzione script (una sola volta)
+Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+
+# Poi esegui il build
 .\docker-build.ps1
+```
+
+**Oppure esegui direttamente senza cambiare policy:**
+```powershell
+powershell -ExecutionPolicy Bypass -File .\docker-build.ps1
 ```
 
 **Cosa succede automaticamente:**
@@ -167,6 +178,16 @@ docker run --rm -v solaredge_scanwriter_influxdb-data:/data -v $(pwd):/backup al
 ```
 
 ## ❓ Risoluzione Problemi
+
+### Script PowerShell bloccato (Windows)
+```powershell
+# Errore: "execution policy" o "scripts is disabled"
+# Soluzione 1: Cambia policy (permanente)
+Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+
+# Soluzione 2: Esecuzione singola (temporanea)
+powershell -ExecutionPolicy Bypass -File .\docker-build.ps1
+```
 
 ### Il container non si avvia
 ```bash
