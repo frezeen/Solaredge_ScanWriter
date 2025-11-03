@@ -77,6 +77,7 @@ SOLAREDGE_PASSWORD=your_password_here
 Dopo l'avvio:
 - **GUI SolarEdge**: http://localhost:8092
 - **InfluxDB**: http://localhost:8086 (admin/solaredge123)
+- **Grafana**: http://localhost:3000 (admin/admin)
 
 ## 🧪 Test Componenti
 
