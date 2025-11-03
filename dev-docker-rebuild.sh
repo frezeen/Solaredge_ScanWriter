@@ -22,6 +22,13 @@ echo -e "${CYAN} SolarEdge Docker Dev Rebuild${NC}"
 echo -e "${CYAN}================================${NC}"
 echo ""
 
+# Rilevamento automatico architettura
+log_info "🔍 Rilevamento automatico architettura..."
+chmod +x detect-arch.sh
+source detect-arch.sh
+detect_system_arch
+echo ""
+
 # 0. AGGIORNAMENTO GIT
 log_info "🔄 Aggiornamento codice da Git..."
 
@@ -146,33 +153,81 @@ else
 fi
 echo ""
 
-# 3. BUILD MULTI-ARCHITETTURA
-log_info "🏗️  Build immagine Docker multi-architettura..."
+# 3. BUILD AUTOMATICO BASATO SU ARCHITETTURA
+log_info "🏗️  Build immagine Docker (rilevamento automatico architettura)..."
 
-# Configura buildx se necessario
-if ! docker buildx ls | grep -q "solaredge-builder"; then
-    log_info "Configurando Docker Buildx..."
-    docker buildx create --name solaredge-builder --use --bootstrap
-fi
+# Rileva architettura corrente
+current_arch=$(uname -m)
+case $current_arch in
+    x86_64|amd64)
+        docker_arch="linux/amd64"
+        arch_name="AMD64"
+        ;;
+    aarch64|arm64)
+        docker_arch="linux/arm64"
+        arch_name="ARM64"
+        ;;
+    armv7l|armhf)
+        docker_arch="linux/arm/v7"
+        arch_name="ARMv7"
+        ;;
+    *)
+        docker_arch="linux/amd64"
+        arch_name="AMD64 (default)"
+        log_warning "⚠️  Architettura $current_arch non riconosciuta, uso AMD64 come default"
+        ;;
+esac
 
-# Build per architetture multiple
-log_info "Building per linux/amd64,linux/arm64,linux/arm/v7..."
-if docker buildx build \
-    --platform linux/amd64,linux/arm64,linux/arm/v7 \
-    --tag solaredge-collector:latest \
-    --tag solaredge-collector:dev \
-    --load \
-    . 2>/dev/null; then
-    log_success "✅ Build multi-architettura completata"
+log_info "🖥️  Architettura rilevata: $current_arch → $arch_name"
+log_info "🐳 Target Docker: $docker_arch"
+
+# Prova prima buildx per architettura specifica
+log_info "Tentativo build con buildx per $docker_arch..."
+if command -v docker &> /dev/null && docker buildx version &> /dev/null; then
+    # Configura buildx se necessario
+    if ! docker buildx ls | grep -q "solaredge-builder"; then
+        log_info "Configurando Docker Buildx..."
+        docker buildx create --name solaredge-builder --use --bootstrap 2>/dev/null || true
+    fi
+    
+    # Build con buildx per architettura specifica
+    if docker buildx build \
+        --platform "$docker_arch" \
+        --tag solaredge-collector:latest \
+        --tag solaredge-collector:dev \
+        --load \
+        . 2>/dev/null; then
+        log_success "✅ Build buildx completato per $arch_name"
+    else
+        log_warning "⚠️  Buildx fallito, usando build standard..."
+        # Fallback a build standard
+        if docker build -t solaredge-collector:latest -t solaredge-collector:dev .; then
+            log_success "✅ Build standard completato per $arch_name"
+        else
+            log_error "❌ Errore nel build dell'immagine"
+            exit 1
+        fi
+    fi
 else
-    log_warning "⚠️  Build multi-arch non supportato, usando build singola architettura..."
-    docker build -t solaredge-collector:latest -t solaredge-collector:dev .
-    if [[ $? -eq 0 ]]; then
-        log_success "✅ Build singola architettura completata"
+    log_info "Buildx non disponibile, usando build standard..."
+    # Build standard
+    if docker build -t solaredge-collector:latest -t solaredge-collector:dev .; then
+        log_success "✅ Build standard completato per $arch_name"
     else
         log_error "❌ Errore nel build dell'immagine"
         exit 1
     fi
+fi
+
+# Verifica immagine creata
+log_info "🔍 Verifica immagine creata..."
+if docker images solaredge-collector:latest --format "{{.Repository}}:{{.Tag}}" | grep -q "solaredge-collector:latest"; then
+    image_arch=$(docker inspect solaredge-collector:latest --format '{{.Architecture}}' 2>/dev/null || echo "unknown")
+    image_size=$(docker images solaredge-collector:latest --format "{{.Size}}" 2>/dev/null || echo "unknown")
+    log_success "✅ Immagine creata: $arch_name ($image_arch) - Dimensione: $image_size"
+else
+    log_error "❌ Immagine non trovata dopo il build"
+    exit 1
 fi
 
 echo ""
