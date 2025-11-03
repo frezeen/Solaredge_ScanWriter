@@ -26,6 +26,9 @@ if [[ ! -f ".env" ]]; then
     exit 1
 fi
 
+# Fix terminatori di riga
+sed -i 's/\r$//' .env 2>/dev/null || true
+
 # Verifica che .env contenga tutte le variabili di .env.example
 log_info "Verifica completezza file .env..."
 missing_vars=()

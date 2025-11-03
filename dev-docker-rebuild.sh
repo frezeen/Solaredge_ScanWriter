@@ -162,23 +162,15 @@ for file in "${required_files[@]}"; do
     fi
 done
 
-# Verifica configurazione .env
-log_info "Verifica finale configurazione .env..."
+# Fix terminatori di riga e verifica configurazione
+sed -i 's/\r$//' .env 2>/dev/null || true
 chmod +x check-env.sh
-if ./check-env.sh; then
-    log_success "✅ Configurazione verificata e corretta"
-else
-    log_error "❌ Configurazione .env non corretta"
-    log_info "Riapri nano per correggere:"
+if ! ./check-env.sh; then
     nano .env
-    # Ricontrolla dopo la modifica
-    if ./check-env.sh; then
-        log_success "✅ Configurazione corretta dopo le modifiche"
-    else
-        log_error "❌ Configurazione ancora non corretta, interrompo"
-        exit 1
-    fi
+    sed -i 's/\r$//' .env 2>/dev/null || true
+    ./check-env.sh || exit 1
 fi
+log_success "✅ Configurazione verificata"
 echo ""
 
 # 3. BUILD AUTOMATICO BASATO SU ARCHITETTURA
