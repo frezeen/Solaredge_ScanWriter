@@ -102,54 +102,23 @@ docker exec solaredge-scanwriter python main.py --realtime
 
 ## 🔄 Updates
 
-### Quick Update (Code Changes Only)
+### Universal Update Method
 ```bash
-# Pull latest changes
+# Pull latest changes and update
 git pull origin dev
-
-# Rebuild and restart
 ./docker-build.sh  # Linux/macOS/Pi
 # or
 .\docker-build.ps1  # Windows
 ```
 
-### Manual Update Process
-```bash
-# 1. Pull latest changes
-git pull origin dev
+This single command handles all updates:
+- Code changes
+- New features
+- Dashboard updates
+- Configuration updates
+- Dependency updates
 
-# 2. Stop current services
-docker compose down
-
-# 3. Rebuild image
-docker build -t solaredge-scanwriter:latest .
-
-# 4. Start services (will reconfigure everything)
-docker compose up -d
-```
-
-### Update Grafana Dashboard Only
-If you only changed the Grafana dashboard:
-```bash
-# Pull changes
-git pull origin dev
-
-# Restart just the build script to reimport dashboard
-./docker-build.sh  # Will detect existing services and update dashboard
-```
-
-### Force Complete Rebuild
-For major changes (new dependencies, Dockerfile changes):
-```bash
-# Stop and remove everything
-docker compose down -v
-
-# Remove old image
-docker rmi solaredge-scanwriter:latest
-
-# Full rebuild
-./docker-build.sh  # or .\docker-build.ps1
-```
+**Your configuration files (.env, custom configs) are preserved.**
 
 ## 🛠️ Troubleshooting
 

@@ -211,12 +211,16 @@ try {
     } catch { }
     
     Write-Host ""
-    Write-ColorOutput "🎉 Setup completed!" "Green"
+    Write-ColorOutput "🎉 Update completed!" "Green"
     Write-Host ""
     Write-ColorOutput "📊 Services available:" "Blue"
     Write-Host "   GUI SolarEdge: http://localhost:8092" -ForegroundColor Yellow
     Write-Host "   InfluxDB:      http://localhost:8086" -ForegroundColor Yellow
     Write-Host "   Grafana:       http://localhost:3000" -ForegroundColor Yellow
+    Write-Host ""
+    Write-ColorOutput "🛡️  Configuration files preserved:" "Blue"
+    Write-Host "   .env - Your credentials and settings" -ForegroundColor Yellow
+    Write-Host "   Docker volumes - All your data (InfluxDB, Grafana, logs)" -ForegroundColor Yellow
     Write-Host ""
     
 } catch {

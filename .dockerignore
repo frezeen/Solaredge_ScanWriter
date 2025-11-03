@@ -64,9 +64,11 @@ docs/
 *.bat
 *.ps1
 
-# Environment files (will be mounted)
+# Environment files (preserved as volumes/external)
 .env
 .env.*
+.env.local
+.env.production
 
 # Temporary files
 *.tmp
