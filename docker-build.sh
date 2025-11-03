@@ -220,6 +220,7 @@ if [[ $? -eq 0 ]]; then
     echo ""
     echo -e "${BLUE}🛡️  Configuration files preserved:${NC}"
     echo -e "   ${YELLOW}.env${NC} - Your credentials and settings"
+    echo -e "   ${YELLOW}config/sources/*.yaml${NC} - Your custom endpoints"
     echo -e "   ${YELLOW}Docker volumes${NC} - All your data (InfluxDB, Grafana, logs)"
     echo ""
 else

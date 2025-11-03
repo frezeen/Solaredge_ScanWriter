@@ -30,6 +30,7 @@ services:
       - solaredge-cookies:/app/cookies
       - solaredge-config:/app/config
       - solaredge-data:/app/data
+      - ./config:/app/config:rw
       - /etc/localtime:/etc/localtime:ro
     
     ports:

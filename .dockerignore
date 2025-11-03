@@ -54,6 +54,12 @@ cache/*.cache
 cache/*.tmp
 cache/requests_*
 
+# User configuration files (preserved externally)
+config/sources/*.yaml
+config/sources/*.yml
+config/*.local.yaml
+config/*.local.yml
+
 # Documentation
 docs/
 *.md

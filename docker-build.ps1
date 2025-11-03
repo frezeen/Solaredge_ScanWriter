@@ -220,6 +220,7 @@ try {
     Write-Host ""
     Write-ColorOutput "🛡️  Configuration files preserved:" "Blue"
     Write-Host "   .env - Your credentials and settings" -ForegroundColor Yellow
+    Write-Host "   config/sources/*.yaml - Your custom endpoints" -ForegroundColor Yellow
     Write-Host "   Docker volumes - All your data (InfluxDB, Grafana, logs)" -ForegroundColor Yellow
     Write-Host ""
     
