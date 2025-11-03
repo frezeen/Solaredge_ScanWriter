@@ -320,6 +320,10 @@ else
     log_warning "⚠️  Scan fallito, continuo comunque"
 fi
 
+# 6. CONFIGURAZIONE GRAFANA
+log_info "📊 Grafana configurato automaticamente con provisioning"
+log_info "Dashboard e data source saranno disponibili all'avvio di Grafana"
+
 echo ""
 
 # 5. VERIFICA SERVIZI

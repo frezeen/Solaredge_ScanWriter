@@ -1,0 +1,16 @@
+apiVersion: 1
+
+datasources:
+  - name: Solaredge
+    type: influxdb
+    access: proxy
+    url: http://influxdb:8086
+    isDefault: true
+    jsonData:
+      version: Flux
+      organization: fotovoltaico
+      defaultBucket: Solaredge
+      tlsSkipVerify: true
+    secureJsonData:
+      token: solaredge-token-2024
+    editable: true

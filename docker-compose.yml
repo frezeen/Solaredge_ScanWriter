@@ -109,6 +109,8 @@ services:
     
     volumes:
       - grafana-data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboard-solaredge.json:/etc/grafana/provisioning/dashboards/dashboard-solaredge.json:ro
       - /etc/localtime:/etc/localtime:ro
     
     ports:
