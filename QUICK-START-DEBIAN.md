@@ -32,6 +32,7 @@ SOLAREDGE_PASSWORD=your_password_here
 
 - **GUI SolarEdge**: http://localhost:8092
 - **InfluxDB**: http://localhost:8086 (admin/solaredge123)
+- **Grafana**: http://localhost:3000 (admin/admin)
 
 ## Comandi Rapidi
 
