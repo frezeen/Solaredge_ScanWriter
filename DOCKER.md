@@ -189,6 +189,17 @@ Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
 powershell -ExecutionPolicy Bypass -File .\docker-build.ps1
 ```
 
+### Docker non installato o non funziona
+```powershell
+# Errore: "Image not found after build" o comandi docker non trovati
+# Verifica che Docker sia installato e in esecuzione
+docker --version
+docker compose version
+
+# Se non installato, scarica Docker Desktop da:
+# https://www.docker.com/products/docker-desktop/
+```
+
 ### Il container non si avvia
 ```bash
 # Controlla i log per errori
