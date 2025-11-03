@@ -169,6 +169,41 @@ try {
         }
     } catch { }
     
+    # Get data source UIDs and fix dashboard
+    Start-Sleep -Seconds 5
+    try {
+        $datasourcesResponse = Invoke-RestMethod -Uri "http://localhost:3000/api/datasources" -Headers $headers -ErrorAction SilentlyContinue
+        $influxUID = ($datasourcesResponse | Where-Object { $_.name -eq "Solaredge" }).uid
+        $sunmoonUID = ($datasourcesResponse | Where-Object { $_.name -eq "Sun and Moon" }).uid
+        
+        if ($influxUID) {
+            Write-ColorOutput "🔧 Importing dashboard with correct UIDs..." "Blue"
+            
+            # Read and fix dashboard JSON
+            $dashboardContent = Get-Content "grafana/dashboard-solaredge.json" -Raw | ConvertFrom-Json
+            
+            # Fix InfluxDB UIDs (simplified approach for PowerShell)
+            $dashboardJson = Get-Content "grafana/dashboard-solaredge.json" -Raw
+            $dashboardJson = $dashboardJson -replace '"uid":"[^"]*","type":"influxdb"', "`"uid`":`"$influxUID`",`"type`":`"influxdb`""
+            
+            if ($sunmoonUID) {
+                $dashboardJson = $dashboardJson -replace '"uid":"[^"]*","type":"fetzerch-sunandmoon-datasource"', "`"uid`":`"$sunmoonUID`",`"type`":`"fetzerch-sunandmoon-datasource`""
+            }
+            
+            # Import dashboard
+            $importData = @{
+                dashboard = ($dashboardJson | ConvertFrom-Json)
+                overwrite = $true
+                message = "Imported by Docker setup"
+            } | ConvertTo-Json -Depth 20
+            
+            $importResponse = Invoke-RestMethod -Uri "http://localhost:3000/api/dashboards/db" -Method Post -Body $importData -Headers $headers -ErrorAction SilentlyContinue
+            if ($importResponse.status -eq "success") {
+                Write-ColorOutput "✅ Dashboard imported successfully" "Green"
+            }
+        }
+    } catch { }
+    
     # Generate web endpoints
     Write-ColorOutput "🔍 Generating web endpoints..." "Blue"
     try {
