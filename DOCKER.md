@@ -10,6 +10,13 @@ Al termine di questa guida avrai:
 - **Dashboard Grafana** per visualizzare grafici e statistiche
 - **Sistema automatico** di raccolta dati dal tuo impianto fotovoltaico
 
+## 💡 Flusso di Installazione
+
+**Importante**: Puoi installare prima e configurare dopo! Gli script di build:
+- ✅ Installano tutto automaticamente senza bisogno di configurazione iniziale
+- ✅ Proteggono le tue configurazioni esistenti durante gli aggiornamenti
+- ✅ Ti permettono di configurare le credenziali quando vuoi
+
 ## 📋 Prima di Iniziare
 
 **Cosa ti serve:**
@@ -45,7 +52,29 @@ git clone https://github.com/frezeen/Solaredge_ScanWriter.git
 cd Solaredge_ScanWriter
 ```
 
-## ⚙️ Passo 3: Configurazione
+## 🏗️ Passo 3: Installazione Automatica
+
+### Su Linux/Raspberry Pi
+```bash
+chmod +x docker-build.sh
+./docker-build.sh
+```
+
+### Su Windows (PowerShell)
+```powershell
+.\docker-build.ps1
+```
+
+**Cosa succede automaticamente:**
+1. ✅ Costruisce il container Docker
+2. ✅ Avvia tutti i servizi (SolarEdge, InfluxDB, Grafana)
+3. ✅ Configura automaticamente Grafana con dashboard
+4. ✅ Genera gli endpoint per la raccolta dati web
+5. ✅ Verifica che tutto funzioni
+
+## ⚙️ Passo 4: Configurazione Credenziali
+
+Dopo l'installazione, devi configurare le tue credenziali SolarEdge:
 
 ### Trova le Tue Credenziali SolarEdge
 
@@ -56,7 +85,7 @@ cd Solaredge_ScanWriter
 ### Configura il File .env
 
 ```bash
-# Copia il file di esempio
+# Copia il file di esempio (se non esiste già)
 cp .env.example .env
 
 # Modifica con le tue credenziali
@@ -78,25 +107,13 @@ REALTIME_MODBUS_HOST=192.168.1.100          # ← IP del tuo inverter
 REALTIME_MODBUS_PORT=1502                   # ← Porta Modbus (di solito 1502)
 ```
 
-## 🏗️ Passo 4: Installazione Automatica
+### Riavvia i Servizi
 
-### Su Linux/Raspberry Pi
+Dopo aver configurato il file `.env`, riavvia i servizi:
+
 ```bash
-chmod +x docker-build.sh
-./docker-build.sh
+docker compose restart
 ```
-
-### Su Windows (PowerShell)
-```powershell
-.\docker-build.ps1
-```
-
-**Cosa succede automaticamente:**
-1. ✅ Costruisce il container Docker
-2. ✅ Avvia tutti i servizi (SolarEdge, InfluxDB, Grafana)
-3. ✅ Configura automaticamente Grafana con dashboard
-4. ✅ Genera gli endpoint per la raccolta dati web
-5. ✅ Verifica che tutto funzioni
 
 ## 🎉 Passo 5: Accesso ai Servizi
 
