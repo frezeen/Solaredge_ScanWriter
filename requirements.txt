@@ -33,5 +33,11 @@ pytz>=2023.3
 # Terminal colors (cross-platform)
 colorama>=0.4.6
 
+# Cross-platform process management (for Docker fixes)
+psutil>=5.9.0
+
+# HTTP requests (fallback sync)
+requests>=2.28.0
+
 # Optional: Monitoring and metrics
 prometheus-client>=0.15.0
