@@ -204,11 +204,16 @@ try {
         }
     } catch { }
     
-    # Generate web endpoints
-    Write-ColorOutput "🔍 Generating web endpoints..." "Blue"
-    try {
-        docker exec solaredge-scanwriter python main.py --scan 2>$null | Out-Null
-    } catch { }
+    # Generate web endpoints only if not exists (preserve user customizations)
+    if (-not (Test-Path "config/sources/web_endpoints.yaml")) {
+        Write-ColorOutput "🔍 Generating web endpoints (first time)..." "Blue"
+        try {
+            docker exec solaredge-scanwriter python main.py --scan 2>$null | Out-Null
+            Write-ColorOutput "✅ Web endpoints generated" "Green"
+        } catch { }
+    } else {
+        Write-ColorOutput "✅ Web endpoints already exist (preserved)" "Green"
+    }
     
     Write-Host ""
     Write-ColorOutput "🎉 Update completed!" "Green"

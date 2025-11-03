@@ -1,162 +1,204 @@
-# 🐳 SolarEdge Docker
+# 🐳 Guida Docker - SolarEdge Data Collector
 
-Multi-platform Docker setup for SolarEdge Data Collector.
+Questa guida ti accompagna passo dopo passo nell'installazione e utilizzo di SolarEdge Data Collector tramite Docker.
 
-## 🌍 Supported Platforms
+## 🎯 Cosa Otterrai
 
-✅ **Windows** (AMD64, ARM64)  
-✅ **Linux** (AMD64, ARM64, ARMv7)  
-✅ **Raspberry Pi** (ARM64, ARMv7)  
+Al termine di questa guida avrai:
+- **SolarEdge Data Collector** funzionante
+- **Database InfluxDB** per memorizzare i dati
+- **Dashboard Grafana** per visualizzare grafici e statistiche
+- **Sistema automatico** di raccolta dati dal tuo impianto fotovoltaico
 
-## 🚀 Quick Start
+## 📋 Prima di Iniziare
 
-### 1. Configuration
+**Cosa ti serve:**
+- Computer con Windows, Linux o Raspberry Pi
+- Docker installato (ti spiego come fare)
+- Account SolarEdge con accesso API
+- 30 minuti di tempo
 
-Copy and edit environment file:
+## 🚀 Passo 1: Installazione Docker
+
+### Su Windows
+1. Scarica **Docker Desktop** da: https://www.docker.com/products/docker-desktop/
+2. Installa seguendo la procedura guidata
+3. Riavvia il computer quando richiesto
+4. Apri Docker Desktop e attendi che si avvii
+
+### Su Linux/Raspberry Pi
 ```bash
+# Installa Docker automaticamente
+curl -fsSL https://get.docker.com | sh
+
+# Aggiungi il tuo utente al gruppo docker
+sudo usermod -aG docker $USER
+
+# Riavvia la sessione (o riavvia il sistema)
+```
+
+## 📥 Passo 2: Scarica il Progetto
+
+```bash
+# Scarica il progetto
+git clone https://github.com/frezeen/Solaredge_ScanWriter.git
+cd Solaredge_ScanWriter
+git checkout dev
+```
+
+## ⚙️ Passo 3: Configurazione
+
+### Trova le Tue Credenziali SolarEdge
+
+1. **Site ID**: Vai su https://monitoring.solaredge.com, il numero nell'URL è il tuo Site ID
+2. **API Key**: Nel portale SolarEdge, vai su Admin → API → Genera nuova chiave
+3. **Username/Password**: Le credenziali del tuo account SolarEdge
+
+### Configura il File .env
+
+```bash
+# Copia il file di esempio
 cp .env.example .env
-# Edit .env with your SolarEdge credentials
+
+# Modifica con le tue credenziali
+nano .env  # Linux/Mac
+notepad .env  # Windows
 ```
 
-Required variables in `.env`:
+**Modifica queste righe nel file .env:**
 ```bash
-SOLAREDGE_SITE_ID=123456
-SOLAREDGE_API_KEY=your_api_key_here
-SOLAREDGE_USERNAME=your.email@example.com
-SOLAREDGE_PASSWORD=your_password_here
+SOLAREDGE_SITE_ID=123456                    # ← Il tuo Site ID
+SOLAREDGE_API_KEY=ABC123XYZ                 # ← La tua API Key
+SOLAREDGE_USERNAME=tuaemail@example.com     # ← La tua email SolarEdge
+SOLAREDGE_PASSWORD=tuapassword              # ← La tua password SolarEdge
 ```
 
-### 2. Build & Run
+**Opzionale - Per dati in tempo reale (Modbus):**
+```bash
+REALTIME_MODBUS_HOST=192.168.1.100          # ← IP del tuo inverter
+REALTIME_MODBUS_PORT=1502                   # ← Porta Modbus (di solito 1502)
+```
 
-#### Linux/macOS/Raspberry Pi
+## 🏗️ Passo 4: Installazione Automatica
+
+### Su Linux/Raspberry Pi
 ```bash
 chmod +x docker-build.sh
 ./docker-build.sh
-docker compose up -d
 ```
 
-#### Windows (PowerShell)
+### Su Windows (PowerShell)
 ```powershell
 .\docker-build.ps1
-docker compose up -d
 ```
 
-#### Manual Build
+**Cosa succede automaticamente:**
+1. ✅ Costruisce il container Docker
+2. ✅ Avvia tutti i servizi (SolarEdge, InfluxDB, Grafana)
+3. ✅ Configura automaticamente Grafana con dashboard
+4. ✅ Genera gli endpoint per la raccolta dati web
+5. ✅ Verifica che tutto funzioni
+
+## 🎉 Passo 5: Accesso ai Servizi
+
+Dopo l'installazione, apri il browser e vai su:
+
+- **🏠 Dashboard Principale**: http://localhost:8092
+- **📊 Grafana (Grafici)**: http://localhost:3000 (admin/admin)
+- **🗄️ InfluxDB (Database)**: http://localhost:8086 (admin/solaredge123)
+
+## 📈 Passo 6: Primo Utilizzo
+
+### Verifica Raccolta Dati
+1. Vai su http://localhost:8092
+2. Controlla che i dati vengano raccolti
+3. Vai su Grafana (http://localhost:3000) per vedere i grafici
+
+### Scarica Dati Storici (Opzionale)
 ```bash
-docker build -t solaredge-scanwriter:latest .
-docker compose up -d
-```
-
-## 📊 Services
-
-After startup, access:
-- **SolarEdge GUI**: http://localhost:8092
-- **InfluxDB**: http://localhost:8086 (admin/solaredge123)
-- **Grafana**: http://localhost:3000 (admin/admin)
-
-## 🔧 Management
-
-```bash
-# View logs
-docker compose logs -f
-
-# Check status
-docker compose ps
-
-# Stop services
-docker compose down
-
-# Restart services
-docker compose restart
-
-# Shell access
-docker exec -it solaredge-scanwriter bash
-```
-
-## 🧪 Testing Components
-
-```bash
-# Test API collection
-docker exec solaredge-scanwriter python main.py --api
-
-# Test web scraping
-docker exec solaredge-scanwriter python main.py --web
-
-# Generate web endpoints
-docker exec solaredge-scanwriter python main.py --scan
-
-# Download historical data
+# Scarica tutto lo storico disponibile
 docker exec solaredge-scanwriter python main.py --history
-
-# Test Modbus (if configured)
-docker exec solaredge-scanwriter python main.py --realtime
 ```
 
-## 📁 Architecture
+## 🔄 Aggiornamenti
 
-- **Dockerfile**: Multi-platform container definition
-- **docker-compose.yml**: Complete stack (SolarEdge + InfluxDB + Grafana)
-- **docker-build.sh**: Linux/macOS build script
-- **docker-build.ps1**: Windows PowerShell build script
-- **grafana/**: Grafana configuration and dashboards
+Quando rilascio nuove funzionalità o correzioni:
 
-## 🔄 Updates
-
-### Universal Update Method
 ```bash
-# Pull latest changes and update
+# Un solo comando per aggiornare tutto
 git pull origin dev
-./docker-build.sh  # Linux/macOS/Pi
-# or
+./docker-build.sh  # Linux/Mac/Pi
+# oppure
 .\docker-build.ps1  # Windows
 ```
 
-This single command handles all updates:
-- Code changes
-- New features
-- Dashboard updates
-- Configuration updates
-- Dependency updates
+**Le tue configurazioni sono sempre al sicuro:**
+- ✅ File `.env` con le tue credenziali
+- ✅ Endpoint personalizzati in `config/sources/`
+- ✅ Tutti i dati storici in InfluxDB
+- ✅ Dashboard personalizzate in Grafana
 
-**Your configuration files are preserved:**
-- `.env` - Credentials and settings
-- `config/sources/*.yaml` - Custom endpoints and configurations
-- Docker volumes - All data (InfluxDB, Grafana, logs)
+## 🛠️ Gestione Quotidiana
 
-## 🛠️ Troubleshooting
-
-### Container won't start
+### Comandi Utili
 ```bash
+# Vedere i log in tempo reale
+docker compose logs -f
+
+# Stato dei servizi
+docker compose ps
+
+# Fermare tutto
+docker compose down
+
+# Riavviare tutto
+docker compose up -d
+
+# Test singoli componenti
+docker exec solaredge-scanwriter python main.py --api
+docker exec solaredge-scanwriter python main.py --web
+```
+
+### Backup dei Dati
+```bash
+# Backup automatico dei volumi Docker
+docker run --rm -v solaredge_scanwriter_influxdb-data:/data -v $(pwd):/backup alpine tar czf /backup/backup-$(date +%Y%m%d).tar.gz /data
+```
+
+## ❓ Risoluzione Problemi
+
+### Il container non si avvia
+```bash
+# Controlla i log per errori
 docker logs solaredge-scanwriter
 ```
 
-### Check configuration
+### Credenziali sbagliate
 ```bash
+# Verifica le credenziali nel container
 docker exec solaredge-scanwriter env | grep SOLAREDGE
 ```
 
-### Test InfluxDB connection
+### Problemi di rete
 ```bash
-docker exec solaredge-scanwriter python -c "
-from storage.writer_influx import InfluxWriter
-try:
-    with InfluxWriter() as w:
-        print('✅ InfluxDB OK')
-except Exception as e:
-    print(f'❌ Error: {e}')
-"
+# Testa la connessione a SolarEdge
+docker exec solaredge-scanwriter python main.py --api
 ```
 
-### Port conflicts
-Change ports in `docker-compose.yml` if needed:
+### Porte occupate
+Se le porte 8092, 8086 o 3000 sono già in uso, modifica `docker-compose.yml`:
 ```yaml
 ports:
-  - "8093:8092"  # Use different external port
+  - "8093:8092"  # Usa porta 8093 invece di 8092
 ```
 
-## 📋 Requirements
+## 🎯 Risultato Finale
 
-- Docker 20.10+
-- Docker Compose v2+
-- 2GB RAM minimum (4GB recommended)
-- SolarEdge account with API access
+Avrai un sistema completo che:
+- 📡 Raccoglie automaticamente i dati dal tuo impianto
+- 💾 Li memorizza in un database professionale
+- 📊 Li visualizza in grafici bellissimi
+- 🔄 Si aggiorna facilmente con nuove funzionalità
+- 🛡️ Mantiene sempre al sicuro le tue configurazioni
+
+**Buon monitoraggio del tuo impianto fotovoltaico!** ☀️

@@ -206,9 +206,14 @@ if [[ $? -eq 0 ]]; then
         fi
     fi
     
-    # Generate web endpoints
-    log_info "🔍 Generating web endpoints..."
-    docker exec solaredge-scanwriter python main.py --scan >/dev/null 2>&1 || true
+    # Generate web endpoints only if not exists (preserve user customizations)
+    if [[ ! -f "config/sources/web_endpoints.yaml" ]]; then
+        log_info "🔍 Generating web endpoints (first time)..."
+        docker exec solaredge-scanwriter python main.py --scan >/dev/null 2>&1 || true
+        log_success "✅ Web endpoints generated"
+    else
+        log_info "✅ Web endpoints already exist (preserved)"
+    fi
     
     echo ""
     log_success "🎉 Update completed!"
