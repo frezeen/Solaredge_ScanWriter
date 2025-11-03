@@ -21,13 +21,13 @@ services:
       - INFLUXDB_URL=http://influxdb:8086
       - GRAFANA_URL=http://grafana:3000
     
-    # Persistent data volumes
+    # Persistent data volumes (Docker internal volumes)
     volumes:
-      - ./logs:/app/logs
-      - ./cache:/app/cache
-      - ./cookies:/app/cookies
-      - ./config:/app/config
-      - ./data:/app/data
+      - solaredge-logs:/app/logs
+      - solaredge-cache:/app/cache
+      - solaredge-cookies:/app/cookies
+      - solaredge-config:/app/config
+      - solaredge-data:/app/data
       - /etc/localtime:/etc/localtime:ro  # Timezone sync
     
     # Network ports
@@ -135,6 +135,16 @@ volumes:
   influxdb-config:
     driver: local
   grafana-data:
+    driver: local
+  solaredge-logs:
+    driver: local
+  solaredge-cache:
+    driver: local
+  solaredge-cookies:
+    driver: local
+  solaredge-config:
+    driver: local
+  solaredge-data:
     driver: local
 
 # Network configuration
