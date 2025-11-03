@@ -33,6 +33,7 @@ RUN echo "Building for platform: ${TARGETPLATFORM:-linux/amd64}" && \
         netcat-openbsd \
         procps \
         python3-dev \
+        jq \
     # Architecture-specific packages
     && if [ "${TARGETARCH}" = "amd64" ]; then \
         apt-get install -y build-essential; \

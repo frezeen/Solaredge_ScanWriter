@@ -320,9 +320,76 @@ else
     log_warning "⚠️  Scan fallito, continuo comunque"
 fi
 
-# 6. CONFIGURAZIONE GRAFANA
-log_info "📊 Grafana configurato automaticamente con provisioning"
-log_info "Dashboard e data source saranno disponibili all'avvio di Grafana"
+# 6. CONFIGURAZIONE GRAFANA E FIX UID
+log_info "📊 Configurazione Grafana e fix UID dashboard..."
+
+# Attendi che Grafana sia pronto
+log_info "Attendo che Grafana sia pronto..."
+for i in {1..60}; do
+    if curl -s http://localhost:3000/api/health >/dev/null 2>&1; then
+        break
+    fi
+    if [[ $i -eq 60 ]]; then
+        log_warning "⚠️  Grafana non pronto, salto fix UID"
+        break
+    fi
+    sleep 2
+done
+
+# Attendi che i data source siano creati dal provisioning
+sleep 10
+
+# Fix UID dashboard come fa install.sh
+log_info "🔧 Fix UID dashboard Grafana..."
+
+# Ottieni UID dei data source
+DATASOURCES_LIST=$(curl -s http://localhost:3000/api/datasources -u "admin:admin" 2>/dev/null)
+INFLUX_UID=$(echo "$DATASOURCES_LIST" | jq -r '.[] | select(.name=="Solaredge") | .uid' 2>/dev/null)
+
+if [[ -n "$INFLUX_UID" && "$INFLUX_UID" != "null" ]]; then
+    log_info "Trovato InfluxDB UID: $INFLUX_UID"
+    
+    # Crea dashboard temporanea con UID corretti
+    TEMP_DASHBOARD="/tmp/dashboard-solaredge-fixed.json"
+    cp grafana/dashboard-solaredge.json "$TEMP_DASHBOARD"
+    
+    # Sostituisci UID nella dashboard usando jq
+    if command -v jq &> /dev/null; then
+        jq --arg uid "$INFLUX_UID" '
+            walk(
+                if type == "object" and .type == "influxdb" then
+                    .uid = $uid
+                else
+                    .
+                end
+            )
+        ' "$TEMP_DASHBOARD" > "${TEMP_DASHBOARD}.tmp" && mv "${TEMP_DASHBOARD}.tmp" "$TEMP_DASHBOARD"
+        
+        log_success "✅ UID dashboard aggiornati"
+        
+        # Importa dashboard con UID corretti
+        DASHBOARD_RESPONSE=$(curl -s -X POST http://localhost:3000/api/dashboards/db \
+            -u "admin:admin" \
+            -H "Content-Type: application/json" \
+            -d "{
+                \"dashboard\": $(cat "$TEMP_DASHBOARD"),
+                \"overwrite\": true,
+                \"message\": \"Imported by Docker with fixed UIDs\"
+            }" 2>/dev/null)
+        
+        if echo "$DASHBOARD_RESPONSE" | grep -q '"id"'; then
+            log_success "✅ Dashboard importata con UID corretti"
+        else
+            log_warning "⚠️  Errore importazione dashboard"
+        fi
+        
+        rm -f "$TEMP_DASHBOARD"
+    else
+        log_warning "⚠️  jq non disponibile, salto fix UID"
+    fi
+else
+    log_warning "⚠️  UID InfluxDB non trovato, salto fix"
+fi
 
 echo ""
 
