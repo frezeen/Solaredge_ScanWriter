@@ -341,59 +341,66 @@ for i in {1..60}; do
 done
 
 # Attendi che i data source siano creati dal provisioning
-sleep 10
-
-# Fix UID dashboard come fa install.sh
-log_info "🔧 Fix UID dashboard Grafana..."
-
-# Ottieni UID dei data source
-DATASOURCES_LIST=$(curl -s http://localhost:3000/api/datasources -u "admin:admin" 2>/dev/null)
-INFLUX_UID=$(echo "$DATASOURCES_LIST" | jq -r '.[] | select(.name=="Solaredge") | .uid' 2>/dev/null)
-
-if [[ -n "$INFLUX_UID" && "$INFLUX_UID" != "null" ]]; then
-    log_info "Trovato InfluxDB UID: $INFLUX_UID"
+log_info "Attendo creazione data source InfluxDB..."
+for i in {1..30}; do
+    DATASOURCES_LIST=$(curl -s http://localhost:3000/api/datasources -u "admin:admin" 2>/dev/null)
+    INFLUX_UID=$(echo "$DATASOURCES_LIST" | jq -r '.[] | select(.name=="Solaredge") | .uid' 2>/dev/null)
     
-    # Crea dashboard temporanea con UID corretti
-    TEMP_DASHBOARD="/tmp/dashboard-solaredge-fixed.json"
-    cp grafana/dashboard-solaredge.json "$TEMP_DASHBOARD"
-    
-    # Sostituisci UID nella dashboard usando jq
-    if command -v jq &> /dev/null; then
-        jq --arg uid "$INFLUX_UID" '
-            walk(
-                if type == "object" and .type == "influxdb" then
-                    .uid = $uid
-                else
-                    .
-                end
-            )
-        ' "$TEMP_DASHBOARD" > "${TEMP_DASHBOARD}.tmp" && mv "${TEMP_DASHBOARD}.tmp" "$TEMP_DASHBOARD"
-        
-        log_success "✅ UID dashboard aggiornati"
-        
-        # Importa dashboard con UID corretti (con timeout)
-        log_info "Importazione dashboard con UID corretti..."
-        
-        DASHBOARD_RESPONSE=$(timeout 30 curl -s -X POST http://localhost:3000/api/dashboards/db \
-            -u "admin:admin" \
-            -H "Content-Type: application/json" \
-            --data-binary "{\"dashboard\":$(cat "$TEMP_DASHBOARD"),\"overwrite\":true}" 2>/dev/null || echo "timeout")
-        
-        if [[ "$DASHBOARD_RESPONSE" == "timeout" ]]; then
-            log_warning "⚠️  Timeout importazione dashboard, continuo"
-        elif echo "$DASHBOARD_RESPONSE" | grep -q '"id"'; then
-            log_success "✅ Dashboard importata con UID corretti"
-        else
-            log_warning "⚠️  Dashboard non importata via API, sarà disponibile dal provisioning"
-        fi
-        
-        rm -f "$TEMP_DASHBOARD" 2>/dev/null || true
-    else
-        log_warning "⚠️  jq non disponibile, salto fix UID"
+    if [[ -n "$INFLUX_UID" && "$INFLUX_UID" != "null" ]]; then
+        log_success "✅ Data source InfluxDB creato con UID: $INFLUX_UID"
+        break
     fi
-else
-    log_warning "⚠️  UID InfluxDB non trovato, salto fix"
-fi
+    
+    if [[ $i -eq 30 ]]; then
+        log_error "❌ Data source InfluxDB non creato dopo 60 secondi"
+        exit 1
+    fi
+    
+    sleep 2
+done
+
+# Fix e importa dashboard con UID corretti
+log_info "🔧 Importazione dashboard con UID corretti..."
+
+# Crea dashboard temporanea con UID corretti
+TEMP_DASHBOARD="/tmp/dashboard-solaredge-fixed.json"
+cp grafana/dashboard-solaredge.json "$TEMP_DASHBOARD"
+
+# Sostituisci UID nella dashboard usando jq
+jq --arg uid "$INFLUX_UID" '
+    walk(
+        if type == "object" and .type == "influxdb" then
+            .uid = $uid
+        else
+            .
+        end
+    )
+' "$TEMP_DASHBOARD" > "${TEMP_DASHBOARD}.tmp" && mv "${TEMP_DASHBOARD}.tmp" "$TEMP_DASHBOARD"
+
+# Importa dashboard con retry
+for attempt in {1..3}; do
+    log_info "Tentativo importazione dashboard ($attempt/3)..."
+    
+    DASHBOARD_RESPONSE=$(curl -s -X POST http://localhost:3000/api/dashboards/db \
+        -u "admin:admin" \
+        -H "Content-Type: application/json" \
+        --max-time 15 \
+        --data-binary "{\"dashboard\":$(cat "$TEMP_DASHBOARD"),\"overwrite\":true}" 2>/dev/null)
+    
+    if echo "$DASHBOARD_RESPONSE" | grep -q '"id"'; then
+        DASHBOARD_ID=$(echo "$DASHBOARD_RESPONSE" | jq -r '.id' 2>/dev/null)
+        log_success "✅ Dashboard importata con successo (ID: $DASHBOARD_ID)"
+        break
+    elif [[ $attempt -eq 3 ]]; then
+        log_warning "⚠️  Importazione dashboard fallita dopo 3 tentativi"
+        log_info "Dashboard sarà disponibile manualmente in Grafana"
+    else
+        log_warning "⚠️  Tentativo $attempt fallito, riprovo..."
+        sleep 5
+    fi
+done
+
+rm -f "$TEMP_DASHBOARD" 2>/dev/null || true
 
 log_success "✅ Configurazione Grafana completata"
 
