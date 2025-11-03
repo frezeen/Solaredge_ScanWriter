@@ -4,7 +4,7 @@ version: '3.8'
 # Compatible with: Windows, Linux, macOS, Raspberry Pi
 
 services:
-  # SolarEdge Data Collector (Auto-adaptive)
+  # SolarEdge ScanWriter (Auto-adaptive)
   solaredge:
     build: 
       context: .
@@ -12,8 +12,8 @@ services:
       args:
         - TARGETPLATFORM=${TARGETPLATFORM:-linux/amd64}
         - BUILDPLATFORM=${BUILDPLATFORM:-linux/amd64}
-    image: solaredge-collector:latest
-    container_name: solaredge-collector
+    image: solaredge-scanwriter:latest
+    container_name: solaredge-scanwriter
     restart: unless-stopped
     
     environment:
@@ -110,7 +110,7 @@ services:
     volumes:
       - grafana-data:/var/lib/grafana
       - ./grafana/provisioning:/etc/grafana/provisioning:ro
-      - ./grafana/dashboard-solaredge.json:/etc/grafana/provisioning/dashboards/dashboard-solaredge.json:ro
+      - ./grafana:/var/lib/grafana/dashboards:ro
       - /etc/localtime:/etc/localtime:ro
     
     ports:

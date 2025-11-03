@@ -253,15 +253,15 @@ if command -v docker &> /dev/null && docker buildx version &> /dev/null; then
     # Build con buildx per architettura specifica
     if docker buildx build \
         --platform "$docker_arch" \
-        --tag solaredge-collector:latest \
-        --tag solaredge-collector:dev \
+        --tag solaredge-scanwriter:latest \
+        --tag solaredge-scanwriter:dev \
         --load \
         . 2>/dev/null; then
         log_success "✅ Build buildx completato per $arch_name"
     else
         log_warning "⚠️  Buildx fallito, usando build standard..."
         # Fallback a build standard
-        if docker build -t solaredge-collector:latest -t solaredge-collector:dev .; then
+        if docker build -t solaredge-scanwriter:latest -t solaredge-scanwriter:dev .; then
             log_success "✅ Build standard completato per $arch_name"
         else
             log_error "❌ Errore nel build dell'immagine"
@@ -271,7 +271,7 @@ if command -v docker &> /dev/null && docker buildx version &> /dev/null; then
 else
     log_info "Buildx non disponibile, usando build standard..."
     # Build standard
-    if docker build -t solaredge-collector:latest -t solaredge-collector:dev .; then
+    if docker build -t solaredge-scanwriter:latest -t solaredge-scanwriter:dev .; then
         log_success "✅ Build standard completato per $arch_name"
     else
         log_error "❌ Errore nel build dell'immagine"
@@ -281,9 +281,9 @@ fi
 
 # Verifica immagine creata
 log_info "🔍 Verifica immagine creata..."
-if docker images solaredge-collector:latest --format "{{.Repository}}:{{.Tag}}" | grep -q "solaredge-collector:latest"; then
-    image_arch=$(docker inspect solaredge-collector:latest --format '{{.Architecture}}' 2>/dev/null || echo "unknown")
-    image_size=$(docker images solaredge-collector:latest --format "{{.Size}}" 2>/dev/null || echo "unknown")
+if docker images solaredge-scanwriter:latest --format "{{.Repository}}:{{.Tag}}" | grep -q "solaredge-scanwriter:latest"; then
+    image_arch=$(docker inspect solaredge-scanwriter:latest --format '{{.Architecture}}' 2>/dev/null || echo "unknown")
+    image_size=$(docker images solaredge-scanwriter:latest --format "{{.Size}}" 2>/dev/null || echo "unknown")
     log_success "✅ Immagine creata: $arch_name ($image_arch) - Dimensione: $image_size"
 else
     log_error "❌ Immagine non trovata dopo il build"
@@ -314,7 +314,7 @@ sleep 5
 
 # Esegui scan per generare web endpoints
 log_info "Esecuzione scan per web endpoints..."
-if docker exec solaredge-collector python main.py --scan; then
+if docker exec solaredge-scanwriter python main.py --scan; then
     log_success "✅ Web endpoints generati con successo"
 else
     log_warning "⚠️  Scan fallito, continuo comunque"
@@ -368,12 +368,12 @@ echo -e "${CYAN}📋 Comandi utili:${NC}"
 echo -e "   ${YELLOW}docker compose logs -f${NC}           # Log in tempo reale"
 echo -e "   ${YELLOW}docker compose ps${NC}                # Status servizi"
 echo -e "   ${YELLOW}docker compose down${NC}              # Ferma tutto"
-echo -e "   ${YELLOW}docker exec -it solaredge-collector bash${NC}  # Shell nel container"
+echo -e "   ${YELLOW}docker exec -it solaredge-scanwriter bash${NC}  # Shell nel container"
 echo ""
 echo -e "${CYAN}🧪 Test componenti:${NC}"
-echo -e "   ${YELLOW}docker exec solaredge-collector python main.py --api${NC}"
-echo -e "   ${YELLOW}docker exec solaredge-collector python main.py --web${NC}"
-echo -e "   ${YELLOW}docker exec solaredge-collector python main.py --scan${NC}"
+echo -e "   ${YELLOW}docker exec solaredge-scanwriter python main.py --api${NC}"
+echo -e "   ${YELLOW}docker exec solaredge-scanwriter python main.py --web${NC}"
+echo -e "   ${YELLOW}docker exec solaredge-scanwriter python main.py --scan${NC}"
 echo ""
 
 # Mostra log iniziali
