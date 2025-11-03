@@ -80,6 +80,21 @@ apt-get install -y -qq curl wget git unzip >/dev/null 2>&1
 log "Installing Python packages..."
 apt-get install -y -qq python3 python3-pip python3-dev >/dev/null 2>&1
 
+# Verify Python 3 installation
+log "Verifying Python 3 installation..."
+if ! command -v python3 &> /dev/null; then
+    error "Python 3 not found after installation"
+    exit 1
+fi
+
+PYTHON_VERSION=$(python3 --version 2>&1 | cut -d' ' -f2 | cut -d'.' -f1,2)
+log "Python version detected: $PYTHON_VERSION"
+
+if ! python3 -c "import sys; sys.exit(0 if sys.version_info >= (3, 8) else 1)" 2>/dev/null; then
+    error "Python 3.8+ required, found $PYTHON_VERSION"
+    exit 1
+fi
+
 log "Installing build tools..."
 apt-get install -y -qq build-essential >/dev/null 2>&1
 
