@@ -1,49 +1,27 @@
-# Auto-adaptive SolarEdge Data Collector
-# Automatically adapts to: AMD64, ARM64, ARMv7
+# SolarEdge Data Collector - Multi-Platform
 FROM python:3.11-slim
-
-# Build arguments for architecture detection
-ARG TARGETPLATFORM
-ARG BUILDPLATFORM
-ARG TARGETARCH
-ARG TARGETVARIANT
 
 # Metadata
 LABEL maintainer="SolarEdge Data Collector"
-LABEL description="Auto-adaptive SolarEdge data collection system"
-LABEL version="3.1-auto"
+LABEL description="SolarEdge data collection system"
+LABEL version="1.0"
 
 # Environment variables
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     DEBIAN_FRONTEND=noninteractive \
     DOCKER_MODE=true \
-    PYTHONPATH=/app \
-    PLATFORM=${TARGETPLATFORM:-linux/amd64} \
-    ARCH=${TARGETARCH:-amd64}
+    PYTHONPATH=/app
 
-# Architecture-specific optimizations
-RUN echo "Building for platform: ${TARGETPLATFORM:-linux/amd64}" && \
-    echo "Target architecture: ${TARGETARCH:-amd64}" && \
-    apt-get update && \
-    # Base packages for all architectures
-    apt-get install -y \
-        curl \
-        wget \
-        netcat-openbsd \
-        procps \
-        python3-dev \
-        jq \
-    # Architecture-specific packages
-    && if [ "${TARGETARCH}" = "amd64" ]; then \
-        apt-get install -y build-essential; \
-    elif [ "${TARGETARCH}" = "arm64" ]; then \
-        apt-get install -y build-essential gcc-aarch64-linux-gnu; \
-    elif [ "${TARGETARCH}" = "arm" ]; then \
-        apt-get install -y build-essential gcc-arm-linux-gnueabihf; \
-    else \
-        apt-get install -y build-essential; \
-    fi \
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    curl \
+    wget \
+    netcat-openbsd \
+    procps \
+    python3-dev \
+    build-essential \
+    jq \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 
