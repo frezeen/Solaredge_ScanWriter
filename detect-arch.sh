@@ -13,28 +13,64 @@ log_success() { echo -e "${GREEN}[SUCCESS]${NC} $1"; }
 
 # Rileva architettura sistema
 detect_system_arch() {
-    local arch=$(uname -m)
-    local os=$(uname -s)
+    local os=$(uname -s 2>/dev/null || echo "Unknown")
+    local arch=$(uname -m 2>/dev/null || echo "Unknown")
     
-    echo -e "${CYAN}🖥️  Sistema Rilevato:${NC}"
-    echo -e "   OS: $os"
-    echo -e "   Architettura: $arch"
+    # Rilevamento specifico per Windows
+    if [[ "$os" == "MINGW"* ]] || [[ "$os" == "MSYS"* ]] || [[ "$os" == "CYGWIN"* ]] || [[ -n "$WINDIR" ]]; then
+        os="Windows"
+        # Su Windows, usa variabili d'ambiente per architettura
+        if [[ -n "$PROCESSOR_ARCHITECTURE" ]]; then
+            case "$PROCESSOR_ARCHITECTURE" in
+                AMD64|x64) arch="x86_64" ;;
+                ARM64) arch="aarch64" ;;
+                x86) arch="i386" ;;
+            esac
+        fi
+        echo -e "${CYAN}🖥️  Sistema Rilevato:${NC}"
+        echo -e "   OS: $os (Docker Desktop)"
+        echo -e "   Architettura Host: $arch"
+        echo -e "   Container Runtime: WSL2 o Hyper-V"
+    elif [[ "$os" == "Darwin" ]]; then
+        echo -e "${CYAN}🖥️  Sistema Rilevato:${NC}"
+        echo -e "   OS: macOS (Docker Desktop)"
+        echo -e "   Architettura: $arch"
+    else
+        echo -e "${CYAN}🖥️  Sistema Rilevato:${NC}"
+        echo -e "   OS: $os"
+        echo -e "   Architettura: $arch"
+    fi
     
     case $arch in
-        x86_64|amd64)
+        x86_64|amd64|AMD64)
             echo -e "   Tipo: ${GREEN}AMD64/Intel 64-bit${NC}"
             echo -e "   Docker Platform: linux/amd64"
-            echo -e "   Ottimizzazioni: Build standard, performance elevate"
+            if [[ "$os" == "Windows" ]]; then
+                echo -e "   Ottimizzazioni: Windows + Linux containers"
+            else
+                echo -e "   Ottimizzazioni: Build standard, performance elevate"
+            fi
             ;;
-        aarch64|arm64)
+        aarch64|arm64|ARM64)
             echo -e "   Tipo: ${GREEN}ARM64 (Apple Silicon, Raspberry Pi 4+)${NC}"
             echo -e "   Docker Platform: linux/arm64"
-            echo -e "   Ottimizzazioni: ARM64 nativo, efficienza energetica"
+            if [[ "$os" == "Windows" ]]; then
+                echo -e "   Ottimizzazioni: Windows ARM + Linux containers"
+            elif [[ "$os" == "Darwin" ]]; then
+                echo -e "   Ottimizzazioni: Apple Silicon nativo"
+            else
+                echo -e "   Ottimizzazioni: ARM64 nativo, efficienza energetica"
+            fi
             ;;
         armv7l|armhf)
             echo -e "   Tipo: ${GREEN}ARMv7 (Raspberry Pi 3/4 32-bit)${NC}"
             echo -e "   Docker Platform: linux/arm/v7"
             echo -e "   Ottimizzazioni: ARM 32-bit, risorse limitate"
+            ;;
+        i386|i686)
+            echo -e "   Tipo: ${YELLOW}i386 32-bit${NC}"
+            echo -e "   Docker Platform: linux/386"
+            echo -e "   Ottimizzazioni: Architettura legacy, supporto limitato"
             ;;
         armv6l)
             echo -e "   Tipo: ${YELLOW}ARMv6 (Raspberry Pi Zero/1)${NC}"
@@ -92,28 +128,73 @@ detect_docker_capabilities() {
 
 # Raccomandazioni per architettura
 show_recommendations() {
-    local arch=$(uname -m)
+    local os=$(uname -s 2>/dev/null || echo "Unknown")
+    local arch=$(uname -m 2>/dev/null || echo "Unknown")
+    
+    # Rilevamento Windows
+    if [[ "$os" == "MINGW"* ]] || [[ "$os" == "MSYS"* ]] || [[ "$os" == "CYGWIN"* ]] || [[ -n "$WINDIR" ]]; then
+        os="Windows"
+        if [[ -n "$PROCESSOR_ARCHITECTURE" ]]; then
+            case "$PROCESSOR_ARCHITECTURE" in
+                AMD64|x64) arch="x86_64" ;;
+                ARM64) arch="aarch64" ;;
+                x86) arch="i386" ;;
+            esac
+        fi
+    fi
     
     echo ""
-    echo -e "${CYAN}💡 Raccomandazioni per la tua architettura:${NC}"
+    echo -e "${CYAN}💡 Raccomandazioni per il tuo sistema:${NC}"
     
+    # Raccomandazioni specifiche per OS
+    if [[ "$os" == "Windows" ]]; then
+        echo -e "   🪟 ${GREEN}Windows con Docker Desktop${NC}"
+        echo -e "   ✅ Assicurati che Docker Desktop sia avviato"
+        echo -e "   ✅ Usa WSL2 backend per performance migliori"
+        echo -e "   ✅ Linux containers supportati nativamente"
+        echo -e "   📋 Prerequisiti Windows:"
+        echo -e "      - Docker Desktop 4.0+"
+        echo -e "      - WSL2 abilitato (raccomandato)"
+        echo -e "      - Hyper-V abilitato (alternativa)"
+        echo -e "      - Memoria: 4GB+ (8GB raccomandati)"
+    elif [[ "$os" == "Darwin" ]]; then
+        echo -e "   🍎 ${GREEN}macOS con Docker Desktop${NC}"
+        echo -e "   ✅ Supporto nativo Apple Silicon"
+        echo -e "   ✅ Performance eccellenti"
+    else
+        echo -e "   🐧 ${GREEN}Linux nativo${NC}"
+        echo -e "   ✅ Performance ottimali"
+        echo -e "   ✅ Supporto completo Docker"
+    fi
+    
+    # Raccomandazioni per architettura
     case $arch in
-        x86_64|amd64)
+        x86_64|amd64|AMD64)
             echo -e "   ✅ Architettura ottimale per Docker"
             echo -e "   ✅ Supporto completo multi-architettura"
             echo -e "   ✅ Performance elevate"
             echo -e "   📋 Configurazione consigliata:"
-            echo -e "      - Memoria: 2GB+ (4GB raccomandati)"
-            echo -e "      - CPU: 2+ core"
+            if [[ "$os" == "Windows" ]]; then
+                echo -e "      - Memoria Windows: 8GB+ (4GB per Docker)"
+                echo -e "      - CPU: 4+ core (2+ per Docker)"
+                echo -e "      - WSL2: 4GB+ allocati"
+            else
+                echo -e "      - Memoria: 2GB+ (4GB raccomandati)"
+                echo -e "      - CPU: 2+ core"
+            fi
             echo -e "      - Build: Buildx multi-platform"
             ;;
-        aarch64|arm64)
+        aarch64|arm64|ARM64)
             echo -e "   ✅ Ottima compatibilità Docker"
             echo -e "   ✅ Efficienza energetica elevata"
-            echo -e "   ⚠️  Alcune immagini potrebbero richiedere più tempo per il build"
+            if [[ "$os" == "Darwin" ]]; then
+                echo -e "   ✅ Apple Silicon: performance native"
+            elif [[ "$os" == "Windows" ]]; then
+                echo -e "   ⚠️  Windows ARM: supporto limitato"
+            fi
             echo -e "   📋 Configurazione consigliata:"
-            echo -e "      - Memoria: 2GB+ (Raspberry Pi 4: 4GB+)"
-            echo -e "      - CPU: 4+ core ARM Cortex-A"
+            echo -e "      - Memoria: 2GB+ (4GB+ per Apple Silicon)"
+            echo -e "      - CPU: 4+ core ARM"
             echo -e "      - Build: Nativo ARM64"
             ;;
         armv7l|armhf)
@@ -125,6 +206,13 @@ show_recommendations() {
             echo -e "      - CPU: 4 core ARM Cortex-A"
             echo -e "      - Build: Singola architettura"
             echo -e "      - Swap: Abilitato per build pesanti"
+            ;;
+        i386|i686)
+            echo -e "   ⚠️  Architettura 32-bit legacy"
+            echo -e "   ⚠️  Supporto Docker limitato"
+            echo -e "   📋 Raccomandazioni:"
+            echo -e "      - Considera upgrade a 64-bit"
+            echo -e "      - Usa immagini 32-bit quando disponibili"
             ;;
         *)
             echo -e "   ⚠️  Architettura non testata"

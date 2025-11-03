@@ -156,20 +156,53 @@ echo ""
 # 3. BUILD AUTOMATICO BASATO SU ARCHITETTURA
 log_info "🏗️  Build immagine Docker (rilevamento automatico architettura)..."
 
-# Rileva architettura corrente
-current_arch=$(uname -m)
+# Rileva sistema operativo e architettura
+os_type=$(uname -s 2>/dev/null || echo "Unknown")
+current_arch=$(uname -m 2>/dev/null || echo "Unknown")
+
+# Rilevamento specifico per Windows
+if [[ "$os_type" == "MINGW"* ]] || [[ "$os_type" == "MSYS"* ]] || [[ "$os_type" == "CYGWIN"* ]] || [[ -n "$WINDIR" ]]; then
+    os_name="Windows"
+    # Su Windows, rileva architettura dal processore
+    if [[ -n "$PROCESSOR_ARCHITECTURE" ]]; then
+        case "$PROCESSOR_ARCHITECTURE" in
+            AMD64|x64)
+                current_arch="x86_64"
+                ;;
+            ARM64)
+                current_arch="aarch64"
+                ;;
+            x86)
+                current_arch="i386"
+                ;;
+        esac
+    fi
+elif [[ "$os_type" == "Darwin" ]]; then
+    os_name="macOS"
+elif [[ "$os_type" == "Linux" ]]; then
+    os_name="Linux"
+else
+    os_name="Unknown ($os_type)"
+fi
+
+# Determina architettura Docker target
 case $current_arch in
-    x86_64|amd64)
+    x86_64|amd64|AMD64)
         docker_arch="linux/amd64"
         arch_name="AMD64"
         ;;
-    aarch64|arm64)
+    aarch64|arm64|ARM64)
         docker_arch="linux/arm64"
         arch_name="ARM64"
         ;;
     armv7l|armhf)
         docker_arch="linux/arm/v7"
         arch_name="ARMv7"
+        ;;
+    i386|i686)
+        docker_arch="linux/386"
+        arch_name="i386"
+        log_warning "⚠️  Architettura 32-bit, supporto limitato"
         ;;
     *)
         docker_arch="linux/amd64"
@@ -178,8 +211,15 @@ case $current_arch in
         ;;
 esac
 
-log_info "🖥️  Architettura rilevata: $current_arch → $arch_name"
+log_info "🖥️  Sistema: $os_name"
+log_info "🏗️  Architettura rilevata: $current_arch → $arch_name"
 log_info "🐳 Target Docker: $docker_arch"
+
+# Avvisi specifici per Windows
+if [[ "$os_name" == "Windows" ]]; then
+    log_info "💡 Rilevato Windows - assicurati che Docker Desktop sia in esecuzione"
+    log_info "💡 I container useranno Linux containers tramite WSL2 o Hyper-V"
+fi
 
 # Prova prima buildx per architettura specifica
 log_info "Tentativo build con buildx per $docker_arch..."

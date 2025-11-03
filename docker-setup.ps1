@@ -234,13 +234,27 @@ function Test-Configuration {
 }
 
 function Main {
-    $platform = if ($IsWindows) { "Windows" } elseif ($IsMacOS) { "macOS" } else { "Linux" }
-    $arch = docker version --format '{{.Server.Arch}}' 2>$null
-    
     Write-ColorOutput "🌍 SolarEdge Multi-Platform Docker Setup" "Magenta"
     Write-ColorOutput "=======================================" "Magenta"
-    Write-ColorOutput "🖥️ Platform: $platform" "Blue"
-    Write-ColorOutput "🏗️ Architecture: $arch" "Blue"
+    
+    # Rilevamento automatico architettura
+    Write-ColorOutput "🔍 Rilevamento automatico sistema..." "Blue"
+    $arch = [System.Environment]::GetEnvironmentVariable("PROCESSOR_ARCHITECTURE")
+    $archReal = [System.Environment]::GetEnvironmentVariable("PROCESSOR_ARCHITEW6432")
+    $realArch = if ($archReal) { $archReal } else { $arch }
+    
+    Write-ColorOutput "🖥️ Sistema: Windows" "Blue"
+    Write-ColorOutput "🏗️ Architettura: $realArch" "Blue"
+    
+    # Verifica Docker Desktop
+    $dockerDesktop = Get-Process "Docker Desktop" -ErrorAction SilentlyContinue
+    if ($dockerDesktop) {
+        Write-ColorOutput "🐳 Docker Desktop: In esecuzione" "Green"
+    } else {
+        Write-ColorOutput "⚠️ Docker Desktop: Non rilevato" "Yellow"
+        Write-ColorOutput "   Assicurati che Docker Desktop sia avviato" "Yellow"
+    }
+    
     Write-ColorOutput "" "White"
     
     # Handle command line arguments
