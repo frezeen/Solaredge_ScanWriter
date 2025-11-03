@@ -358,24 +358,76 @@ REQS
         
         # Install Grafana
         log "📊 Installing Grafana..."
-        rm -f /usr/share/keyrings/grafana-archive-keyring.gpg
-        curl -s https://packages.grafana.com/gpg.key | gpg --dearmor -o /usr/share/keyrings/grafana-archive-keyring.gpg 2>/dev/null
-        echo "deb [signed-by=/usr/share/keyrings/grafana-archive-keyring.gpg] https://packages.grafana.com/oss/deb stable main" | tee /etc/apt/sources.list.d/grafana.list >/dev/null
         
-        apt-get update -qq >/dev/null 2>&1
-        if ! apt-get install -y -qq grafana >/dev/null 2>&1; then
-            warn "Failed to install Grafana from repository, trying direct download..."
-            GRAFANA_VERSION="10.2.3"
-            ARCH=$(dpkg --print-architecture)
-            curl -LO "https://dl.grafana.com/oss/release/grafana_${GRAFANA_VERSION}_${ARCH}.deb" >/dev/null 2>&1
-            dpkg -i "grafana_${GRAFANA_VERSION}_${ARCH}.deb" >/dev/null 2>&1 || apt-get install -f -y -qq
-            rm -f "grafana_${GRAFANA_VERSION}_${ARCH}.deb"
+        if [[ "$IS_RASPBERRY_PI" == "true" ]]; then
+            log "🍓 Installing Grafana for Raspberry Pi (ARM)..."
+            
+            # Try repository first
+            rm -f /usr/share/keyrings/grafana-archive-keyring.gpg
+            curl -s https://packages.grafana.com/gpg.key | gpg --dearmor -o /usr/share/keyrings/grafana-archive-keyring.gpg 2>/dev/null
+            echo "deb [signed-by=/usr/share/keyrings/grafana-archive-keyring.gpg] https://packages.grafana.com/oss/deb stable main" | tee /etc/apt/sources.list.d/grafana.list >/dev/null
+            
+            apt-get update -qq >/dev/null 2>&1
+            if ! apt-get install -y -qq grafana >/dev/null 2>&1; then
+                warn "Grafana repository failed on ARM, trying direct download..."
+                GRAFANA_VERSION="10.2.3"
+                DEB_ARCH=$(dpkg --print-architecture)
+                
+                # Map architecture names for Grafana downloads
+                case "$DEB_ARCH" in
+                    "armhf") GRAFANA_ARCH="armhf" ;;
+                    "arm64") GRAFANA_ARCH="arm64" ;;
+                    "amd64") GRAFANA_ARCH="amd64" ;;
+                    *) GRAFANA_ARCH="$DEB_ARCH" ;;
+                esac
+                
+                GRAFANA_URL="https://dl.grafana.com/oss/release/grafana_${GRAFANA_VERSION}_${GRAFANA_ARCH}.deb"
+                log "Downloading Grafana for $GRAFANA_ARCH..."
+                
+                if curl -LO "$GRAFANA_URL" >/dev/null 2>&1; then
+                    dpkg -i "grafana_${GRAFANA_VERSION}_${GRAFANA_ARCH}.deb" >/dev/null 2>&1 || apt-get install -f -y -qq
+                    rm -f "grafana_${GRAFANA_VERSION}_${GRAFANA_ARCH}.deb"
+                else
+                    error "Failed to download Grafana for ARM architecture"
+                    warn "You may need to install Grafana manually"
+                    warn "See: https://grafana.com/docs/grafana/latest/setup-grafana/installation/debian/"
+                    # Continue without Grafana - not critical for core functionality
+                fi
+            fi
+        else
+            # Standard x86_64 installation
+            rm -f /usr/share/keyrings/grafana-archive-keyring.gpg
+            curl -s https://packages.grafana.com/gpg.key | gpg --dearmor -o /usr/share/keyrings/grafana-archive-keyring.gpg 2>/dev/null
+            echo "deb [signed-by=/usr/share/keyrings/grafana-archive-keyring.gpg] https://packages.grafana.com/oss/deb stable main" | tee /etc/apt/sources.list.d/grafana.list >/dev/null
+            
+            apt-get update -qq >/dev/null 2>&1
+            if ! apt-get install -y -qq grafana >/dev/null 2>&1; then
+                warn "Failed to install Grafana from repository, trying direct download..."
+                GRAFANA_VERSION="10.2.3"
+                ARCH=$(dpkg --print-architecture)
+                curl -LO "https://dl.grafana.com/oss/release/grafana_${GRAFANA_VERSION}_${ARCH}.deb" >/dev/null 2>&1
+                dpkg -i "grafana_${GRAFANA_VERSION}_${ARCH}.deb" >/dev/null 2>&1 || apt-get install -f -y -qq
+                rm -f "grafana_${GRAFANA_VERSION}_${ARCH}.deb"
+            fi
         fi
         
         # Install Grafana plugins
         log "🔌 Installing Grafana plugins..."
-        grafana-cli plugins install fetzerch-sunandmoon-datasource >/dev/null 2>&1 || warn "Failed to install sun-and-moon plugin"
-        grafana-cli plugins install grafana-clock-panel >/dev/null 2>&1 || warn "Failed to install clock plugin"
+        
+        # Check if Grafana was installed successfully
+        if command -v grafana-cli &> /dev/null; then
+            if [[ "$IS_RASPBERRY_PI" == "true" ]]; then
+                log "🍓 Installing Grafana plugins for Raspberry Pi..."
+                # Some plugins might not be available for ARM, so we're more tolerant
+                grafana-cli plugins install fetzerch-sunandmoon-datasource >/dev/null 2>&1 || warn "Sun-and-moon plugin not available for ARM (optional)"
+                grafana-cli plugins install grafana-clock-panel >/dev/null 2>&1 || warn "Clock plugin not available for ARM (optional)"
+            else
+                grafana-cli plugins install fetzerch-sunandmoon-datasource >/dev/null 2>&1 || warn "Failed to install sun-and-moon plugin"
+                grafana-cli plugins install grafana-clock-panel >/dev/null 2>&1 || warn "Failed to install clock plugin"
+            fi
+        else
+            warn "Grafana CLI not available - skipping plugin installation"
+        fi
         
         systemctl enable grafana-server >/dev/null 2>&1
         
