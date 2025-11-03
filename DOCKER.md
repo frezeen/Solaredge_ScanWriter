@@ -118,7 +118,10 @@ This single command handles all updates:
 - Configuration updates
 - Dependency updates
 
-**Your configuration files (.env, custom configs) are preserved.**
+**Your configuration files are preserved:**
+- `.env` - Credentials and settings
+- `config/sources/*.yaml` - Custom endpoints and configurations
+- Docker volumes - All data (InfluxDB, Grafana, logs)
 
 ## 🛠️ Troubleshooting
 
