@@ -26,7 +26,10 @@ fi
 
 # Rebuild solo l'immagine principale
 log_info "🏗️ Rebuild immagine SolarEdge..."
-docker build -t solaredge-collector:latest .
+if ! docker build -t solaredge-collector:latest .; then
+    log_error "❌ Errore nel build dell'immagine"
+    exit 1
+fi
 
 # Restart solo il container principale
 log_info "🔄 Restart container SolarEdge..."

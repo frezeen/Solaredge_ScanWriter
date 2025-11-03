@@ -99,7 +99,7 @@ if [[ ! -f ".env" ]]; then
     if [[ -f ".env.example" ]]; then
         log_warning "File .env non trovato, copiando da .env.example"
         cp .env.example .env
-        log_warning "⚠️  IMPORTANTE: Modifica .env con le tue credenziali SolarEdge!"
+        log_warning "⚠️  IMPORTANTE: Configura .env con le tue credenziali SolarEdge!"
         echo ""
         echo -e "${YELLOW}Credenziali richieste in .env:${NC}"
         echo -e "${CYAN}SOLAREDGE_SITE_ID=123456${NC}"
@@ -107,7 +107,11 @@ if [[ ! -f ".env" ]]; then
         echo -e "${CYAN}SOLAREDGE_USERNAME=your.email@example.com${NC}"
         echo -e "${CYAN}SOLAREDGE_PASSWORD=your_password${NC}"
         echo ""
-        read -p "Premi ENTER dopo aver configurato .env per continuare..."
+        log_info "📝 Aprendo nano per modificare .env..."
+        sleep 2
+        nano .env
+        echo ""
+        log_info "✅ Configurazione .env completata"
     else
         log_error "❌ File .env.example non trovato!"
         exit 1
@@ -123,7 +127,23 @@ for file in "${required_files[@]}"; do
     fi
 done
 
-log_success "✅ Configurazione verificata"
+# Verifica configurazione .env
+log_info "Verifica finale configurazione .env..."
+chmod +x check-env.sh
+if ./check-env.sh; then
+    log_success "✅ Configurazione verificata e corretta"
+else
+    log_error "❌ Configurazione .env non corretta"
+    log_info "Riapri nano per correggere:"
+    nano .env
+    # Ricontrolla dopo la modifica
+    if ./check-env.sh; then
+        log_success "✅ Configurazione corretta dopo le modifiche"
+    else
+        log_error "❌ Configurazione ancora non corretta, interrompo"
+        exit 1
+    fi
+fi
 echo ""
 
 # 3. BUILD MULTI-ARCHITETTURA
@@ -137,19 +157,22 @@ fi
 
 # Build per architetture multiple
 log_info "Building per linux/amd64,linux/arm64,linux/arm/v7..."
-docker buildx build \
+if docker buildx build \
     --platform linux/amd64,linux/arm64,linux/arm/v7 \
     --tag solaredge-collector:latest \
     --tag solaredge-collector:dev \
     --load \
-    .
-
-if [[ $? -eq 0 ]]; then
+    . 2>/dev/null; then
     log_success "✅ Build multi-architettura completata"
 else
-    log_warning "⚠️  Build multi-arch fallito, provo build singola architettura..."
+    log_warning "⚠️  Build multi-arch non supportato, usando build singola architettura..."
     docker build -t solaredge-collector:latest -t solaredge-collector:dev .
-    log_success "✅ Build singola architettura completata"
+    if [[ $? -eq 0 ]]; then
+        log_success "✅ Build singola architettura completata"
+    else
+        log_error "❌ Errore nel build dell'immagine"
+        exit 1
+    fi
 fi
 
 echo ""
