@@ -45,10 +45,14 @@ Thumbs.db
 
 # Runtime data (will be mounted as volumes)
 logs/
-cache/
 cookies/
 data/
 backups/
+
+# Cache runtime files (not source code)
+cache/*.cache
+cache/*.tmp
+cache/requests_*
 
 # Documentation
 docs/
