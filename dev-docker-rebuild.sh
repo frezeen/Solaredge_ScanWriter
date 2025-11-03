@@ -371,29 +371,31 @@ if [[ -n "$INFLUX_UID" && "$INFLUX_UID" != "null" ]]; then
         
         log_success "✅ UID dashboard aggiornati"
         
-        # Importa dashboard con UID corretti
-        DASHBOARD_RESPONSE=$(curl -s -X POST http://localhost:3000/api/dashboards/db \
+        # Importa dashboard con UID corretti (con timeout)
+        log_info "Importazione dashboard con UID corretti..."
+        
+        DASHBOARD_RESPONSE=$(timeout 30 curl -s -X POST http://localhost:3000/api/dashboards/db \
             -u "admin:admin" \
             -H "Content-Type: application/json" \
-            -d "{
-                \"dashboard\": $(cat "$TEMP_DASHBOARD"),
-                \"overwrite\": true,
-                \"message\": \"Imported by Docker with fixed UIDs\"
-            }" 2>/dev/null)
+            --data-binary "{\"dashboard\":$(cat "$TEMP_DASHBOARD"),\"overwrite\":true}" 2>/dev/null || echo "timeout")
         
-        if echo "$DASHBOARD_RESPONSE" | grep -q '"id"'; then
+        if [[ "$DASHBOARD_RESPONSE" == "timeout" ]]; then
+            log_warning "⚠️  Timeout importazione dashboard, continuo"
+        elif echo "$DASHBOARD_RESPONSE" | grep -q '"id"'; then
             log_success "✅ Dashboard importata con UID corretti"
         else
-            log_warning "⚠️  Errore importazione dashboard"
+            log_warning "⚠️  Dashboard non importata via API, sarà disponibile dal provisioning"
         fi
         
-        rm -f "$TEMP_DASHBOARD"
+        rm -f "$TEMP_DASHBOARD" 2>/dev/null || true
     else
         log_warning "⚠️  jq non disponibile, salto fix UID"
     fi
 else
     log_warning "⚠️  UID InfluxDB non trovato, salto fix"
 fi
+
+log_success "✅ Configurazione Grafana completata"
 
 echo ""
 
