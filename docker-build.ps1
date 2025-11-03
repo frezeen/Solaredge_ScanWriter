@@ -21,7 +21,12 @@ function Write-ColorOutput {
         "Blue" = "Blue"; "Magenta" = "Magenta"; "Cyan" = "Cyan"; "White" = "White"
     }
     
-    Write-Host $Message -ForegroundColor $colorMap[$Color]
+    $finalColor = $colorMap[$Color]
+    if (-not $finalColor) {
+        $finalColor = "White"
+    }
+    
+    Write-Host $Message -ForegroundColor $finalColor
 }
 
 Write-ColorOutput "🐳 SolarEdge Multi-Platform Docker Builder" "Cyan"
