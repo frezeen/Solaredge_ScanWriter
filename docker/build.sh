@@ -111,6 +111,7 @@ test_image() {
     fi
     
     docker run --rm --platform "$PLATFORM" \
+        --entrypoint="" \
         $env_args \
         "${IMAGE_NAME}:${IMAGE_TAG}" python -c "
 import os, platform
