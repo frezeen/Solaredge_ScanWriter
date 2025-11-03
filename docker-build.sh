@@ -86,10 +86,120 @@ else
 fi
 
 echo ""
-log_success "🎉 Docker build completed!"
-echo ""
-echo -e "${BLUE}📋 Next steps:${NC}"
-echo -e "   ${YELLOW}docker compose up -d${NC}     # Start services"
-echo -e "   ${YELLOW}docker compose ps${NC}        # Check status"
-echo -e "   ${YELLOW}docker compose logs -f${NC}   # View logs"
-echo ""
+
+# Start services automatically
+log_info "🚀 Starting Docker services..."
+docker compose up -d
+
+if [[ $? -eq 0 ]]; then
+    log_success "✅ Services started successfully"
+    
+    # Wait for services to be ready
+    log_info "⏳ Waiting for services to be ready..."
+    sleep 15
+    
+    # Configure Grafana automatically
+    log_info "📊 Configuring Grafana..."
+    
+    # Wait for Grafana to be ready
+    for i in {1..30}; do
+        if curl -s http://localhost:3000/api/health >/dev/null 2>&1; then
+            break
+        fi
+        sleep 2
+    done
+    
+    # Configure Sun and Moon data source
+    log_info "☀️ Configuring Sun and Moon data source..."
+    SUNMOON_RESPONSE=$(curl -s -X POST http://localhost:3000/api/datasources \
+        -u "admin:admin" \
+        -H "Content-Type: application/json" \
+        -d "{
+            \"name\": \"Sun and Moon\",
+            \"type\": \"fetzerch-sunandmoon-datasource\",
+            \"access\": \"proxy\",
+            \"jsonData\": {
+                \"latitude\": 40.8199,
+                \"longitude\": 14.3413
+            }
+        }" 2>/dev/null)
+    
+    if echo "$SUNMOON_RESPONSE" | grep -q '"id"'; then
+        log_success "✅ Sun and Moon data source configured"
+    fi
+    
+    # Get data source UIDs and fix dashboard
+    sleep 5
+    DATASOURCES_LIST=$(curl -s http://localhost:3000/api/datasources -u "admin:admin" 2>/dev/null)
+    INFLUX_UID=$(echo "$DATASOURCES_LIST" | jq -r '.[] | select(.name=="Solaredge") | .uid' 2>/dev/null)
+    SUNMOON_UID=$(echo "$DATASOURCES_LIST" | jq -r '.[] | select(.name=="Sun and Moon") | .uid' 2>/dev/null)
+    
+    if [[ -n "$INFLUX_UID" && "$INFLUX_UID" != "null" ]]; then
+        log_info "🔧 Importing dashboard with correct UIDs..."
+        
+        # Create temporary dashboard with fixed UIDs
+        TEMP_DASHBOARD="/tmp/dashboard-solaredge-temp.json"
+        cp "grafana/dashboard-solaredge.json" "$TEMP_DASHBOARD"
+        
+        # Fix InfluxDB UID
+        jq --arg uid "$INFLUX_UID" '
+            walk(
+                if type == "object" and .type == "influxdb" then
+                    .uid = $uid
+                else
+                    .
+                end
+            )
+        ' "$TEMP_DASHBOARD" > "${TEMP_DASHBOARD}.tmp" && mv "${TEMP_DASHBOARD}.tmp" "$TEMP_DASHBOARD"
+        
+        # Fix Sun and Moon UID if available
+        if [[ -n "$SUNMOON_UID" && "$SUNMOON_UID" != "null" ]]; then
+            jq --arg uid "$SUNMOON_UID" '
+                walk(
+                    if type == "object" and .type == "fetzerch-sunandmoon-datasource" then
+                        .uid = $uid
+                    else
+                        .
+                    end
+                )
+            ' "$TEMP_DASHBOARD" > "${TEMP_DASHBOARD}.tmp" && mv "${TEMP_DASHBOARD}.tmp" "$TEMP_DASHBOARD"
+        fi
+        
+        # Import dashboard
+        IMPORT_PAYLOAD="/tmp/dashboard-import-payload.json"
+        jq -n --slurpfile dashboard "$TEMP_DASHBOARD" '{
+            dashboard: $dashboard[0],
+            overwrite: true,
+            message: "Imported by Docker setup"
+        }' > "$IMPORT_PAYLOAD" 2>/dev/null
+        
+        if [[ -f "$IMPORT_PAYLOAD" ]]; then
+            IMPORT_RESPONSE=$(curl -s -X POST http://localhost:3000/api/dashboards/db \
+                -u "admin:admin" \
+                -H "Content-Type: application/json" \
+                -d @"$IMPORT_PAYLOAD" 2>/dev/null)
+            
+            if echo "$IMPORT_RESPONSE" | grep -q '"status":"success"'; then
+                log_success "✅ Dashboard imported successfully"
+            fi
+            
+            rm -f "$IMPORT_PAYLOAD" "$TEMP_DASHBOARD"
+        fi
+    fi
+    
+    # Generate web endpoints
+    log_info "🔍 Generating web endpoints..."
+    docker exec solaredge-scanwriter python main.py --scan >/dev/null 2>&1 || true
+    
+    echo ""
+    log_success "🎉 Setup completed!"
+    echo ""
+    echo -e "${BLUE}📊 Services available:${NC}"
+    echo -e "   GUI SolarEdge: ${YELLOW}http://localhost:8092${NC}"
+    echo -e "   InfluxDB:      ${YELLOW}http://localhost:8086${NC}"
+    echo -e "   Grafana:       ${YELLOW}http://localhost:3000${NC}"
+    echo ""
+else
+    echo "❌ Failed to start services"
+    exit 1
+fi

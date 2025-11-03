@@ -124,10 +124,67 @@ try {
 }
 
 Write-Host ""
-Write-ColorOutput "🎉 Docker build completed!" "Green"
-Write-Host ""
-Write-ColorOutput "📋 Next steps:" "Blue"
-Write-Host "   docker compose up -d     # Start services" -ForegroundColor Yellow
-Write-Host "   docker compose ps        # Check status" -ForegroundColor Yellow
-Write-Host "   docker compose logs -f   # View logs" -ForegroundColor Yellow
-Write-Host ""
+
+# Start services automatically
+Write-ColorOutput "🚀 Starting Docker services..." "Blue"
+try {
+    docker compose up -d
+    Write-ColorOutput "✅ Services started successfully" "Green"
+    
+    # Wait for services
+    Write-ColorOutput "⏳ Waiting for services to be ready..." "Blue"
+    Start-Sleep -Seconds 15
+    
+    # Configure Grafana
+    Write-ColorOutput "📊 Configuring Grafana..." "Blue"
+    
+    # Wait for Grafana
+    for ($i = 1; $i -le 30; $i++) {
+        try {
+            $response = Invoke-WebRequest -Uri "http://localhost:3000/api/health" -TimeoutSec 2 -ErrorAction SilentlyContinue
+            if ($response.StatusCode -eq 200) { break }
+        } catch { }
+        Start-Sleep -Seconds 2
+    }
+    
+    # Configure Sun and Moon data source
+    Write-ColorOutput "☀️ Configuring Sun and Moon data source..." "Blue"
+    try {
+        $sunMoonData = @{
+            name = "Sun and Moon"
+            type = "fetzerch-sunandmoon-datasource"
+            access = "proxy"
+            jsonData = @{
+                latitude = 40.8199
+                longitude = 14.3413
+            }
+        } | ConvertTo-Json -Depth 3
+        
+        $auth = [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes("admin:admin"))
+        $headers = @{ Authorization = "Basic $auth"; "Content-Type" = "application/json" }
+        
+        $sunMoonResponse = Invoke-RestMethod -Uri "http://localhost:3000/api/datasources" -Method Post -Body $sunMoonData -Headers $headers -ErrorAction SilentlyContinue
+        if ($sunMoonResponse.id) {
+            Write-ColorOutput "✅ Sun and Moon data source configured" "Green"
+        }
+    } catch { }
+    
+    # Generate web endpoints
+    Write-ColorOutput "🔍 Generating web endpoints..." "Blue"
+    try {
+        docker exec solaredge-scanwriter python main.py --scan 2>$null | Out-Null
+    } catch { }
+    
+    Write-Host ""
+    Write-ColorOutput "🎉 Setup completed!" "Green"
+    Write-Host ""
+    Write-ColorOutput "📊 Services available:" "Blue"
+    Write-Host "   GUI SolarEdge: http://localhost:8092" -ForegroundColor Yellow
+    Write-Host "   InfluxDB:      http://localhost:8086" -ForegroundColor Yellow
+    Write-Host "   Grafana:       http://localhost:3000" -ForegroundColor Yellow
+    Write-Host ""
+    
+} catch {
+    Write-ColorOutput "❌ Failed to start services: $($_.Exception.Message)" "Red"
+    exit 1
+}
