@@ -340,67 +340,77 @@ for i in {1..60}; do
     sleep 2
 done
 
-# Attendi che i data source siano creati dal provisioning
-log_info "Attendo creazione data source InfluxDB..."
-for i in {1..30}; do
-    DATASOURCES_LIST=$(curl -s http://localhost:3000/api/datasources -u "admin:admin" 2>/dev/null)
-    INFLUX_UID=$(echo "$DATASOURCES_LIST" | jq -r '.[] | select(.name=="Solaredge") | .uid' 2>/dev/null)
-    
-    if [[ -n "$INFLUX_UID" && "$INFLUX_UID" != "null" ]]; then
-        log_success "✅ Data source InfluxDB creato con UID: $INFLUX_UID"
-        break
-    fi
-    
-    if [[ $i -eq 30 ]]; then
-        log_error "❌ Data source InfluxDB non creato dopo 60 secondi"
-        exit 1
-    fi
-    
-    sleep 2
-done
+# Importa dashboard Grafana usando la logica esatta di install.sh
+log_info "📊 Importazione dashboard Grafana (metodo install.sh)..."
 
-# Fix e importa dashboard con UID corretti
-log_info "🔧 Importazione dashboard con UID corretti..."
+# Attendi che Grafana sia completamente pronto
+sleep 15
 
-# Crea dashboard temporanea con UID corretti
-TEMP_DASHBOARD="/tmp/dashboard-solaredge-fixed.json"
-cp grafana/dashboard-solaredge.json "$TEMP_DASHBOARD"
+# Disabilita exit on error per questa sezione (come install.sh)
+set +e
 
-# Sostituisci UID nella dashboard usando jq
-jq --arg uid "$INFLUX_UID" '
-    walk(
-        if type == "object" and .type == "influxdb" then
-            .uid = $uid
+# Get data source UIDs (esatto come install.sh)
+DATASOURCES_LIST=$(curl -s http://localhost:3000/api/datasources -u "admin:admin" 2>/dev/null)
+INFLUX_UID=$(echo "$DATASOURCES_LIST" | jq -r '.[] | select(.name=="Solaredge") | .uid' 2>/dev/null)
+
+if [[ -n "$INFLUX_UID" && "$INFLUX_UID" != "null" ]]; then
+    log_success "✅ Found Solaredge data source UID: $INFLUX_UID"
+    
+    # Create temporary dashboard file with updated UIDs (esatto come install.sh)
+    TEMP_DASHBOARD="/tmp/dashboard-solaredge-temp.json"
+    cp "grafana/dashboard-solaredge.json" "$TEMP_DASHBOARD"
+    
+    # Replace data source UIDs using jq (esatto come install.sh)
+    jq --arg uid "$INFLUX_UID" '
+        walk(
+            if type == "object" and .type == "influxdb" then
+                .uid = $uid
+            else
+                .
+            end
+        )
+    ' "$TEMP_DASHBOARD" > "${TEMP_DASHBOARD}.tmp" && mv "${TEMP_DASHBOARD}.tmp" "$TEMP_DASHBOARD"
+    
+    # Import dashboard via API using file directly (esatto come install.sh)
+    # Create wrapper JSON for import
+    IMPORT_PAYLOAD="/tmp/dashboard-import-payload.json"
+    jq -n --slurpfile dashboard "$TEMP_DASHBOARD" '{
+        dashboard: $dashboard[0],
+        overwrite: true,
+        message: "Imported by Docker setup"
+    }' > "$IMPORT_PAYLOAD" 2>/dev/null || {
+        log_warning "⚠️  Failed to create import payload"
+        rm -f "$TEMP_DASHBOARD" "$IMPORT_PAYLOAD"
+    }
+    
+    if [[ -f "$IMPORT_PAYLOAD" ]]; then
+        IMPORT_RESPONSE=$(curl -s -X POST http://localhost:3000/api/dashboards/db \
+            -u "admin:admin" \
+            -H "Content-Type: application/json" \
+            -d @"$IMPORT_PAYLOAD" 2>/dev/null)
+        
+        rm -f "$IMPORT_PAYLOAD"
+        
+        if echo "$IMPORT_RESPONSE" | grep -q '"status":"success"'; then
+            DASHBOARD_URL=$(echo "$IMPORT_RESPONSE" | jq -r '.url' 2>/dev/null)
+            log_success "✅ Grafana dashboard imported successfully"
+            
+            if [[ -n "$DASHBOARD_URL" && "$DASHBOARD_URL" != "null" ]]; then
+                log_info "Dashboard URL: http://localhost:3000$DASHBOARD_URL"
+            fi
         else
-            .
-        end
-    )
-' "$TEMP_DASHBOARD" > "${TEMP_DASHBOARD}.tmp" && mv "${TEMP_DASHBOARD}.tmp" "$TEMP_DASHBOARD"
-
-# Importa dashboard con retry
-for attempt in {1..3}; do
-    log_info "Tentativo importazione dashboard ($attempt/3)..."
-    
-    DASHBOARD_RESPONSE=$(curl -s -X POST http://localhost:3000/api/dashboards/db \
-        -u "admin:admin" \
-        -H "Content-Type: application/json" \
-        --max-time 15 \
-        --data-binary "{\"dashboard\":$(cat "$TEMP_DASHBOARD"),\"overwrite\":true}" 2>/dev/null)
-    
-    if echo "$DASHBOARD_RESPONSE" | grep -q '"id"'; then
-        DASHBOARD_ID=$(echo "$DASHBOARD_RESPONSE" | jq -r '.id' 2>/dev/null)
-        log_success "✅ Dashboard importata con successo (ID: $DASHBOARD_ID)"
-        break
-    elif [[ $attempt -eq 3 ]]; then
-        log_warning "⚠️  Importazione dashboard fallita dopo 3 tentativi"
-        log_info "Dashboard sarà disponibile manualmente in Grafana"
-    else
-        log_warning "⚠️  Tentativo $attempt fallito, riprovo..."
-        sleep 5
+            log_warning "⚠️  Could not import Grafana dashboard automatically"
+            log_info "You can import it manually from grafana/dashboard-solaredge.json"
+        fi
     fi
-done
+    
+    rm -f "$TEMP_DASHBOARD"
+else
+    log_warning "⚠️  Could not retrieve data source UIDs. Dashboard import skipped."
+fi
 
-rm -f "$TEMP_DASHBOARD" 2>/dev/null || true
+# Re-enable exit on error (come install.sh)
+set -e
 
 log_success "✅ Configurazione Grafana completata"
 
