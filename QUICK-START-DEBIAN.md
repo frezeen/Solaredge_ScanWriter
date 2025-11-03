@@ -55,4 +55,20 @@ docker exec solaredge-collector python main.py --scan
 - ✅ Ricostruisce tutto da zero con le ultime modifiche
 - ✅ Supporta multi-architettura (AMD64, ARM64, ARMv7)
 
+## 🧹 Script di Pulizia Aggiuntivi
+
+### Pulizia Completa Macchina
+```bash
+# ⚠️ ATTENZIONE: Rimuove TUTTO Docker dalla macchina!
+chmod +x debian-clean-machine.sh
+./debian-clean-machine.sh
+```
+
+### Pulizia Solo Progetto SolarEdge
+```bash
+# Rimuove solo SolarEdge, mantiene Docker
+chmod +x debian-clean-project.sh
+./debian-clean-project.sh
+```
+
 Tutto è pronto per il test su Debian! 🎯
