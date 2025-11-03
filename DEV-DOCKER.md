@@ -1,5 +1,22 @@
 # 🛠️ SolarEdge Docker - Sviluppo su Debian
 
+## 🧹 Script di Pulizia
+
+### Pulizia Completa Macchina (ATTENZIONE!)
+```bash
+# Rimuove TUTTO: Docker, container, immagini, progetto
+# ⚠️ OPERAZIONE NON REVERSIBILE ⚠️
+chmod +x debian-clean-machine.sh
+./debian-clean-machine.sh
+```
+
+### Pulizia Solo Progetto SolarEdge
+```bash
+# Rimuove solo il progetto, mantiene Docker installato
+chmod +x debian-clean-project.sh
+./debian-clean-project.sh
+```
+
 ## 🚀 Setup Rapido
 
 ### 1. Primo Setup (Pulizia + Build + Deploy)
