@@ -114,6 +114,12 @@ if [[ $errors -eq 0 ]]; then
     echo -e "   ${BLUE}API Key:${NC} ${SOLAREDGE_API_KEY:0:10}..."
     echo -e "   ${BLUE}InfluxDB:${NC} $INFLUXDB_URL"
     echo -e "   ${BLUE}GUI:${NC} http://$GUI_HOST:$GUI_PORT"
+    echo -e "   ${BLUE}Grafana:${NC} http://localhost:3000"
+    if [[ "$MODBUS_ENABLED" == "true" ]]; then
+        echo -e "   ${BLUE}Modbus:${NC} $REALTIME_MODBUS_HOST:$REALTIME_MODBUS_PORT"
+    else
+        echo -e "   ${BLUE}Modbus:${NC} Disabilitato"
+    fi
     echo ""
     log_success "✅ Pronto per il deploy Docker!"
 else
@@ -127,5 +133,9 @@ else
     echo -e "   ${BLUE}SOLAREDGE_API_KEY${NC}=la_tua_api_key"
     echo -e "   ${BLUE}SOLAREDGE_USERNAME${NC}=la_tua_email"
     echo -e "   ${BLUE}SOLAREDGE_PASSWORD${NC}=la_tua_password"
+    echo ""
+    echo -e "   ${YELLOW}Opzionali (Modbus):${NC}"
+    echo -e "   ${BLUE}REALTIME_MODBUS_HOST${NC}=ip_del_tuo_inverter"
+    echo -e "   ${BLUE}REALTIME_MODBUS_PORT${NC}=1502"
     exit 1
 fi
