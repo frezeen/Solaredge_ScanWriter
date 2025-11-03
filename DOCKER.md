@@ -43,7 +43,6 @@ sudo usermod -aG docker $USER
 # Scarica il progetto
 git clone https://github.com/frezeen/Solaredge_ScanWriter.git
 cd Solaredge_ScanWriter
-git checkout dev
 ```
 
 ## ⚙️ Passo 3: Configurazione
@@ -126,7 +125,7 @@ Quando rilascio nuove funzionalità o correzioni:
 
 ```bash
 # Un solo comando per aggiornare tutto
-git pull origin dev
+git pull origin main
 ./docker-build.sh  # Linux/Mac/Pi
 # oppure
 .\docker-build.ps1  # Windows
