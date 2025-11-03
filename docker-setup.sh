@@ -186,9 +186,6 @@ start_services() {
     fi
     
     local compose_args="up -d"
-    if [[ "$1" == "--grafana" ]]; then
-        compose_args="$compose_args --profile grafana"
-    fi
     
     if $compose_cmd $compose_args; then
         log_success "Services started successfully"
@@ -237,9 +234,7 @@ show_service_info() {
     echo ""
     echo -e "${CYAN}📊 GUI Dashboard: http://localhost:8092${NC}"
     echo -e "${CYAN}🗄️ InfluxDB: http://localhost:8086${NC}"
-    if [[ "$1" == "--grafana" ]]; then
-        echo -e "${CYAN}📈 Grafana: http://localhost:3000${NC}"
-    fi
+    echo -e "${CYAN}📈 Grafana: http://localhost:3000${NC}"
     echo ""
     log_info "📋 Useful commands:"
     echo -e "${CYAN}   ./docker-setup.sh logs     # View logs${NC}"
