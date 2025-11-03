@@ -31,9 +31,28 @@ if [[ $EUID -ne 0 ]]; then
     exit 1
 fi
 
-# Check if running on Debian/Ubuntu
+# Detect platform and architecture
+ARCH=$(uname -m)
+OS_ID=$(grep '^ID=' /etc/os-release | cut -d'=' -f2 | tr -d '"')
+OS_VERSION=$(grep '^VERSION_ID=' /etc/os-release | cut -d'=' -f2 | tr -d '"')
+IS_RASPBERRY_PI=false
+
+# Check if running on Raspberry Pi
+if [[ -f /proc/device-tree/model ]] && grep -q "Raspberry Pi" /proc/device-tree/model; then
+    IS_RASPBERRY_PI=true
+    info "🍓 Raspberry Pi detected: $(cat /proc/device-tree/model)"
+elif [[ "$ARCH" == "armv7l" || "$ARCH" == "aarch64" ]] && [[ "$OS_ID" == "debian" ]]; then
+    IS_RASPBERRY_PI=true
+    info "🍓 ARM-based Debian detected (likely Raspberry Pi): $ARCH"
+fi
+
+# Check if running on supported OS
 if ! grep -qE "(Debian|Ubuntu)" /etc/os-release; then
     warn "This script is designed for Debian/Ubuntu. Proceeding anyway..."
+fi
+
+if [[ "$IS_RASPBERRY_PI" == "true" ]]; then
+    info "🔧 Applying Raspberry Pi optimizations..."
 fi
 
 log "🚀 Starting SolarEdge Data Collector installation..."
@@ -152,31 +171,91 @@ REQS
         
         # Install Python dependencies system-wide
         log "🐍 Installing Python dependencies..."
+        
+        # Raspberry Pi specific optimizations
+        if [[ "$IS_RASPBERRY_PI" == "true" ]]; then
+            log "🍓 Installing Raspberry Pi specific packages..."
+            # Install system packages that are better from apt on RPi
+            apt-get install -y -qq python3-yaml python3-requests python3-dateutil python3-tz >/dev/null 2>&1 || true
+            
+            # Use piwheels for faster ARM builds
+            export PIP_EXTRA_INDEX_URL="https://www.piwheels.org/simple"
+            log "🔧 Using piwheels for ARM-optimized packages"
+        fi
+        
+        # Try different installation methods
         if ! pip3 install -r "$APP_DIR/requirements.txt"; then
             warn "Failed to install Python dependencies with standard pip3"
-            log "Trying with --break-system-packages flag (Python 3.11+)..."
-            if ! pip3 install -r "$APP_DIR/requirements.txt" --break-system-packages; then
-                error "Failed to install Python dependencies"
-                echo "Please run manually: cd $APP_DIR && pip3 install -r requirements.txt"
-                echo "Or try: pip3 install -r requirements.txt --break-system-packages"
-                exit 1
+            
+            if [[ "$IS_RASPBERRY_PI" == "true" ]]; then
+                log "🍓 Trying Raspberry Pi specific installation..."
+                # Try with no-build-isolation for problematic packages
+                if ! pip3 install -r "$APP_DIR/requirements.txt" --no-build-isolation; then
+                    log "Trying with --break-system-packages flag..."
+                    pip3 install -r "$APP_DIR/requirements.txt" --break-system-packages --no-build-isolation
+                fi
+            else
+                log "Trying with --break-system-packages flag (Python 3.11+)..."
+                if ! pip3 install -r "$APP_DIR/requirements.txt" --break-system-packages; then
+                    error "Failed to install Python dependencies"
+                    echo "Please run manually: cd $APP_DIR && pip3 install -r requirements.txt"
+                    echo "Or try: pip3 install -r requirements.txt --break-system-packages"
+                    exit 1
+                fi
             fi
         fi
         
         # Install InfluxDB
         log "🗄️ Installing InfluxDB..."
-        rm -f /usr/share/keyrings/influxdata-archive-keyring.gpg
-        curl -s https://repos.influxdata.com/influxdata-archive_compat.key | gpg --dearmor -o /usr/share/keyrings/influxdata-archive-keyring.gpg 2>/dev/null
-        echo "deb [signed-by=/usr/share/keyrings/influxdata-archive-keyring.gpg] https://repos.influxdata.com/debian stable main" | tee /etc/apt/sources.list.d/influxdb.list >/dev/null
         
-        apt-get update -qq >/dev/null 2>&1
-        if ! apt-get install -y -qq influxdb2 >/dev/null 2>&1; then
-            warn "Failed to install InfluxDB from repository, trying direct download..."
-            INFLUX_VERSION="2.7.4"
-            ARCH=$(dpkg --print-architecture)
-            curl -LO "https://dl.influxdata.com/influxdb/releases/influxdb2_${INFLUX_VERSION}-1_${ARCH}.deb" >/dev/null 2>&1
-            dpkg -i "influxdb2_${INFLUX_VERSION}-1_${ARCH}.deb" >/dev/null 2>&1 || apt-get install -f -y -qq
-            rm -f "influxdb2_${INFLUX_VERSION}-1_${ARCH}.deb"
+        if [[ "$IS_RASPBERRY_PI" == "true" ]]; then
+            log "🍓 Installing InfluxDB for Raspberry Pi (ARM)..."
+            # For Raspberry Pi, try repository first, then fallback to direct download
+            rm -f /usr/share/keyrings/influxdata-archive-keyring.gpg
+            curl -s https://repos.influxdata.com/influxdata-archive_compat.key | gpg --dearmor -o /usr/share/keyrings/influxdata-archive-keyring.gpg 2>/dev/null
+            echo "deb [signed-by=/usr/share/keyrings/influxdata-archive-keyring.gpg] https://repos.influxdata.com/debian stable main" | tee /etc/apt/sources.list.d/influxdb.list >/dev/null
+            
+            apt-get update -qq >/dev/null 2>&1
+            if ! apt-get install -y -qq influxdb2 >/dev/null 2>&1; then
+                warn "InfluxDB repository failed on ARM, trying direct download..."
+                INFLUX_VERSION="2.7.4"
+                DEB_ARCH=$(dpkg --print-architecture)
+                
+                # Map architecture names for InfluxDB downloads
+                case "$DEB_ARCH" in
+                    "armhf") INFLUX_ARCH="armhf" ;;
+                    "arm64") INFLUX_ARCH="arm64" ;;
+                    "amd64") INFLUX_ARCH="amd64" ;;
+                    *) INFLUX_ARCH="$DEB_ARCH" ;;
+                esac
+                
+                INFLUX_URL="https://dl.influxdata.com/influxdb/releases/influxdb2_${INFLUX_VERSION}-1_${INFLUX_ARCH}.deb"
+                log "Downloading InfluxDB for $INFLUX_ARCH..."
+                
+                if curl -LO "$INFLUX_URL" >/dev/null 2>&1; then
+                    dpkg -i "influxdb2_${INFLUX_VERSION}-1_${INFLUX_ARCH}.deb" >/dev/null 2>&1 || apt-get install -f -y -qq
+                    rm -f "influxdb2_${INFLUX_VERSION}-1_${INFLUX_ARCH}.deb"
+                else
+                    error "Failed to download InfluxDB for ARM architecture"
+                    warn "You may need to install InfluxDB manually"
+                    warn "See: https://docs.influxdata.com/influxdb/v2.7/install/"
+                fi
+            fi
+        else
+            # Standard x86_64 installation
+            rm -f /usr/share/keyrings/influxdata-archive-keyring.gpg
+            curl -s https://repos.influxdata.com/influxdata-archive_compat.key | gpg --dearmor -o /usr/share/keyrings/influxdata-archive-keyring.gpg 2>/dev/null
+            echo "deb [signed-by=/usr/share/keyrings/influxdata-archive-keyring.gpg] https://repos.influxdata.com/debian stable main" | tee /etc/apt/sources.list.d/influxdb.list >/dev/null
+            
+            apt-get update -qq >/dev/null 2>&1
+            if ! apt-get install -y -qq influxdb2 >/dev/null 2>&1; then
+                warn "Failed to install InfluxDB from repository, trying direct download..."
+                INFLUX_VERSION="2.7.4"
+                ARCH=$(dpkg --print-architecture)
+                curl -LO "https://dl.influxdata.com/influxdb/releases/influxdb2_${INFLUX_VERSION}-1_${ARCH}.deb" >/dev/null 2>&1
+                dpkg -i "influxdb2_${INFLUX_VERSION}-1_${ARCH}.deb" >/dev/null 2>&1 || apt-get install -f -y -qq
+                rm -f "influxdb2_${INFLUX_VERSION}-1_${ARCH}.deb"
+            fi
         fi
         
         systemctl enable influxdb >/dev/null 2>&1
