@@ -201,7 +201,6 @@ try {
             if ($importResponse.status -eq "success") {
                 Write-ColorOutput "✅ Dashboard imported successfully" "Green"
             }
-        }
     } catch { }
     
     # Generate web endpoints only if not exists (preserve user customizations)
