@@ -125,6 +125,16 @@ main() {
     fi
     
     echo "✅ Initialization completed"
+    echo "🔍 Generating web endpoints configuration..."
+    
+    # Generate web endpoints if not exists or if forced
+    if [[ ! -f "/app/config/sources/web_endpoints.yaml" ]] || [[ "$FORCE_SCAN" == "true" ]]; then
+        echo "📡 Running scan to generate web endpoints..."
+        python main.py --scan || echo "⚠️ Scan failed, continuing with existing config"
+    else
+        echo "✅ Web endpoints configuration already exists"
+    fi
+    
     echo "🎯 Starting application: $*"
     echo "📊 GUI available at: http://localhost:8092"
     

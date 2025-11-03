@@ -295,7 +295,6 @@ echo ""
 # 4. AVVIO STACK
 log_info "🚀 Avvio stack Docker..."
 
-# Avvia solo i servizi base (senza Grafana per default)
 docker compose up -d
 
 if [[ $? -eq 0 ]]; then
@@ -305,6 +304,20 @@ else
     log_info "Mostrando log per debug..."
     docker compose logs --tail=20
     exit 1
+fi
+
+# 5. GENERAZIONE WEB ENDPOINTS
+log_info "🔍 Generazione file web endpoints..."
+
+# Attendi che il container sia pronto
+sleep 5
+
+# Esegui scan per generare web endpoints
+log_info "Esecuzione scan per web endpoints..."
+if docker exec solaredge-collector python main.py --scan; then
+    log_success "✅ Web endpoints generati con successo"
+else
+    log_warning "⚠️  Scan fallito, continuo comunque"
 fi
 
 echo ""
