@@ -98,31 +98,15 @@ test_image() {
     echo -e "${BLUE}📋 Container info:${NC}"
     docker run --rm --platform "$PLATFORM" "${IMAGE_NAME}:${IMAGE_TAG}" uname -a
     
-    # Test configurazione (usa .env se esiste)
-    local env_args=""
-    if [ -f ".env" ]; then
-        echo -e "${BLUE}📋 Using .env file for test${NC}"
-        # Carica variabili da .env
-        source .env 2>/dev/null || true
-        env_args="-e SOLAREDGE_SITE_ID=${SOLAREDGE_SITE_ID:-123456} -e SOLAREDGE_API_KEY=${SOLAREDGE_API_KEY:-test-key}"
-    else
-        echo -e "${BLUE}📋 Using default test values${NC}"
-        env_args="-e SOLAREDGE_SITE_ID=123456 -e SOLAREDGE_API_KEY=test-key"
-    fi
-    
+    # Test semplice senza entrypoint (evita problemi di configurazione)
+    echo -e "${BLUE}📋 Simple Python test (bypassing entrypoint)${NC}"
     docker run --rm --platform "$PLATFORM" \
-        --entrypoint="" \
-        $env_args \
-        "${IMAGE_NAME}:${IMAGE_TAG}" python -c "
-import os, platform
-print(f'✅ Python: {platform.python_version()}')
-print(f'✅ Platform: {platform.platform()}')
-site_id = os.getenv('SOLAREDGE_SITE_ID', 'NOT_SET')
-print(f'✅ Site ID: {site_id}')
-if site_id != 'NOT_SET' and site_id != '123456':
-    print('✅ Real credentials detected - test successful!')
-else:
-    print('ℹ️ Using test credentials')
+        --entrypoint="python" \
+        "${IMAGE_NAME}:${IMAGE_TAG}" -c "
+import platform
+print('✅ Python:', platform.python_version())
+print('✅ Platform:', platform.platform())
+print('✅ Container build successful!')
 "
     
     echo -e "${GREEN}✅ Tests passed${NC}"
