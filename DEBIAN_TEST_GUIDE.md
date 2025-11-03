@@ -35,12 +35,12 @@ cd /home/$USER
 git clone https://github.com/frezeen/Solaredge_ScanWriter.git
 cd Solaredge_ScanWriter
 
-# Crea e switch al branch dev
-git checkout -b dev
-git push -u origin dev
+# Switch al branch dev (ora disponibile)
+git checkout dev
 
-# Verifica branch attivo
+# Verifica branch attivo e contenuto
 git branch
+ls -la docker/
 ```
 
 ### Step 2: Configurazione Credenziali
