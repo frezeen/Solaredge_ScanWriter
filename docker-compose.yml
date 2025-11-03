@@ -4,15 +4,14 @@ version: '3.8'
 # Compatible with: Windows, Linux, macOS, Raspberry Pi
 
 services:
-  # SolarEdge Data Collector
+  # SolarEdge Data Collector (Auto-adaptive)
   solaredge:
     build: 
       context: .
       dockerfile: Dockerfile
-      platforms:
-        - linux/amd64
-        - linux/arm64
-        - linux/arm/v7
+      args:
+        - TARGETPLATFORM=${TARGETPLATFORM:-linux/amd64}
+        - BUILDPLATFORM=${BUILDPLATFORM:-linux/amd64}
     image: solaredge-collector:latest
     container_name: solaredge-collector
     restart: unless-stopped

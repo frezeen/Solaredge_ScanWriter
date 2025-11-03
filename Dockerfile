@@ -1,17 +1,17 @@
-# Multi-platform SolarEdge Data Collector
-# Supports: Windows, Linux (AMD64), Raspberry Pi (ARM64/ARMv7)
+# Auto-adaptive SolarEdge Data Collector
+# Automatically adapts to: AMD64, ARM64, ARMv7
 FROM python:3.11-slim
 
-# Build arguments for multi-architecture support
+# Build arguments for architecture detection
 ARG TARGETPLATFORM
 ARG BUILDPLATFORM
 ARG TARGETARCH
+ARG TARGETVARIANT
 
 # Metadata
 LABEL maintainer="SolarEdge Data Collector"
-LABEL description="Multi-platform SolarEdge data collection system"
-LABEL version="3.0"
-LABEL platforms="linux/amd64,linux/arm64,linux/arm/v7"
+LABEL description="Auto-adaptive SolarEdge data collection system"
+LABEL version="3.1-auto"
 
 # Environment variables
 ENV PYTHONUNBUFFERED=1 \
@@ -19,16 +19,30 @@ ENV PYTHONUNBUFFERED=1 \
     DEBIAN_FRONTEND=noninteractive \
     DOCKER_MODE=true \
     PYTHONPATH=/app \
-    PLATFORM=${TARGETPLATFORM:-linux/amd64}
+    PLATFORM=${TARGETPLATFORM:-linux/amd64} \
+    ARCH=${TARGETARCH:-amd64}
 
-# Install system dependencies based on architecture
-RUN apt-get update && apt-get install -y \
-    curl \
-    wget \
-    netcat-openbsd \
-    procps \
-    build-essential \
-    python3-dev \
+# Architecture-specific optimizations
+RUN echo "Building for platform: ${TARGETPLATFORM:-linux/amd64}" && \
+    echo "Target architecture: ${TARGETARCH:-amd64}" && \
+    apt-get update && \
+    # Base packages for all architectures
+    apt-get install -y \
+        curl \
+        wget \
+        netcat-openbsd \
+        procps \
+        python3-dev \
+    # Architecture-specific packages
+    && if [ "${TARGETARCH}" = "amd64" ]; then \
+        apt-get install -y build-essential; \
+    elif [ "${TARGETARCH}" = "arm64" ]; then \
+        apt-get install -y build-essential gcc-aarch64-linux-gnu; \
+    elif [ "${TARGETARCH}" = "arm" ]; then \
+        apt-get install -y build-essential gcc-arm-linux-gnueabihf; \
+    else \
+        apt-get install -y build-essential; \
+    fi \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 
