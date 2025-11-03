@@ -136,9 +136,6 @@ function Start-Services {
     }
     
     $composeArgs = @("up", "-d")
-    if ($Grafana) {
-        $composeArgs += @("--profile", "grafana")
-    }
     
     if ($composeCmd -eq "docker-compose") {
         & docker-compose @composeArgs
@@ -201,9 +198,7 @@ function Show-ServiceInfo {
     Write-ColorOutput "" "White"
     Write-ColorOutput "📊 GUI Dashboard: http://localhost:8092" "Cyan"
     Write-ColorOutput "🗄️ InfluxDB: http://localhost:8086" "Cyan"
-    if ($Grafana) {
-        Write-ColorOutput "📈 Grafana: http://localhost:3000" "Cyan"
-    }
+    Write-ColorOutput "📈 Grafana: http://localhost:3000" "Cyan"
     Write-ColorOutput "" "White"
     Write-ColorOutput "📋 Useful commands:" "Blue"
     Write-ColorOutput "   .\docker-setup.ps1 -Logs     # View logs" "White"

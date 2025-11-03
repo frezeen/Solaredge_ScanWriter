@@ -95,7 +95,7 @@ services:
     networks:
       - solaredge-net
 
-  # Grafana Dashboard (Optional)
+  # Grafana Dashboard
   grafana:
     image: grafana/grafana:latest
     container_name: solaredge-grafana
@@ -105,6 +105,7 @@ services:
       - GF_SECURITY_ADMIN_USER=${GRAFANA_USER:-admin}
       - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
       - GF_DEFAULT_TIMEZONE=${TZ:-Europe/Rome}
+      - GF_INSTALL_PLUGINS=fetzerch-sunandmoon-datasource,grafana-clock-panel
     
     volumes:
       - grafana-data:/var/lib/grafana
@@ -119,9 +120,6 @@ services:
     
     networks:
       - solaredge-net
-    
-    profiles:
-      - grafana
 
 # Persistent volumes
 volumes:
