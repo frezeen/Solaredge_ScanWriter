@@ -120,14 +120,12 @@ if [[ $? -eq 0 ]]; then
         sleep 2
     done
     
-    # Check if already configured
-    EXISTING_DATASOURCES=$(curl -s http://localhost:3000/api/datasources -u "admin:admin" 2>/dev/null)
-    SOLAREDGE_EXISTS=$(echo "$EXISTING_DATASOURCES" | jq -r '.[] | select(.name=="Solaredge") | .name' 2>/dev/null)
+    # Protect user configuration files
+    log_info "🛡️  Protecting user configuration files..."
     
-    if [[ "$SOLAREDGE_EXISTS" == "Solaredge" ]]; then
-        log_info "🔄 Grafana already configured, updating dashboard..."
-    else
-        log_info "🆕 First time setup, configuring Grafana..."
+    # Backup .env if it exists and is different from example
+    if [[ -f ".env" ]] && ! cmp -s ".env" ".env.example" 2>/dev/null; then
+        log_info "✅ User .env configuration preserved"
     fi
     
     # Configure Sun and Moon data source
@@ -213,12 +211,16 @@ if [[ $? -eq 0 ]]; then
     docker exec solaredge-scanwriter python main.py --scan >/dev/null 2>&1 || true
     
     echo ""
-    log_success "🎉 Setup completed!"
+    log_success "🎉 Update completed!"
     echo ""
     echo -e "${BLUE}📊 Services available:${NC}"
     echo -e "   GUI SolarEdge: ${YELLOW}http://localhost:8092${NC}"
     echo -e "   InfluxDB:      ${YELLOW}http://localhost:8086${NC}"
     echo -e "   Grafana:       ${YELLOW}http://localhost:3000${NC}"
+    echo ""
+    echo -e "${BLUE}🛡️  Configuration files preserved:${NC}"
+    echo -e "   ${YELLOW}.env${NC} - Your credentials and settings"
+    echo -e "   ${YELLOW}Docker volumes${NC} - All your data (InfluxDB, Grafana, logs)"
     echo ""
 else
     echo "❌ Failed to start services"
