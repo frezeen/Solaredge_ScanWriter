@@ -349,9 +349,31 @@ sleep 15
 # Disabilita exit on error per questa sezione (come install.sh)
 set +e
 
+# Configure Sun and Moon data source (esatto come install.sh)
+log_info "☀️ Configuring Sun and Moon data source..."
+SUNMOON_RESPONSE=$(curl -s -X POST http://localhost:3000/api/datasources \
+    -u "admin:admin" \
+    -H "Content-Type: application/json" \
+    -d "{
+        \"name\": \"Sun and Moon\",
+        \"type\": \"fetzerch-sunandmoon-datasource\",
+        \"access\": \"proxy\",
+        \"jsonData\": {
+            \"latitude\": 40.8199,
+            \"longitude\": 14.3413
+        }
+    }" 2>/dev/null)
+
+if echo "$SUNMOON_RESPONSE" | grep -q '"id"'; then
+    log_success "✅ Grafana Sun and Moon data source configured successfully"
+else
+    log_warning "⚠️  Could not configure Sun and Moon data source automatically"
+fi
+
 # Get data source UIDs (esatto come install.sh)
 DATASOURCES_LIST=$(curl -s http://localhost:3000/api/datasources -u "admin:admin" 2>/dev/null)
 INFLUX_UID=$(echo "$DATASOURCES_LIST" | jq -r '.[] | select(.name=="Solaredge") | .uid' 2>/dev/null)
+SUNMOON_UID=$(echo "$DATASOURCES_LIST" | jq -r '.[] | select(.name=="Sun and Moon") | .uid' 2>/dev/null)
 
 if [[ -n "$INFLUX_UID" && "$INFLUX_UID" != "null" ]]; then
     log_success "✅ Found Solaredge data source UID: $INFLUX_UID"
@@ -370,6 +392,21 @@ if [[ -n "$INFLUX_UID" && "$INFLUX_UID" != "null" ]]; then
             end
         )
     ' "$TEMP_DASHBOARD" > "${TEMP_DASHBOARD}.tmp" && mv "${TEMP_DASHBOARD}.tmp" "$TEMP_DASHBOARD"
+    
+    if [[ -n "$SUNMOON_UID" && "$SUNMOON_UID" != "null" ]]; then
+        log_success "✅ Found Sun and Moon data source UID: $SUNMOON_UID"
+        jq --arg uid "$SUNMOON_UID" '
+            walk(
+                if type == "object" and .type == "fetzerch-sunandmoon-datasource" then
+                    .uid = $uid
+                else
+                    .
+                end
+            )
+        ' "$TEMP_DASHBOARD" > "${TEMP_DASHBOARD}.tmp" && mv "${TEMP_DASHBOARD}.tmp" "$TEMP_DASHBOARD"
+    else
+        log_warning "⚠️  Sun and Moon UID not found, some panels may not work"
+    fi
     
     # Import dashboard via API using file directly (esatto come install.sh)
     # Create wrapper JSON for import
