@@ -1,48 +1,48 @@
 version: '3.8'
 
-# SolarEdge ScanWriter - Universal Docker Stack
-# Compatibile con: Windows, Linux, macOS, Raspberry Pi
+# SolarEdge Multi-Platform Docker Stack
+# Compatible with: Windows, Linux, macOS, Raspberry Pi
 
 services:
-  # SolarEdge Data Collector (Universal)
-  solaredge-scanwriter:
+  # SolarEdge Data Collector
+  solaredge:
     build: 
       context: .
       dockerfile: Dockerfile
-    image: solaredge-scanwriter:latest
-    container_name: solaredge-scanwriter
+      platforms:
+        - linux/amd64
+        - linux/arm64
+        - linux/arm/v7
+    image: solaredge-collector:latest
+    container_name: solaredge-collector
     restart: unless-stopped
     
-    # Environment configuration
-    env_file:
-      - .env
     environment:
       - DOCKER_MODE=true
       - INFLUXDB_URL=http://influxdb:8086
       - GRAFANA_URL=http://grafana:3000
     
-    # Persistent data volumes (Docker internal volumes)
+    env_file:
+      - .env
+    
     volumes:
       - solaredge-logs:/app/logs
       - solaredge-cache:/app/cache
       - solaredge-cookies:/app/cookies
       - solaredge-config:/app/config
       - solaredge-data:/app/data
-      - /etc/localtime:/etc/localtime:ro  # Timezone sync
+      - /etc/localtime:/etc/localtime:ro
     
-    # Network ports
     ports:
-      - "8092:8092"  # Web GUI
+      - "8092:8092"
     
-    # Health monitoring
     healthcheck:
-      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8092/health', timeout=5)"]
+      test: ["CMD", "curl", "-f", "http://localhost:8092/health"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 60s
     
-    # Resource limits (adjustable per platform)
     deploy:
       resources:
         limits:
@@ -52,24 +52,20 @@ services:
           memory: 256M
           cpus: '0.5'
     
-    # Logging
     logging:
       driver: "json-file"
       options:
         max-size: "10m"
-        max-file: "5"
+        max-file: "3"
     
-    # Service dependencies
     depends_on:
       influxdb:
         condition: service_healthy
-      grafana:
-        condition: service_started
     
     networks:
-      - solaredge-network
+      - solaredge-net
 
-  # InfluxDB 2.x Time-Series Database
+  # InfluxDB Time-Series Database
   influxdb:
     image: influxdb:2.7
     container_name: solaredge-influxdb
@@ -80,8 +76,8 @@ services:
       - DOCKER_INFLUXDB_INIT_USERNAME=${INFLUXDB_USERNAME:-admin}
       - DOCKER_INFLUXDB_INIT_PASSWORD=${INFLUXDB_PASSWORD:-solaredge123}
       - DOCKER_INFLUXDB_INIT_ORG=${INFLUXDB_ORG:-fotovoltaico}
-      - DOCKER_INFLUXDB_INIT_BUCKET=${INFLUXDB_BUCKET:-solaredge}
-      - DOCKER_INFLUXDB_INIT_ADMIN_TOKEN=${INFLUXDB_TOKEN:-solaredge-super-secret-token-2024}
+      - DOCKER_INFLUXDB_INIT_BUCKET=${INFLUXDB_BUCKET:-Solaredge}
+      - DOCKER_INFLUXDB_INIT_ADMIN_TOKEN=${INFLUXDB_TOKEN:-solaredge-token-2024}
     
     volumes:
       - influxdb-data:/var/lib/influxdb2
@@ -98,24 +94,21 @@ services:
       start_period: 60s
     
     networks:
-      - solaredge-network
+      - solaredge-net
 
-  # Grafana Dashboard
+  # Grafana Dashboard (Optional)
   grafana:
-    image: grafana/grafana:10.2.0
+    image: grafana/grafana:latest
     container_name: solaredge-grafana
     restart: unless-stopped
     
     environment:
       - GF_SECURITY_ADMIN_USER=${GRAFANA_USER:-admin}
       - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
-      - GF_INSTALL_PLUGINS=fetzerch-sunandmoon-datasource,grafana-clock-panel
       - GF_DEFAULT_TIMEZONE=${TZ:-Europe/Rome}
     
     volumes:
       - grafana-data:/var/lib/grafana
-      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
-      - ./grafana/provisioning:/etc/grafana/provisioning:ro
       - /etc/localtime:/etc/localtime:ro
     
     ports:
@@ -126,7 +119,10 @@ services:
         condition: service_healthy
     
     networks:
-      - solaredge-network
+      - solaredge-net
+    
+    profiles:
+      - grafana
 
 # Persistent volumes
 volumes:
@@ -149,8 +145,5 @@ volumes:
 
 # Network configuration
 networks:
-  solaredge-network:
+  solaredge-net:
     driver: bridge
-    ipam:
-      config:
-        - subnet: 172.20.0.0/16

@@ -1,14 +1,12 @@
 #!/bin/bash
 set -e
 
-# SolarEdge ScanWriter Docker Entrypoint
-# Gestisce l'inizializzazione cross-platform del container
-
-echo "🐳 Avvio SolarEdge ScanWriter Docker Container"
+# SolarEdge Multi-Platform Docker Entrypoint
+echo "🐳 Starting SolarEdge Data Collector"
 echo "📋 Platform: $(uname -m) - $(uname -s)"
 echo "🐍 Python: $(python --version)"
 
-# Funzione per attendere servizi dipendenti
+# Wait for dependent services
 wait_for_service() {
     local host=$1
     local port=$2
@@ -16,74 +14,74 @@ wait_for_service() {
     local max_attempts=30
     local attempt=1
     
-    echo "⏳ Attendendo $service_name su $host:$port..."
+    echo "⏳ Waiting for $service_name on $host:$port..."
     
     while ! nc -z "$host" "$port" 2>/dev/null; do
         if [ $attempt -eq $max_attempts ]; then
-            echo "❌ Timeout: $service_name non disponibile dopo $max_attempts tentativi"
+            echo "❌ Timeout: $service_name not available after $max_attempts attempts"
             exit 1
         fi
         
-        echo "   Tentativo $attempt/$max_attempts..."
+        echo "   Attempt $attempt/$max_attempts..."
         sleep 2
         ((attempt++))
     done
     
-    echo "✅ $service_name disponibile!"
+    echo "✅ $service_name is available!"
 }
 
-# Verifica configurazione essenziale
+# Check essential configuration
 check_configuration() {
-    echo "🔍 Verifica configurazione..."
+    echo "🔍 Checking configuration..."
     
-    # Verifica variabili d'ambiente essenziali
+    # Check required environment variables
     required_vars=("SOLAREDGE_SITE_ID" "SOLAREDGE_API_KEY")
     for var in "${required_vars[@]}"; do
         if [ -z "${!var}" ]; then
-            echo "❌ Variabile d'ambiente mancante: $var"
-            echo "💡 Configura il file .env con le credenziali SolarEdge"
+            echo "❌ Missing environment variable: $var"
+            echo "💡 Configure .env file with SolarEdge credentials"
             exit 1
         fi
     done
     
-    # Verifica file di configurazione
+    # Check configuration file
     if [ ! -f "/app/config/main.yaml" ]; then
-        echo "❌ File di configurazione mancante: config/main.yaml"
+        echo "❌ Missing configuration file: config/main.yaml"
         exit 1
     fi
     
-    echo "✅ Configurazione verificata"
+    echo "✅ Configuration verified"
 }
 
-# Inizializzazione database (se in modalità Docker)
+# Initialize database connection
 init_database() {
     if [ "$DOCKER_MODE" = "true" ] && [ -n "$INFLUXDB_URL" ]; then
-        echo "🗄️ Inizializzazione database InfluxDB..."
+        echo "🗄️ Initializing InfluxDB connection..."
         
-        # Attendi InfluxDB
+        # Wait for InfluxDB
         influx_host=$(echo "$INFLUXDB_URL" | sed 's|http://||' | cut -d':' -f1)
         influx_port=$(echo "$INFLUXDB_URL" | sed 's|http://||' | cut -d':' -f2 | cut -d'/' -f1)
         
         wait_for_service "$influx_host" "$influx_port" "InfluxDB"
         
-        # Verifica connessione InfluxDB
+        # Test InfluxDB connection
         python -c "
 from storage.writer_influx import InfluxWriter
 try:
     with InfluxWriter() as writer:
-        print('✅ Connessione InfluxDB verificata')
+        print('✅ InfluxDB connection verified')
 except Exception as e:
-    print(f'❌ Errore connessione InfluxDB: {e}')
+    print(f'❌ InfluxDB connection error: {e}')
     exit(1)
-"
+" || exit 1
     fi
 }
 
-# Gestione permessi e directory
+# Setup permissions and directories
 setup_permissions() {
-    echo "🔐 Configurazione permessi..."
+    echo "🔐 Setting up permissions..."
     
-    # Assicurati che le directory esistano e abbiano i permessi corretti
+    # Ensure directories exist with correct permissions
     directories=("/app/logs" "/app/cache" "/app/cookies" "/app/config/sources" "/app/data")
     
     for dir in "${directories[@]}"; do
@@ -93,50 +91,50 @@ setup_permissions() {
         chmod 755 "$dir"
     done
     
-    echo "✅ Permessi configurati"
+    echo "✅ Permissions configured"
 }
 
-# Gestione segnali per shutdown graceful
+# Graceful shutdown handler
 cleanup() {
-    echo "🛑 Ricevuto segnale di terminazione..."
+    echo "🛑 Received termination signal..."
     
-    # Termina processi Python gracefully
+    # Terminate Python processes gracefully
     if [ -n "$MAIN_PID" ]; then
         kill -TERM "$MAIN_PID" 2>/dev/null || true
         wait "$MAIN_PID" 2>/dev/null || true
     fi
     
-    echo "✅ Shutdown completato"
+    echo "✅ Shutdown completed"
     exit 0
 }
 
-# Registra handler per segnali
+# Register signal handlers
 trap cleanup SIGTERM SIGINT
 
-# Esecuzione principale
+# Main execution
 main() {
-    echo "🚀 Inizializzazione container..."
+    echo "🚀 Initializing container..."
     
-    # Setup base
+    # Base setup
     setup_permissions
     check_configuration
     
-    # Inizializzazione servizi dipendenti
+    # Initialize dependent services
     if [ "$DOCKER_MODE" = "true" ]; then
         init_database
     fi
     
-    echo "✅ Inizializzazione completata"
-    echo "🎯 Avvio applicazione: $*"
-    echo "📊 GUI disponibile su: http://localhost:8092"
+    echo "✅ Initialization completed"
+    echo "🎯 Starting application: $*"
+    echo "📊 GUI available at: http://localhost:8092"
     
-    # Avvia l'applicazione principale
+    # Start main application
     exec "$@" &
     MAIN_PID=$!
     
-    # Attendi il processo principale
+    # Wait for main process
     wait "$MAIN_PID"
 }
 
-# Esegui funzione principale con tutti gli argomenti
+# Execute main function with all arguments
 main "$@"
