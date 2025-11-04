@@ -64,16 +64,41 @@ init_database() {
         
         wait_for_service "$influx_host" "$influx_port" "InfluxDB"
         
-        # Test InfluxDB connection
-        python -c "
+        # Wait additional time for InfluxDB initialization
+        echo "⏳ Waiting for InfluxDB initialization..."
+        sleep 10
+        
+        # Test InfluxDB connection with retries
+        max_retries=5
+        retry=1
+        
+        while [ $retry -le $max_retries ]; do
+            echo "🔄 Testing InfluxDB connection (attempt $retry/$max_retries)..."
+            
+            if python -c "
 from storage.writer_influx import InfluxWriter
 try:
     with InfluxWriter() as writer:
         print('✅ InfluxDB connection verified')
+        exit(0)
 except Exception as e:
     print(f'❌ InfluxDB connection error: {e}')
     exit(1)
-" || exit 1
+" 2>/dev/null; then
+                echo "✅ InfluxDB connection successful!"
+                break
+            else
+                if [ $retry -eq $max_retries ]; then
+                    echo "❌ InfluxDB connection failed after $max_retries attempts"
+                    echo "⚠️ Starting application anyway - connection will be retried at runtime"
+                    break
+                else
+                    echo "⏳ Retrying in 5 seconds..."
+                    sleep 5
+                    ((retry++))
+                fi
+            fi
+        done
     fi
 }
 
@@ -86,9 +111,10 @@ setup_permissions() {
     
     for dir in "${directories[@]}"; do
         if [ ! -d "$dir" ]; then
-            mkdir -p "$dir"
+            mkdir -p "$dir" 2>/dev/null || echo "⚠️ Cannot create $dir (bind mount?)"
         fi
-        chmod 755 "$dir"
+        # Try to set permissions, but don't fail if it's a bind mount
+        chmod 755 "$dir" 2>/dev/null || echo "⚠️ Cannot set permissions on $dir (bind mount?)"
     done
     
     echo "✅ Permissions configured"

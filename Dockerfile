@@ -41,6 +41,7 @@ COPY . .
 
 # Create necessary directories and set permissions
 RUN mkdir -p logs cache cookies config/sources data backups && \
+    sed -i 's/\r$//' docker/entrypoint.sh && \
     chmod +x docker/entrypoint.sh && \
     chown -R solaredge:solaredge /app
 
