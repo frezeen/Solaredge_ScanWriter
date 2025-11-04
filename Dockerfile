@@ -41,8 +41,8 @@ COPY . .
 
 # Create necessary directories and set permissions
 RUN mkdir -p logs cache cookies config/sources data backups && \
-    chown -R solaredge:solaredge /app && \
-    chmod +x docker/entrypoint.sh
+    chmod +x docker/entrypoint.sh && \
+    chown -R solaredge:solaredge /app
 
 # Switch to non-root user
 USER solaredge
