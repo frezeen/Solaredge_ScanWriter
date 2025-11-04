@@ -153,7 +153,7 @@ Raccogli, analizza e visualizza i dati del tuo impianto fotovoltaico con dashboa
 ### Sistema
 
 - **OS**: Linux (Debian/Ubuntu consigliato) o Windows
-- **Python**: 3.11+
+- **Python**: 3.11+ ⚠️ **IMPORTANTE**: Versioni precedenti (3.9, 3.10) non sono supportate
 - **RAM**: 2GB minimo, 4GB consigliato
 - **Disco**: 16GB per dati storici
 - **InfluxDB**: 2.x

@@ -109,10 +109,56 @@ fi
 PYTHON_VERSION=$(python3 --version 2>&1 | cut -d' ' -f2 | cut -d'.' -f1,2)
 log "Python version detected: $PYTHON_VERSION"
 
-if ! python3 -c "import sys; sys.exit(0 if sys.version_info >= (3, 8) else 1)" 2>/dev/null; then
-    error "Python 3.8+ required, found $PYTHON_VERSION"
-    exit 1
+# Check if Python 3.11+ is available
+if ! python3 -c "import sys; sys.exit(0 if sys.version_info >= (3, 11) else 1)" 2>/dev/null; then
+    warn "Python $PYTHON_VERSION found, but Python 3.11+ is required"
+    
+    # Try to install Python 3.11 from deadsnakes PPA (Ubuntu/Debian)
+    log "Attempting to install Python 3.11..."
+    
+    if command -v add-apt-repository &> /dev/null || apt-get install -y -qq software-properties-common >/dev/null 2>&1; then
+        log "Adding deadsnakes PPA for Python 3.11..."
+        add-apt-repository -y ppa:deadsnakes/ppa >/dev/null 2>&1 || true
+        apt-get update -qq >/dev/null 2>&1
+        
+        if apt-get install -y -qq python3.11 python3.11-dev python3.11-venv >/dev/null 2>&1; then
+            log "✅ Python 3.11 installed successfully"
+            # Update alternatives to use Python 3.11 as default python3
+            update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.11 1 >/dev/null 2>&1
+            update-alternatives --set python3 /usr/bin/python3.11 >/dev/null 2>&1
+            
+            # Reinstall pip for Python 3.11
+            curl -sS https://bootstrap.pypa.io/get-pip.py | python3.11 >/dev/null 2>&1
+            
+            PYTHON_VERSION=$(python3 --version 2>&1 | cut -d' ' -f2 | cut -d'.' -f1,2)
+            log "Python updated to version: $PYTHON_VERSION"
+        else
+            error "Failed to install Python 3.11 from deadsnakes PPA"
+            error "Your system has Python $PYTHON_VERSION, but this project requires Python 3.11+"
+            error ""
+            error "Please use Docker installation instead:"
+            error "  curl -sSL https://get.docker.com | sh"
+            error "  git clone https://github.com/frezeen/Solaredge_ScanWriter.git"
+            error "  cd Solaredge_ScanWriter"
+            error "  docker compose up -d"
+            exit 1
+        fi
+    else
+        error "Cannot install Python 3.11 automatically on this system"
+        error "Your system has Python $PYTHON_VERSION, but this project requires Python 3.11+"
+        error ""
+        error "Please use Docker installation instead:"
+        error "  curl -sSL https://get.docker.com | sh"
+        error "  git clone https://github.com/frezeen/Solaredge_ScanWriter.git"
+        error "  cd Solaredge_ScanWriter"
+        error "  docker compose up -d"
+        exit 1
+    fi
 fi
+
+# Final verification
+PYTHON_VERSION=$(python3 --version 2>&1 | cut -d' ' -f2 | cut -d'.' -f1,2)
+log "✅ Python $PYTHON_VERSION is ready"
 
 log "Installing build tools..."
 apt-get install -y -qq build-essential >/dev/null 2>&1
