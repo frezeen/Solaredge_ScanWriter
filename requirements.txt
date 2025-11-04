@@ -1,5 +1,5 @@
 # SolarEdge Data Collector - Python Dependencies
-# Core dependencies for Python 3.10+
+# Core dependencies for Python 3.11+
 
 # HTTP Client (async)
 aiohttp>=3.8.0

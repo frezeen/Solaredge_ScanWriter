@@ -3,7 +3,7 @@
 
 import sys, argparse, os, asyncio, webbrowser, re, platform
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 import yaml
 from datetime import datetime, timedelta
 import time
@@ -385,7 +385,7 @@ def run_web_flow(log, cache, start_date=None, end_date=None) -> int:
     return 0
 
 
-def run_api_flow(log, cache, config, start_date=None, end_date=None) -> int:
+def run_api_flow(log, cache, config, start_date: Optional[str] = None, end_date: Optional[str] = None) -> int:
     """Pipeline API semplificata
     
     Args:
