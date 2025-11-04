@@ -180,11 +180,163 @@ try {
 
 Write-Host ""
 
-# Start services automatically
-Write-ColorOutput "Starting Docker services..." "Blue"
+# Check if services are already running
+Write-ColorOutput "Checking service status..." "Blue"
+$servicesRunning = $false
+try {
+    $runningServices = docker compose ps --format json 2>$null | ConvertFrom-Json
+    if ($runningServices -and ($runningServices | Where-Object { $_.State -eq "running" })) {
+        $servicesRunning = $true
+        Write-ColorOutput "Services already running, updating..." "Blue"
+    } else {
+        Write-ColorOutput "Starting Docker services..." "Blue"
+    }
+} catch {
+    Write-ColorOutput "Starting Docker services..." "Blue"
+}
+
 try {
     docker compose up -d
-    Write-ColorOutput "Services started successfully" "Green"
+    if ($servicesRunning) {
+        Write-ColorOutput "Services updated successfully" "Green"
+    } else {
+        Write-ColorOutput "Services started successfully" "Green"
+    }
+    
+    # Wait for services to be ready
+    Write-ColorOutput "Waiting for services to be ready..." "Blue"
+    Start-Sleep -Seconds 15
+    
+    # Configure Grafana automatically
+    Write-ColorOutput "Configuring Grafana..." "Blue"
+    
+    # Wait for Grafana to be ready
+    $grafanaReady = $false
+    for ($i = 1; $i -le 30; $i++) {
+        try {
+            $response = Invoke-WebRequest -Uri "http://localhost:3000/api/health" -TimeoutSec 2 -ErrorAction SilentlyContinue
+            if ($response.StatusCode -eq 200) {
+                $grafanaReady = $true
+                break
+            }
+        } catch {
+            # Continue waiting
+        }
+        Start-Sleep -Seconds 2
+    }
+    
+    if ($grafanaReady) {
+        # Configure Sun and Moon data source
+        Write-ColorOutput "Configuring Sun and Moon data source..." "Blue"
+        try {
+            $sunMoonData = @{
+                name = "Sun and Moon"
+                type = "fetzerch-sunandmoon-datasource"
+                access = "proxy"
+                jsonData = @{
+                    latitude = 40.8199
+                    longitude = 14.3413
+                }
+            } | ConvertTo-Json -Depth 3
+            
+            $credentials = [System.Convert]::ToBase64String([System.Text.Encoding]::ASCII.GetBytes("admin:admin"))
+            $headers = @{
+                "Authorization" = "Basic $credentials"
+                "Content-Type" = "application/json"
+            }
+            
+            $sunMoonResponse = Invoke-RestMethod -Uri "http://localhost:3000/api/datasources" -Method Post -Body $sunMoonData -Headers $headers -ErrorAction SilentlyContinue
+            if ($sunMoonResponse.id) {
+                Write-ColorOutput "Sun and Moon data source configured" "Green"
+            }
+        } catch {
+            Write-ColorOutput "Warning: Could not configure Sun and Moon data source" "Yellow"
+        }
+        
+        # Get data source UIDs and fix dashboard
+        Start-Sleep -Seconds 5
+        
+        $dataSourcesList = Invoke-RestMethod -Uri "http://localhost:3000/api/datasources" -Headers $headers -ErrorAction Continue
+        $influxUID = ($dataSourcesList | Where-Object { $_.name -eq "Solaredge" }).uid
+        $sunMoonUID = ($dataSourcesList | Where-Object { $_.name -eq "Sun and Moon" }).uid
+        
+        if ($influxUID) {
+                Write-ColorOutput "Importing dashboard with correct UIDs..." "Blue"
+                
+                # Replicate EXACTLY what Linux script does using jq in container
+                if (Test-Path "grafana/dashboard-solaredge.json") {
+                    try {
+                        # Create bash script and execute (exactly like Linux script)
+                        $bashScript = @"
+#!/bin/bash
+INFLUX_UID='$influxUID'
+SUNMOON_UID='$sunMoonUID'
+
+# Copy dashboard (exactly like Linux script)
+TEMP_DASHBOARD='/tmp/dashboard-solaredge-temp.json'
+cp /app/grafana/dashboard-solaredge.json `$TEMP_DASHBOARD
+
+# Fix InfluxDB UID using jq (exactly like Linux script)
+jq --arg uid "`$INFLUX_UID" 'walk(if type == "object" and .type == "influxdb" then .uid = `$uid else . end)' `$TEMP_DASHBOARD > `${TEMP_DASHBOARD}.tmp && mv `${TEMP_DASHBOARD}.tmp `$TEMP_DASHBOARD
+
+# Fix Sun and Moon UID if available (exactly like Linux script)
+if [[ -n "`$SUNMOON_UID" && "`$SUNMOON_UID" != "null" ]]; then
+    jq --arg uid "`$SUNMOON_UID" 'walk(if type == "object" and .type == "fetzerch-sunandmoon-datasource" then .uid = `$uid else . end)' `$TEMP_DASHBOARD > `${TEMP_DASHBOARD}.tmp && mv `${TEMP_DASHBOARD}.tmp `$TEMP_DASHBOARD
+fi
+
+# Create import payload (exactly like Linux script)
+IMPORT_PAYLOAD='/tmp/dashboard-import-payload.json'
+jq -n --slurpfile dashboard `$TEMP_DASHBOARD '{dashboard: `$dashboard[0], overwrite: true, message: "Imported by Docker setup"}' > `$IMPORT_PAYLOAD
+
+# Import dashboard using curl (exactly like Linux script)
+if [[ -f `$IMPORT_PAYLOAD ]]; then
+    IMPORT_RESPONSE=`$(curl -s -X POST http://grafana:3000/api/dashboards/db -u admin:admin -H 'Content-Type: application/json' -d @`$IMPORT_PAYLOAD)
+    
+    if echo "`$IMPORT_RESPONSE" | grep -q '"status":"success"'; then
+        echo 'SUCCESS'
+    else
+        echo 'FAILED'
+    fi
+    
+    rm -f `$IMPORT_PAYLOAD `$TEMP_DASHBOARD
+else
+    echo 'FAILED'
+fi
+"@
+                        
+                        # Write script with Unix line endings and execute
+                        $importResult = $bashScript | docker exec -i solaredge-scanwriter bash -c "cat | sed 's/\r$//' | bash"
+                        
+                        # Cleanup
+                        docker exec solaredge-scanwriter rm -f /tmp/import-dashboard.sh 2>$null
+                        
+                        if ($importResult -match "SUCCESS") {
+                            Write-ColorOutput "Dashboard imported successfully" "Green"
+                        } else {
+                            Write-ColorOutput "Dashboard import failed. Result: $importResult" "Red"
+                        }
+                        
+                    } catch {
+                        Write-ColorOutput "Warning: Could not import dashboard - $($_.Exception.Message)" "Yellow"
+                    }
+                }
+            } else {
+                Write-ColorOutput "DEBUG: No InfluxDB UID found, skipping dashboard import" "Yellow"
+            }
+    }
+    
+    # Generate web endpoints only if not exists (preserve user customizations)
+    if (-not (Test-Path "config/sources/web_endpoints.yaml")) {
+        Write-ColorOutput "Generating web endpoints (first time)..." "Blue"
+        try {
+            docker exec solaredge-scanwriter python main.py --scan 2>$null | Out-Null
+            Write-ColorOutput "Web endpoints generated" "Green"
+        } catch {
+            Write-ColorOutput "Warning: Could not generate web endpoints" "Yellow"
+        }
+    } else {
+        Write-ColorOutput "Web endpoints already exist (preserved)" "Green"
+    }
     
     Write-Host ""
     Write-ColorOutput "Update completed!" "Green"
@@ -197,7 +349,7 @@ try {
     Write-ColorOutput "Configuration files preserved:" "Blue"
     Write-Host "   .env - Your credentials and settings" -ForegroundColor Yellow
     Write-Host "   config/sources/*.yaml - Your custom endpoints" -ForegroundColor Yellow
-    Write-Host "   Docker volumes - All your data" -ForegroundColor Yellow
+    Write-Host "   Docker volumes - All your data (InfluxDB, Grafana, logs)" -ForegroundColor Yellow
     Write-Host ""
     
 } catch {
