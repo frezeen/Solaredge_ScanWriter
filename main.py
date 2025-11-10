@@ -254,8 +254,8 @@ def run_gui_mode(log, cache, config=None) -> int:
         
         try:
             # Loop infinito con gestione interruzioni
-            # Usa un intervallo più lungo per ridurre CPU usage quando idle
-            gui_check_interval = 60  # 60 secondi invece di 5
+            # Usa un intervallo configurabile per bilanciare CPU e responsività
+            gui_check_interval = 5  # 5 secondi per shutdown più reattivo
             while True:
                 await asyncio.sleep(gui_check_interval)
         except KeyboardInterrupt:
