@@ -916,20 +916,45 @@ class SimpleWebGUI:
                                 updated_measurements[metric_name] = {'enabled': new_state}
                                 metrics_updated += 1
                     
+                    # Auto-aggiorna modbus.enabled basandosi sugli endpoint
+                    # Se TUTTI gli endpoint sono disabilitati → modbus.enabled = false
+                    # Se ALMENO UN endpoint è abilitato → modbus.enabled = true
+                    any_endpoint_enabled = any(
+                        ep.get('enabled', False) 
+                        for ep in devices.values() 
+                        if isinstance(ep, dict)
+                    )
+                    
+                    modbus_auto_updated = False
+                    old_modbus_enabled = config['modbus'].get('enabled', False)
+                    
+                    if old_modbus_enabled != any_endpoint_enabled:
+                        config['modbus']['enabled'] = any_endpoint_enabled
+                        modbus_auto_updated = True
+                        self.logger.info(f"Modbus auto-{'abilitato' if any_endpoint_enabled else 'disabilitato'} (endpoint attivi: {sum(1 for ep in devices.values() if isinstance(ep, dict) and ep.get('enabled', False))})")
+                    
                     # Save the updated configuration
                     with open(config_path, 'w', encoding='utf-8') as f:
                         yaml.dump(config, f, default_flow_style=False, allow_unicode=True, indent=2)
                     
                     self.logger.info(f"Toggled modbus device {device_id}: {current_state} -> {new_state} (cascaded to {metrics_updated} metrics)")
                     
-                    return web.json_response({
+                    response_data = {
                         'success': True,
                         'device_id': device_id,
                         'enabled': new_state,
                         'measurements': updated_measurements,
                         'metrics_updated': metrics_updated,
                         'message': f'Modbus device {device_id} {"enabled" if new_state else "disabled"} (with {metrics_updated} metrics)'
-                    })
+                    }
+                    
+                    # Aggiungi info su modbus.enabled se è stato aggiornato
+                    if modbus_auto_updated:
+                        response_data['modbus_auto_updated'] = True
+                        response_data['modbus_enabled'] = any_endpoint_enabled
+                        response_data['message'] += f" - Modbus {'abilitato' if any_endpoint_enabled else 'disabilitato'} automaticamente"
+                    
+                    return web.json_response(response_data)
                 else:
                     return web.json_response({'error': f'Modbus device not found: {device_id}'}, status=404)
             else:
@@ -1074,6 +1099,23 @@ class SimpleWebGUI:
                                 device_changed = True
                                 self.logger.info(f"Auto-disabled modbus device {device_id} because no metrics are enabled")
                         
+                        # Auto-aggiorna modbus.enabled basandosi sugli endpoint
+                        # Se TUTTI gli endpoint sono disabilitati → modbus.enabled = false
+                        # Se ALMENO UN endpoint è abilitato → modbus.enabled = true
+                        any_endpoint_enabled = any(
+                            ep.get('enabled', False) 
+                            for ep in devices.values() 
+                            if isinstance(ep, dict)
+                        )
+                        
+                        modbus_auto_updated = False
+                        old_modbus_enabled = config['modbus'].get('enabled', False)
+                        
+                        if old_modbus_enabled != any_endpoint_enabled:
+                            config['modbus']['enabled'] = any_endpoint_enabled
+                            modbus_auto_updated = True
+                            self.logger.info(f"Modbus auto-{'abilitato' if any_endpoint_enabled else 'disabilitato'} (endpoint attivi: {sum(1 for ep in devices.values() if isinstance(ep, dict) and ep.get('enabled', False))})")
+                        
                         # Save the updated configuration
                         with open(config_path, 'w', encoding='utf-8') as f:
                             yaml.dump(config, f, default_flow_style=False, allow_unicode=True, indent=2)
@@ -1092,6 +1134,11 @@ class SimpleWebGUI:
                         
                         if device_changed:
                             response_data['message'] += f' (device auto-{"enabled" if device_new_state else "disabled"})'
+                        
+                        if modbus_auto_updated:
+                            response_data['modbus_auto_updated'] = True
+                            response_data['modbus_enabled'] = any_endpoint_enabled
+                            response_data['message'] += f' - Modbus {'abilitato' if any_endpoint_enabled else 'disabilitato'} automaticamente'
                         
                         return web.json_response(response_data)
                     else:
@@ -1304,14 +1351,32 @@ class SimpleWebGUI:
         realtime_interval = timedelta(seconds=realtime_interval_seconds)
         last_realtime_run = datetime.min
         
-        # Controlla se Modbus è abilitato nella configurazione
+        # Controlla quali flow sono abilitati nella configurazione
+        api_enabled = config.get('sources', {}).get('api_ufficiali', {}).get('enabled', False)
+        web_enabled = config.get('sources', {}).get('web_scraping', {}).get('enabled', False)
         modbus_enabled = config.get('sources', {}).get('modbus', {}).get('enabled', False)
         
-        if modbus_enabled:
-            self.logger.info(f"[GUI] Intervalli configurati - API/Web: {api_web_interval.total_seconds()/60:.0f} min, Realtime: {realtime_interval.total_seconds():.0f} sec")
+        # Log configurazione
+        status_parts = []
+        if api_enabled or web_enabled:
+            status_parts.append(f"API/Web: {api_web_interval.total_seconds()/60:.0f} min")
         else:
-            self.logger.info(f"[GUI] Intervalli configurati - API/Web: {api_web_interval.total_seconds()/60:.0f} min, Realtime: DISABILITATO")
-            self.logger.info("[GUI] ℹ️ Modbus disabilitato nella configurazione, realtime flow non verrà eseguito")
+            status_parts.append("API/Web: DISABILITATO")
+        
+        if modbus_enabled:
+            status_parts.append(f"Realtime: {realtime_interval.total_seconds():.0f} sec")
+        else:
+            status_parts.append("Realtime: DISABILITATO")
+        
+        self.logger.info(f"[GUI] Intervalli configurati - {', '.join(status_parts)}")
+        
+        # Log dettagliato per flow disabilitati
+        if not api_enabled:
+            self.logger.info("[GUI] ℹ️ API disabilitato nella configurazione, API flow non verrà eseguito")
+        if not web_enabled:
+            self.logger.info("[GUI] ℹ️ Web scraping disabilitato nella configurazione, Web flow non verrà eseguito")
+        if not modbus_enabled:
+            self.logger.info("[GUI] ℹ️ Modbus disabilitato nella configurazione, Realtime flow non verrà eseguito")
         
         try:
             while self.loop_running and not self.stop_requested:
@@ -1321,33 +1386,35 @@ class SimpleWebGUI:
                 time_until_api_web = (last_api_web_run + api_web_interval - current_time).total_seconds()
                 time_until_realtime = (last_realtime_run + realtime_interval - current_time).total_seconds()
                 
-                # Esegui API e Web ogni intervallo configurato
-                if time_until_api_web <= 0:
+                # Esegui API e Web ogni intervallo configurato (solo se almeno uno è abilitato)
+                if (api_enabled or web_enabled) and time_until_api_web <= 0:
                     self.logger.info("[GUI] 🌐 Esecuzione raccolta API/Web...")
                     
-                    # Esegui Web flow (in thread separato per non bloccare GUI)
-                    self.loop_stats['web_stats']['executed'] += 1
-                    try:
-                        await asyncio.get_event_loop().run_in_executor(
-                            None, run_web_flow, log, cache
-                        )
-                        self.loop_stats['web_stats']['success'] += 1
-                        self.logger.info("[GUI] ✅ Raccolta web completata")
-                    except Exception as e:
-                        self.loop_stats['web_stats']['failed'] += 1
-                        self.logger.error(f"[GUI] ❌ Errore raccolta web: {e}")
+                    # Esegui Web flow solo se abilitato (in thread separato per non bloccare GUI)
+                    if web_enabled:
+                        self.loop_stats['web_stats']['executed'] += 1
+                        try:
+                            await asyncio.get_event_loop().run_in_executor(
+                                None, run_web_flow, log, cache
+                            )
+                            self.loop_stats['web_stats']['success'] += 1
+                            self.logger.info("[GUI] ✅ Raccolta web completata")
+                        except Exception as e:
+                            self.loop_stats['web_stats']['failed'] += 1
+                            self.logger.error(f"[GUI] ❌ Errore raccolta web: {e}")
                     
-                    # Esegui API flow (in thread separato per non bloccare GUI)
-                    self.loop_stats['api_stats']['executed'] += 1
-                    try:
-                        await asyncio.get_event_loop().run_in_executor(
-                            None, run_api_flow, log, cache, config
-                        )
-                        self.loop_stats['api_stats']['success'] += 1
-                        self.logger.info("[GUI] ✅ Raccolta API completata")
-                    except Exception as e:
-                        self.loop_stats['api_stats']['failed'] += 1
-                        self.logger.error(f"[GUI] ❌ Errore raccolta API: {e}")
+                    # Esegui API flow solo se abilitato (in thread separato per non bloccare GUI)
+                    if api_enabled:
+                        self.loop_stats['api_stats']['executed'] += 1
+                        try:
+                            await asyncio.get_event_loop().run_in_executor(
+                                None, run_api_flow, log, cache, config
+                            )
+                            self.loop_stats['api_stats']['success'] += 1
+                            self.logger.info("[GUI] ✅ Raccolta API completata")
+                        except Exception as e:
+                            self.loop_stats['api_stats']['failed'] += 1
+                            self.logger.error(f"[GUI] ❌ Errore raccolta API: {e}")
                     
                     last_api_web_run = current_time
                     self.loop_stats['last_api_web_run'] = current_time
@@ -1360,6 +1427,9 @@ class SimpleWebGUI:
                     # Ricalcola tempi dopo l'esecuzione
                     time_until_api_web = api_web_interval.total_seconds()
                     time_until_realtime = (last_realtime_run + realtime_interval - datetime.now()).total_seconds()
+                elif not api_enabled and not web_enabled:
+                    # Se entrambi disabilitati, non calcolare time_until_api_web
+                    time_until_api_web = 999999
                 
                 # Esegui Realtime solo se Modbus è abilitato
                 if modbus_enabled and time_until_realtime <= 0:
