@@ -1416,15 +1416,24 @@ class SimpleWebGUI:
         web_enabled = load_source_enabled('config/sources/web_endpoints.yaml', 'web_scraping')
         modbus_enabled = load_source_enabled('config/sources/modbus_endpoints.yaml', 'modbus')
         
-        # Log configurazione
+        # Log configurazione dettagliata per ogni flow
         status_parts = []
-        if api_enabled or web_enabled:
-            status_parts.append(f"API/Web: {api_web_interval.total_seconds()/60:.0f} min")
-        else:
-            status_parts.append("API/Web: DISABILITATO")
         
+        # API
+        if api_enabled:
+            status_parts.append(f"API: {api_interval_minutes} min")
+        else:
+            status_parts.append("API: DISABILITATO")
+        
+        # Web
+        if web_enabled:
+            status_parts.append(f"Web: {web_interval_minutes} min")
+        else:
+            status_parts.append("Web: DISABILITATO")
+        
+        # Realtime
         if modbus_enabled:
-            status_parts.append(f"Realtime: {realtime_interval.total_seconds():.0f} sec")
+            status_parts.append(f"Realtime: {realtime_interval_seconds} sec")
         else:
             status_parts.append("Realtime: DISABILITATO")
         
