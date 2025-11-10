@@ -1270,6 +1270,14 @@ class SimpleWebGUI:
                 message_lower = message.lower()
                 logger_lower = logger_name.lower()
                 
+                # 0. PRIMA DI TUTTO: Escludi log di sistema (scheduler, cache, config, GUI)
+                system_keywords = [
+                    'scheduler inizializzato', 'cache', 'config', '[gui]', 
+                    'intervalli configurati', 'loop', 'gui web', 'server gui'
+                ]
+                if any(keyword in message_lower for keyword in system_keywords):
+                    return 'general'
+                
                 # 1. Controlla marker di inizio/fine pipeline (più affidabili)
                 if 'avvio flusso api' in message_lower or 'pipeline api completata' in message_lower:
                     return 'api'
