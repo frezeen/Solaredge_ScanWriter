@@ -94,17 +94,33 @@ class LoopOrchestrator:
         while self.running and not self.stop_requested:
             current_time = datetime.now()
             
+            # Calcola tempo fino alla prossima operazione
+            time_until_api_web = (last_api_web_run + api_web_interval - current_time).total_seconds()
+            time_until_realtime = (last_realtime_run + realtime_interval - current_time).total_seconds()
+            
             # Esegui API/Web collectors
-            if current_time - last_api_web_run >= api_web_interval:
+            if time_until_api_web <= 0:
                 await self._execute_collectors(['api', 'web'])
                 last_api_web_run = current_time
+                # Ricalcola tempi dopo l'esecuzione
+                time_until_api_web = api_web_interval.total_seconds()
+                time_until_realtime = (last_realtime_run + realtime_interval - datetime.now()).total_seconds()
             
             # Esegui Realtime collector
-            if current_time - last_realtime_run >= realtime_interval:
+            if time_until_realtime <= 0:
                 await self._execute_collectors(['realtime'])
-                last_realtime_run = current_time
+                last_realtime_run = datetime.now()
+                # Ricalcola tempo dopo l'esecuzione
+                time_until_realtime = realtime_interval.total_seconds()
             
-            await asyncio.sleep(1)
+            # Sleep intelligente: dormi fino alla prossima operazione (max 5 secondi per responsività)
+            # Questo riduce drasticamente l'utilizzo CPU quando non ci sono operazioni da fare
+            next_wake = min(max(time_until_api_web, 0), max(time_until_realtime, 0), 5.0)
+            if next_wake > 0:
+                await asyncio.sleep(next_wake)
+            else:
+                # Pausa minima per evitare busy-wait
+                await asyncio.sleep(0.1)
 
     async def _execute_collectors(self, collector_types: list[str]):
         """Esegue collectors specificati"""

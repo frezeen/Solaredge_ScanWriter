@@ -1310,8 +1310,12 @@ class SimpleWebGUI:
             while self.loop_running and not self.stop_requested:
                 current_time = datetime.now()
                 
+                # Calcola tempo fino alla prossima operazione
+                time_until_api_web = (last_api_web_run + api_web_interval - current_time).total_seconds()
+                time_until_realtime = (last_realtime_run + realtime_interval - current_time).total_seconds()
+                
                 # Esegui API e Web ogni intervallo configurato
-                if current_time - last_api_web_run >= api_web_interval:
+                if time_until_api_web <= 0:
                     self.logger.info("[GUI] 🌐 Esecuzione raccolta API/Web...")
                     
                     # Esegui Web flow (in thread separato per non bloccare GUI)
@@ -1345,9 +1349,13 @@ class SimpleWebGUI:
                     # Calcola next run per API/Web
                     next_api_web_run = current_time + api_web_interval
                     self.loop_stats['next_api_web_run'] = next_api_web_run
+                    
+                    # Ricalcola tempi dopo l'esecuzione
+                    time_until_api_web = api_web_interval.total_seconds()
+                    time_until_realtime = (last_realtime_run + realtime_interval - datetime.now()).total_seconds()
                 
-                # Esegui Realtime ogni 5 secondi (in thread separato per non bloccare GUI)
-                if current_time - last_realtime_run >= realtime_interval:
+                # Esegui Realtime ogni intervallo configurato (in thread separato per non bloccare GUI)
+                if time_until_realtime <= 0:
                     self.loop_stats['realtime_stats']['executed'] += 1
                     try:
                         # Esegui in thread separato per evitare blocco su timeout Modbus
@@ -1360,11 +1368,20 @@ class SimpleWebGUI:
                         self.loop_stats['realtime_stats']['failed'] += 1
                         self.logger.error(f"[GUI] ❌ Errore raccolta realtime: {e}")
                     
-                    last_realtime_run = current_time
-                    self.loop_stats['last_update'] = current_time
+                    last_realtime_run = datetime.now()
+                    self.loop_stats['last_update'] = datetime.now()
+                    
+                    # Ricalcola tempo dopo l'esecuzione
+                    time_until_realtime = realtime_interval.total_seconds()
                 
-                # Pausa breve per permettere controllo stop
-                await asyncio.sleep(1)
+                # Sleep intelligente: dormi fino alla prossima operazione (max 5 secondi per responsività)
+                # Questo riduce drasticamente l'utilizzo CPU quando non ci sono operazioni da fare
+                next_wake = min(max(time_until_api_web, 0), max(time_until_realtime, 0), 5.0)
+                if next_wake > 0:
+                    await asyncio.sleep(next_wake)
+                else:
+                    # Pausa minima per evitare busy-wait
+                    await asyncio.sleep(0.1)
                 
         except Exception as e:
             self.logger.error(f"[GUI] Errore nel loop: {e}")
