@@ -1,5 +1,5 @@
 modbus:
-  enabled: false  # TEMPORANEO - Test CPU
+  enabled: true  # Riabilitato con intervallo ottimizzato (15s invece di 5s)
   endpoints:
     batteries:
       category: Battery
