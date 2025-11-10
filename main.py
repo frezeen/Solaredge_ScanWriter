@@ -502,6 +502,13 @@ def run_realtime_flow(log, cache, config) -> int:
     except KeyboardInterrupt:
         log.info("🛑 Interruzione utente durante raccolta realtime")
         raise
+    except ValueError as e:
+        # Modbus disabilitato nella configurazione - non è un errore
+        if "disabilitato nella configurazione" in str(e):
+            log.info("ℹ️ Modbus disabilitato nella configurazione, skip realtime")
+            return 0  # Ritorna successo, non errore
+        log.error(f"❌ Errore valore pipeline realtime: {e}")
+        raise
     except ImportError as e:
         log.error(f"❌ Modulo realtime mancante: {e}. Verifica installazione pymodbus")
         raise
