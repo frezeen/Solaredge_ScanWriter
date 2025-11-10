@@ -1304,7 +1304,14 @@ class SimpleWebGUI:
         realtime_interval = timedelta(seconds=realtime_interval_seconds)
         last_realtime_run = datetime.min
         
-        self.logger.info(f"[GUI] Intervalli configurati - API/Web: {api_web_interval.total_seconds()/60:.0f} min, Realtime: {realtime_interval.total_seconds():.0f} sec")
+        # Controlla se Modbus è abilitato nella configurazione
+        modbus_enabled = config.get('sources', {}).get('modbus', {}).get('enabled', False)
+        
+        if modbus_enabled:
+            self.logger.info(f"[GUI] Intervalli configurati - API/Web: {api_web_interval.total_seconds()/60:.0f} min, Realtime: {realtime_interval.total_seconds():.0f} sec")
+        else:
+            self.logger.info(f"[GUI] Intervalli configurati - API/Web: {api_web_interval.total_seconds()/60:.0f} min, Realtime: DISABILITATO")
+            self.logger.info("[GUI] ℹ️ Modbus disabilitato nella configurazione, realtime flow non verrà eseguito")
         
         try:
             while self.loop_running and not self.stop_requested:
@@ -1354,34 +1361,33 @@ class SimpleWebGUI:
                     time_until_api_web = api_web_interval.total_seconds()
                     time_until_realtime = (last_realtime_run + realtime_interval - datetime.now()).total_seconds()
                 
-                # Esegui Realtime ogni intervallo configurato (in thread separato per non bloccare GUI)
-                if time_until_realtime <= 0:
+                # Esegui Realtime solo se Modbus è abilitato
+                if modbus_enabled and time_until_realtime <= 0:
                     self.loop_stats['realtime_stats']['executed'] += 1
                     try:
                         # Esegui in thread separato per evitare blocco su timeout Modbus
                         result = await asyncio.get_event_loop().run_in_executor(
                             None, run_realtime_flow, log, cache, config
                         )
-                        # result == 0 significa successo (anche se Modbus disabilitato)
+                        # result == 0 significa successo
                         if result == 0:
                             self.loop_stats['realtime_stats']['success'] += 1
                             self.logger.debug("[GUI] ✅ Raccolta realtime completata")
                         else:
                             self.loop_stats['realtime_stats']['failed'] += 1
                     except Exception as e:
-                        # Gestisci Modbus disabilitato come caso normale, non errore
-                        if "disabilitato nella configurazione" in str(e):
-                            self.logger.debug("[GUI] ℹ️ Modbus disabilitato, skip realtime")
-                            self.loop_stats['realtime_stats']['success'] += 1
-                        else:
-                            self.loop_stats['realtime_stats']['failed'] += 1
-                            self.logger.error(f"[GUI] ❌ Errore raccolta realtime: {e}")
+                        self.loop_stats['realtime_stats']['failed'] += 1
+                        self.logger.error(f"[GUI] ❌ Errore raccolta realtime: {e}")
                     
                     last_realtime_run = datetime.now()
                     self.loop_stats['last_update'] = datetime.now()
                     
                     # Ricalcola tempo dopo l'esecuzione
                     time_until_realtime = realtime_interval.total_seconds()
+                elif not modbus_enabled:
+                    # Se Modbus disabilitato, non calcolare time_until_realtime
+                    # Imposta a un valore alto per non influenzare il next_wake
+                    time_until_realtime = 999999
                 
                 # Sleep intelligente: dormi fino alla prossima operazione (max 5 secondi per responsività)
                 # Questo riduce drasticamente l'utilizzo CPU quando non ci sono operazioni da fare
