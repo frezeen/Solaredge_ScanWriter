@@ -1,5 +1,5 @@
 modbus:
-  enabled: true
+  enabled: false  # TEMPORANEO - Test CPU
   endpoints:
     batteries:
       category: Battery

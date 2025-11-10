@@ -1359,14 +1359,23 @@ class SimpleWebGUI:
                     self.loop_stats['realtime_stats']['executed'] += 1
                     try:
                         # Esegui in thread separato per evitare blocco su timeout Modbus
-                        await asyncio.get_event_loop().run_in_executor(
+                        result = await asyncio.get_event_loop().run_in_executor(
                             None, run_realtime_flow, log, cache, config
                         )
-                        self.loop_stats['realtime_stats']['success'] += 1
-                        self.logger.debug("[GUI] ✅ Raccolta realtime completata")
+                        # result == 0 significa successo (anche se Modbus disabilitato)
+                        if result == 0:
+                            self.loop_stats['realtime_stats']['success'] += 1
+                            self.logger.debug("[GUI] ✅ Raccolta realtime completata")
+                        else:
+                            self.loop_stats['realtime_stats']['failed'] += 1
                     except Exception as e:
-                        self.loop_stats['realtime_stats']['failed'] += 1
-                        self.logger.error(f"[GUI] ❌ Errore raccolta realtime: {e}")
+                        # Gestisci Modbus disabilitato come caso normale, non errore
+                        if "disabilitato nella configurazione" in str(e):
+                            self.logger.debug("[GUI] ℹ️ Modbus disabilitato, skip realtime")
+                            self.loop_stats['realtime_stats']['success'] += 1
+                        else:
+                            self.loop_stats['realtime_stats']['failed'] += 1
+                            self.logger.error(f"[GUI] ❌ Errore raccolta realtime: {e}")
                     
                     last_realtime_run = datetime.now()
                     self.loop_stats['last_update'] = datetime.now()
