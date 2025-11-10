@@ -749,9 +749,12 @@ class SimpleWebGUI:
             aiohttp_logger = logging.getLogger('aiohttp.access')
             aiohttp_logger.setLevel(logging.WARNING)
             
-            runner = web.AppRunner(self.create_app())
+            # Configura app con backlog ridotto per evitare busy-wait
+            runner = web.AppRunner(self.create_app(), access_log=None)
             await runner.setup()
-            site = web.TCPSite(runner, host, self.port)
+            
+            # TCPSite con backlog limitato per ridurre overhead
+            site = web.TCPSite(runner, host, self.port, backlog=128)
             await site.start()
             
             self.logger.info(f"[GUI] Uso porta {self.port}")
