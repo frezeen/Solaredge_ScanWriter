@@ -774,18 +774,42 @@ except Exception as e:
                         self.log("⚠️ No data source UIDs found, importing dashboard as-is", "WARNING")
                     
                     # 4. Importa dashboard con UIDs corretti
+                    # Rimuovi id e uid dalla dashboard per permettere l'import
+                    if 'id' in dashboard_json:
+                        del dashboard_json['id']
+                    if 'uid' in dashboard_json:
+                        dashboard_uid = dashboard_json['uid']
+                    else:
+                        dashboard_uid = None
+                    
                     payload = {
                         "dashboard": dashboard_json,
                         "overwrite": True,
-                        "message": "Updated by smart_update.py with correct UIDs"
+                        "message": "Updated by smart_update.py with correct UIDs",
+                        "folderId": 0
                     }
                     
+                    # Usa l'endpoint corretto per Grafana 9+
                     response = requests.post(
-                        f"{grafana_url}/api/dashboards/db",
+                        f"{grafana_url}/api/dashboards/import",
                         auth=(grafana_user, grafana_pass),
                         json=payload,
                         timeout=10
                     )
+                    
+                    # Se fallisce con import, prova con db (per retrocompatibilità)
+                    if response.status_code == 404:
+                        payload_db = {
+                            "dashboard": dashboard_json,
+                            "overwrite": True,
+                            "message": "Updated by smart_update.py with correct UIDs"
+                        }
+                        response = requests.post(
+                            f"{grafana_url}/api/dashboards/db",
+                            auth=(grafana_user, grafana_pass),
+                            json=payload_db,
+                            timeout=10
+                        )
                     
                     if response.status_code == 200:
                         result = response.json()
