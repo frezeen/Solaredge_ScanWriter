@@ -1352,9 +1352,23 @@ class SimpleWebGUI:
         last_realtime_run = datetime.min
         
         # Controlla quali flow sono abilitati nella configurazione
-        api_enabled = config.get('sources', {}).get('api_ufficiali', {}).get('enabled', False)
-        web_enabled = config.get('sources', {}).get('web_scraping', {}).get('enabled', False)
-        modbus_enabled = config.get('sources', {}).get('modbus', {}).get('enabled', False)
+        # Carica i file sources separatamente perché non sono nel config principale
+        import yaml
+        from pathlib import Path
+        
+        def load_source_enabled(file_path, key):
+            try:
+                if Path(file_path).exists():
+                    with open(file_path, 'r', encoding='utf-8') as f:
+                        data = yaml.safe_load(f)
+                    return data.get(key, {}).get('enabled', False)
+            except:
+                pass
+            return False
+        
+        api_enabled = load_source_enabled('config/sources/api_endpoints.yaml', 'api_ufficiali')
+        web_enabled = load_source_enabled('config/sources/web_endpoints.yaml', 'web_scraping')
+        modbus_enabled = load_source_enabled('config/sources/modbus_endpoints.yaml', 'modbus')
         
         # Log configurazione
         status_parts = []
