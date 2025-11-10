@@ -253,8 +253,9 @@ def run_gui_mode(log, cache, config=None) -> int:
             pass
         
         try:
-            # Loop infinito con gestione interruzioni (usa intervallo configurabile)
-            gui_check_interval = int(os.getenv('SCHEDULER_REALTIME_DELAY_SECONDS', '5'))
+            # Loop infinito con gestione interruzioni
+            # Usa un intervallo più lungo per ridurre CPU usage quando idle
+            gui_check_interval = 60  # 60 secondi invece di 5
             while True:
                 await asyncio.sleep(gui_check_interval)
         except KeyboardInterrupt:
@@ -270,6 +271,16 @@ def run_gui_mode(log, cache, config=None) -> int:
                 log.error(f"Errore durante chiusura GUI: {e}")
     
     try:
+        # Usa ProactorEventLoop su Windows, o uvloop se disponibile
+        # Questo riduce il busy-wait di epoll
+        try:
+            import uvloop
+            asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
+            log.info("✅ Usando uvloop per migliori performance")
+        except ImportError:
+            # uvloop non disponibile, usa default
+            pass
+        
         asyncio.run(run_gui())
     except KeyboardInterrupt:
         # Questo è normale quando si preme Ctrl+C
