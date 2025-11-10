@@ -123,6 +123,37 @@ class SimpleWebGUI:
         except Exception:
             # Fallback a localhost se non riesce
             return "127.0.0.1"
+    
+    def _auto_update_source_enabled(self, config: dict, source_key: str, endpoints_or_devices: dict, 
+                                     config_path: Path, source_name: str) -> tuple[bool, bool]:
+        """Helper per auto-aggiornare source.enabled basandosi sugli endpoint/device.
+        
+        Args:
+            config: Configurazione completa caricata
+            source_key: Chiave della sorgente (es: 'api_ufficiali', 'web_scraping', 'modbus')
+            endpoints_or_devices: Dizionario degli endpoint o device
+            config_path: Path del file di configurazione
+            source_name: Nome leggibile della sorgente per i log (es: 'API', 'Web scraping', 'Modbus')
+            
+        Returns:
+            Tuple (source_updated, new_enabled_state)
+        """
+        # Controlla se almeno un endpoint/device è abilitato
+        any_endpoint_enabled = any(
+            ep.get('enabled', False) 
+            for ep in endpoints_or_devices.values() 
+            if isinstance(ep, dict)
+        )
+        
+        old_enabled = config[source_key].get('enabled', False)
+        
+        if old_enabled != any_endpoint_enabled:
+            config[source_key]['enabled'] = any_endpoint_enabled
+            enabled_count = sum(1 for ep in endpoints_or_devices.values() if isinstance(ep, dict) and ep.get('enabled', False))
+            self.logger.info(f"{source_name} auto-{'abilitato' if any_endpoint_enabled else 'disabilitato'} (endpoint attivi: {enabled_count})")
+            return True, any_endpoint_enabled
+        
+        return False, old_enabled
         
     async def load_config(self):
         """Carica la configurazione YAML dal main.yaml (senza sources)"""
@@ -794,18 +825,34 @@ class SimpleWebGUI:
                     new_state = not current_state
                     endpoints[endpoint_name]['enabled'] = new_state
                     
+                    # Auto-aggiorna source.enabled basandosi sugli endpoint (solo per API)
+                    source_auto_updated = False
+                    any_endpoint_enabled = False
+                    if source_type == 'api_ufficiali':
+                        source_auto_updated, any_endpoint_enabled = self._auto_update_source_enabled(
+                            config, source_type, endpoints, config_path, 'API'
+                        )
+                    
                     # Save the updated configuration
                     with open(config_path, 'w', encoding='utf-8') as f:
                         yaml.dump(config, f, default_flow_style=False, allow_unicode=True, indent=2)
                     
                     self.logger.info(f"Toggled endpoint {endpoint_id}: {current_state} -> {new_state}")
                     
-                    return web.json_response({
+                    response_data = {
                         'success': True,
                         'endpoint_id': endpoint_id,
                         'enabled': new_state,
                         'message': f'Endpoint {endpoint_id} {"enabled" if new_state else "disabled"}'
-                    })
+                    }
+                    
+                    # Aggiungi info su source.enabled se è stato aggiornato
+                    if source_auto_updated:
+                        response_data['source_auto_updated'] = True
+                        response_data['source_enabled'] = any_endpoint_enabled
+                        response_data['message'] += f" - API {'abilitato' if any_endpoint_enabled else 'disabilitato'} automaticamente"
+                    
+                    return web.json_response(response_data)
                 else:
                     return web.json_response({'error': f'Endpoint not found: {endpoint_name}'}, status=404)
             else:
@@ -854,20 +901,33 @@ class SimpleWebGUI:
                                 updated_measurements[metric_name] = {'enabled': new_state}
                                 metrics_updated += 1
                     
+                    # Auto-aggiorna web_scraping.enabled basandosi sugli endpoint
+                    web_auto_updated, any_endpoint_enabled = self._auto_update_source_enabled(
+                        config, 'web_scraping', devices, config_path, 'Web scraping'
+                    )
+                    
                     # Save the updated configuration
                     with open(config_path, 'w', encoding='utf-8') as f:
                         yaml.dump(config, f, default_flow_style=False, allow_unicode=True, indent=2)
                     
                     self.logger.info(f"Toggled web device {device_id}: {current_state} -> {new_state} (cascaded to {metrics_updated} metrics)")
                     
-                    return web.json_response({
+                    response_data = {
                         'success': True,
                         'device_id': device_id,
                         'enabled': new_state,
                         'measurements': updated_measurements,
                         'metrics_updated': metrics_updated,
                         'message': f'Device {device_id} {"enabled" if new_state else "disabled"} (with {metrics_updated} metrics)'
-                    })
+                    }
+                    
+                    # Aggiungi info su web_scraping.enabled se è stato aggiornato
+                    if web_auto_updated:
+                        response_data['web_auto_updated'] = True
+                        response_data['web_enabled'] = any_endpoint_enabled
+                        response_data['message'] += f" - Web scraping {'abilitato' if any_endpoint_enabled else 'disabilitato'} automaticamente"
+                    
+                    return web.json_response(response_data)
                 else:
                     return web.json_response({'error': f'Device not found: {device_id}'}, status=404)
             else:
@@ -917,21 +977,9 @@ class SimpleWebGUI:
                                 metrics_updated += 1
                     
                     # Auto-aggiorna modbus.enabled basandosi sugli endpoint
-                    # Se TUTTI gli endpoint sono disabilitati → modbus.enabled = false
-                    # Se ALMENO UN endpoint è abilitato → modbus.enabled = true
-                    any_endpoint_enabled = any(
-                        ep.get('enabled', False) 
-                        for ep in devices.values() 
-                        if isinstance(ep, dict)
+                    modbus_auto_updated, any_endpoint_enabled = self._auto_update_source_enabled(
+                        config, 'modbus', devices, config_path, 'Modbus'
                     )
-                    
-                    modbus_auto_updated = False
-                    old_modbus_enabled = config['modbus'].get('enabled', False)
-                    
-                    if old_modbus_enabled != any_endpoint_enabled:
-                        config['modbus']['enabled'] = any_endpoint_enabled
-                        modbus_auto_updated = True
-                        self.logger.info(f"Modbus auto-{'abilitato' if any_endpoint_enabled else 'disabilitato'} (endpoint attivi: {sum(1 for ep in devices.values() if isinstance(ep, dict) and ep.get('enabled', False))})")
                     
                     # Save the updated configuration
                     with open(config_path, 'w', encoding='utf-8') as f:
@@ -1016,6 +1064,11 @@ class SimpleWebGUI:
                                 device_changed = True
                                 self.logger.info(f"Auto-disabled device {device_id} because no metrics are enabled")
                         
+                        # Auto-aggiorna web_scraping.enabled basandosi sugli endpoint
+                        web_auto_updated, any_endpoint_enabled = self._auto_update_source_enabled(
+                            config, 'web_scraping', devices, config_path, 'Web scraping'
+                        )
+                        
                         # Save the updated configuration
                         with open(config_path, 'w', encoding='utf-8') as f:
                             yaml.dump(config, f, default_flow_style=False, allow_unicode=True, indent=2)
@@ -1034,6 +1087,11 @@ class SimpleWebGUI:
                         
                         if device_changed:
                             response_data['message'] += f' (device auto-{"enabled" if device_new_state else "disabled"})'
+                        
+                        if web_auto_updated:
+                            response_data['web_auto_updated'] = True
+                            response_data['web_enabled'] = any_endpoint_enabled
+                            response_data['message'] += f' - Web scraping {'abilitato' if any_endpoint_enabled else 'disabilitato'} automaticamente'
                         
                         return web.json_response(response_data)
                     else:
@@ -1100,21 +1158,9 @@ class SimpleWebGUI:
                                 self.logger.info(f"Auto-disabled modbus device {device_id} because no metrics are enabled")
                         
                         # Auto-aggiorna modbus.enabled basandosi sugli endpoint
-                        # Se TUTTI gli endpoint sono disabilitati → modbus.enabled = false
-                        # Se ALMENO UN endpoint è abilitato → modbus.enabled = true
-                        any_endpoint_enabled = any(
-                            ep.get('enabled', False) 
-                            for ep in devices.values() 
-                            if isinstance(ep, dict)
+                        modbus_auto_updated, any_endpoint_enabled = self._auto_update_source_enabled(
+                            config, 'modbus', devices, config_path, 'Modbus'
                         )
-                        
-                        modbus_auto_updated = False
-                        old_modbus_enabled = config['modbus'].get('enabled', False)
-                        
-                        if old_modbus_enabled != any_endpoint_enabled:
-                            config['modbus']['enabled'] = any_endpoint_enabled
-                            modbus_auto_updated = True
-                            self.logger.info(f"Modbus auto-{'abilitato' if any_endpoint_enabled else 'disabilitato'} (endpoint attivi: {sum(1 for ep in devices.values() if isinstance(ep, dict) and ep.get('enabled', False))})")
                         
                         # Save the updated configuration
                         with open(config_path, 'w', encoding='utf-8') as f:
