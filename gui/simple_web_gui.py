@@ -1420,9 +1420,37 @@ class SimpleWebGUI:
                 pass
             return False
         
-        api_enabled = load_source_enabled('config/sources/api_endpoints.yaml', 'api_ufficiali')
-        web_enabled = load_source_enabled('config/sources/web_endpoints.yaml', 'web_scraping')
-        modbus_enabled = load_source_enabled('config/sources/modbus_endpoints.yaml', 'modbus')
+        # Carica stato enabled dai file, ma verifica anche se ci sono endpoint attivi
+        def load_source_enabled_with_check(file_path, key):
+            try:
+                if Path(file_path).exists():
+                    with open(file_path, 'r', encoding='utf-8') as f:
+                        data = yaml.safe_load(f)
+                    
+                    source_enabled = data.get(key, {}).get('enabled', False)
+                    
+                    # Se il source è enabled, verifica che ci sia almeno un endpoint abilitato
+                    if source_enabled:
+                        endpoints = data.get(key, {}).get('endpoints', {})
+                        has_enabled_endpoint = any(
+                            ep.get('enabled', False) 
+                            for ep in endpoints.values() 
+                            if isinstance(ep, dict)
+                        )
+                        
+                        # Se non ci sono endpoint abilitati, considera il source come disabilitato
+                        if not has_enabled_endpoint:
+                            self.logger.warning(f"[GUI] ⚠️ {key} è enabled ma non ha endpoint attivi - considerato disabilitato")
+                            return False
+                    
+                    return source_enabled
+            except Exception as e:
+                self.logger.error(f"[GUI] Errore caricamento {file_path}: {e}")
+            return False
+        
+        api_enabled = load_source_enabled_with_check('config/sources/api_endpoints.yaml', 'api_ufficiali')
+        web_enabled = load_source_enabled_with_check('config/sources/web_endpoints.yaml', 'web_scraping')
+        modbus_enabled = load_source_enabled_with_check('config/sources/modbus_endpoints.yaml', 'modbus')
         
         # Log configurazione dettagliata per ogni flow
         status_parts = []
