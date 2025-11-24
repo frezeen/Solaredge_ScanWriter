@@ -125,7 +125,8 @@ class RealtimeParser:
                             if scale == 1:
                                 final_value = value / 10
                             else:
-                                final_value = value
+                                # Per tutti gli altri scale (0, -1, -2, etc.), usa scaling standard
+                                final_value = value * (10 ** scale)
                         else:
                             final_value = value * (10 ** scale)
                     except: continue
@@ -228,12 +229,12 @@ class RealtimeParser:
                             
                             if clean_key in energy_counters:
                                 # Se scale=1, il meter sta riportando valore x10 (bug firmware)
-                                # Dividi per 10 per compensare
+                                # Dividi per 10 per compensare (tratta come scale -1)
                                 if scale == 1:
                                     final_value = value / 10
                                 else:
-                                    # Se scale=0 (corretto), usa valore raw
-                                    final_value = value
+                                    # Per tutti gli altri scale (0, -1, -2, etc.), usa scaling standard
+                                    final_value = value * (10 ** scale)
                             else:
                                 # Altri valori: usa scaling normale
                                 final_value = value * (10 ** scale)
