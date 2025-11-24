@@ -158,6 +158,7 @@ class RealtimeParser:
             enabled_measurements = self._get_enabled_measurements(meters_config)
             
             for meter_name, data in meters_data.items():
+                serial = data.get('c_serialnumber')
                 if serial:
                     device_id = f"meter_{serial}"
                     self._cached_device_ids['meters'][meter_name] = device_id
