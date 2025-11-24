@@ -9,6 +9,7 @@ modbus:
       device_type: Battery
       enabled: false
       measurements:
+        # Metadata fields (c_ prefix)
         manufacturer:
           description: Produttore batteria
           enabled: false
@@ -17,14 +18,142 @@ modbus:
           description: Modello batteria
           enabled: false
           field_name: c_model
-        serial:
-          description: Numero seriale
-          enabled: false
-          field_name: c_serialnumber
         version:
           description: Versione firmware
           enabled: false
           field_name: c_version
+        serial:
+          description: Numero seriale
+          enabled: false
+          field_name: c_serialnumber
+        serialnumber:
+          description: Numero seriale (alias)
+          enabled: false
+          field_name: c_serialnumber
+        device_address:
+          description: Indirizzo dispositivo Modbus
+          enabled: false
+          field_name: c_deviceaddress
+        deviceaddress:
+          description: Indirizzo dispositivo Modbus (alias)
+          enabled: false
+          field_name: c_deviceaddress
+        sunspec_did:
+          description: SunSpec Device ID
+          enabled: false
+          field_name: c_sunspec_did
+        
+        # Power specifications
+        rated_energy:
+          description: Energia nominale
+          enabled: false
+          field_name: rated_energy
+          unit: Wh
+        maximum_charge_continuous_power:
+          description: Potenza continua massima di carica
+          enabled: false
+          field_name: maximum_charge_continuous_power
+          unit: W
+        maximum_discharge_continuous_power:
+          description: Potenza continua massima di scarica
+          enabled: false
+          field_name: maximum_discharge_continuous_power
+          unit: W
+        maximum_charge_peak_power:
+          description: Potenza di picco massima di carica
+          enabled: false
+          field_name: maximum_charge_peak_power
+          unit: W
+        maximum_discharge_peak_power:
+          description: Potenza di picco massima di scarica
+          enabled: false
+          field_name: maximum_discharge_peak_power
+          unit: W
+        
+        # Temperature
+        average_temperature:
+          description: Temperatura media
+          enabled: false
+          field_name: average_temperature
+          unit: C
+        maximum_temperature:
+          description: Temperatura massima
+          enabled: false
+          field_name: maximum_temperature
+          unit: C
+        
+        # Instantaneous measurements
+        instantaneous_voltage:
+          description: Tensione istantanea
+          enabled: false
+          field_name: instantaneous_voltage
+          unit: V
+        instantaneous_current:
+          description: Corrente istantanea
+          enabled: false
+          field_name: instantaneous_current
+          unit: A
+        instantaneous_power:
+          description: Potenza istantanea
+          enabled: false
+          field_name: instantaneous_power
+          unit: W
+        
+        # Energy counters
+        lifetime_export_energy_counter:
+          description: Contatore energia esportata totale
+          enabled: false
+          field_name: lifetime_export_energy_counter
+          unit: Wh
+        lifetime_import_energy_counter:
+          description: Contatore energia importata totale
+          enabled: false
+          field_name: lifetime_import_energy_counter
+          unit: Wh
+        
+        # Energy capacity
+        maximum_energy:
+          description: Energia massima
+          enabled: false
+          field_name: maximum_energy
+          unit: Wh
+        available_energy:
+          description: Energia disponibile
+          enabled: false
+          field_name: available_energy
+          unit: Wh
+        
+        # State indicators
+        soh:
+          description: State of Health (SOH)
+          enabled: false
+          field_name: soh
+          unit: '%'
+        soe:
+          description: State of Energy (SOE)
+          enabled: false
+          field_name: soe
+          unit: '%'
+        
+        # Status
+        status:
+          description: Stato batteria
+          enabled: false
+          field_name: status
+        status_internal:
+          description: Stato interno batteria
+          enabled: false
+          field_name: status_internal
+        
+        # Event logs
+        event_log:
+          description: Log eventi
+          enabled: false
+          field_name: event_log
+        event_log_internal:
+          description: Log eventi interno
+          enabled: false
+          field_name: event_log_internal
     inverter_realtime:
       category: Inverter
       data_format: structured
@@ -53,12 +182,24 @@ modbus:
           description: DID comune SunSpec
           enabled: true
           field_name: c_did
+        did:
+          description: DID comune SunSpec (alias)
+          enabled: true
+          field_name: c_did
         common_id:
           description: ID comune SunSpec
           enabled: true
           field_name: c_id
+        id:
+          description: ID comune SunSpec (alias)
+          enabled: true
+          field_name: c_id
         common_length:
           description: Lunghezza comune SunSpec
+          enabled: true
+          field_name: c_length
+        length:
+          description: Lunghezza comune SunSpec (alias)
           enabled: true
           field_name: c_length
         cosphi:
@@ -79,6 +220,10 @@ modbus:
           unit: A
         device_address:
           description: Indirizzo dispositivo Modbus
+          enabled: true
+          field_name: c_deviceaddress
+        deviceaddress:
+          description: Indirizzo dispositivo Modbus (alias)
           enabled: true
           field_name: c_deviceaddress
         energy_total:
@@ -218,6 +363,10 @@ modbus:
           description: Numero seriale
           enabled: true
           field_name: c_serialnumber
+        serialnumber:
+          description: Numero seriale (alias)
+          enabled: true
+          field_name: c_serialnumber
         status:
           description: Stato operativo inverter
           enabled: true
@@ -238,6 +387,10 @@ modbus:
           unit: C
         type:
           description: Tipo inverter (calcolato da SunSpec DID)
+          enabled: true
+          field_name: c_sunspec_did
+        sunspec_did:
+          description: SunSpec Device ID (alias)
           enabled: true
           field_name: c_sunspec_did
         vendor_status:
@@ -274,6 +427,10 @@ modbus:
           unit: A
         device_address:
           description: Indirizzo dispositivo Modbus
+          enabled: true
+          field_name: c_deviceaddress
+        deviceaddress:
+          description: Indirizzo dispositivo Modbus (alias)
           enabled: true
           field_name: c_deviceaddress
         export_energy_active:
@@ -642,6 +799,10 @@ modbus:
           field_name: energy_reactive_scale
         serial:
           description: Numero seriale
+          enabled: true
+          field_name: c_serialnumber
+        serialnumber:
+          description: Numero seriale (alias)
           enabled: true
           field_name: c_serialnumber
         sunspec_did:
