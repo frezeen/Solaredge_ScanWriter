@@ -23,6 +23,13 @@ class RealtimeParser:
         except Exception as e:
             self._log.error(f"Errore caricamento configurazione modbus: {e}")
             raise
+            
+        # Cache per device_id dinamici
+        self._cached_device_ids = {
+            'inverter': None,
+            'meters': {},
+            'batteries': {}
+        }
     
     def _get_enabled_measurements(self, endpoint_config: dict) -> dict:
         """Ottieni measurements abilitati da configurazione endpoint.
@@ -71,7 +78,13 @@ class RealtimeParser:
             if not inverter_config.get('enabled', False):
                 return []
                 
-            device_id = data.get('c_model', 'Unknown')
+            # Usa c_model dai dati, o cache, o device_name da config, o fallback a 'Unknown'
+            current_model = data.get('c_model')
+            if current_model:
+                self._cached_device_ids['inverter'] = current_model
+                device_id = current_model
+            else:
+                device_id = self._cached_device_ids['inverter'] or inverter_config.get('device_name') or 'Unknown'
             enabled_measurements = self._get_enabled_measurements(inverter_config)
             
             points = []
@@ -100,7 +113,9 @@ class RealtimeParser:
                 scale = data.get(scale_key)
                 
                 final_value = value
-                unit = ""
+                # Get unit from config if available
+                measurement_config = enabled_measurements.get(clean_key, {})
+                unit = measurement_config.get('unit', '')
                 
                 if isinstance(value, (int, float)) and scale is not None:
                     try:
@@ -143,11 +158,17 @@ class RealtimeParser:
             enabled_measurements = self._get_enabled_measurements(meters_config)
             
             for meter_name, data in meters_data.items():
-                serial = data.get('c_serialnumber')
                 if serial:
                     device_id = f"meter_{serial}"
+                    self._cached_device_ids['meters'][meter_name] = device_id
                 else:
-                    device_id = data.get('c_model') or meter_name
+                    # Prova a usare cache o model
+                    current_model = data.get('c_model')
+                    if current_model:
+                        device_id = current_model
+                        self._cached_device_ids['meters'][meter_name] = device_id
+                    else:
+                        device_id = self._cached_device_ids['meters'].get(meter_name) or meter_name
                 
                 for key, value in data.items():
                     clean_key = key[2:] if key.startswith('c_') else key
@@ -161,7 +182,9 @@ class RealtimeParser:
                     scale = data.get(scale_key)
                     
                     final_value = value
-                    unit = ""
+                    # Get unit from config if available
+                    measurement_config = enabled_measurements.get(clean_key, {})
+                    unit = measurement_config.get('unit', '')
                     
                     if isinstance(value, (int, float)) and scale is not None:
                         try:
@@ -203,7 +226,12 @@ class RealtimeParser:
             enabled_measurements = self._get_enabled_measurements(batteries_config)
             
             for battery_name, data in batteries_data.items():
-                device_id = data.get('c_model') or battery_name
+                current_model = data.get('c_model')
+                if current_model:
+                    device_id = current_model
+                    self._cached_device_ids['batteries'][battery_name] = device_id
+                else:
+                    device_id = self._cached_device_ids['batteries'].get(battery_name) or battery_name
                 
                 for key, value in data.items():
                     clean_key = key[2:] if key.startswith('c_') else key
@@ -218,7 +246,9 @@ class RealtimeParser:
                     scale = data.get(scale_key)
                     
                     final_value = value
-                    unit = ""
+                    # Get unit from config if available
+                    measurement_config = enabled_measurements.get(clean_key, {})
+                    unit = measurement_config.get('unit', '')
                     
                     if isinstance(value, (int, float)) and scale is not None:
                         try:
