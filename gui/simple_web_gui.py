@@ -1503,7 +1503,7 @@ class SimpleWebGUI:
                         self.loop_stats['web_stats']['executed'] += 1
                         try:
                             await asyncio.get_event_loop().run_in_executor(
-                                None, run_web_flow, log, cache
+                                None, run_web_flow, log, cache, config
                             )
                             self.loop_stats['web_stats']['success'] += 1
                             self.logger.info("[GUI] ✅ Raccolta web completata")
