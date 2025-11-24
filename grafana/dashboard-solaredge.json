@@ -28,30 +28,66 @@
   "links": [],
   "panels": [
     {
+      "datasource": {
+        "uid": "ff27vpmruzxtsc"
+      },
       "fieldConfig": {
-        "defaults": {},
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "custom": {
+            "align": "center",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "filterable": false,
+            "footer": {
+              "reducers": []
+            },
+            "inspect": false,
+            "wrapHeaderText": false,
+            "wrapText": false
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
         "overrides": []
       },
       "gridPos": {
-        "h": 2,
+        "h": 3,
         "w": 22,
         "x": 0,
         "y": 0
       },
       "id": 171,
       "options": {
-        "code": {
-          "language": "plaintext",
-          "showLineNumbers": false,
-          "showMiniMap": false
-        },
-        "content": "<div style=\"text-align:center; color:#ffffff; font-size:2.2rem; font-weight:600;\">\r\n  Live Monitoring SolarEdge SE6000H\r\n</div>",
-        "mode": "html"
+        "cellHeight": "sm",
+        "enablePagination": false,
+        "showHeader": true
       },
       "pluginVersion": "12.3.0",
+      "targets": [
+        {
+          "query": "from(bucket: \"Solaredge_Realtime\")\r\n  |> range(start: -1h)\r\n  |> filter(fn: (r) => r._measurement == \"realtime\")\r\n  |> filter(fn: (r) => r._field == \"Inverter_Text\")\r\n  |> filter(fn: (r) => \r\n      r.endpoint == \"Manufacturer\" or \r\n      r.endpoint == \"Model\" or \r\n      r.endpoint == \"Serialnumber\" or \r\n      r.endpoint == \"Version\"\r\n  )\r\n  |> last()\r\n  |> group()\r\n  |> pivot(rowKey: [], columnKey: [\"endpoint\"], valueColumn: \"_value\")\r\n  |> drop(columns: [\"_start\", \"_stop\", \"_measurement\", \"_field\", \"device_id\", \"unit\"])",
+          "refId": "A"
+        }
+      ],
       "title": "",
       "transparent": true,
-      "type": "text"
+      "type": "table"
     },
     {
       "datasource": {
@@ -63,7 +99,7 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 2,
+        "h": 3,
         "w": 2,
         "x": 22,
         "y": 0
@@ -167,7 +203,7 @@
         "h": 9,
         "w": 7,
         "x": 0,
-        "y": 2
+        "y": 3
       },
       "hideTimeOverride": true,
       "id": 10,
@@ -236,7 +272,7 @@
         "h": 9,
         "w": 8,
         "x": 7,
-        "y": 2
+        "y": 3
       },
       "hideTimeOverride": true,
       "id": 14,
@@ -313,7 +349,7 @@
         "h": 9,
         "w": 7,
         "x": 15,
-        "y": 2
+        "y": 3
       },
       "hideTimeOverride": true,
       "id": 12,
@@ -445,7 +481,7 @@
         "h": 5,
         "w": 2,
         "x": 22,
-        "y": 2
+        "y": 3
       },
       "hideTimeOverride": true,
       "id": 48,
@@ -541,7 +577,7 @@
         "h": 5,
         "w": 2,
         "x": 22,
-        "y": 7
+        "y": 8
       },
       "hideTimeOverride": true,
       "id": 184,
@@ -629,7 +665,7 @@
         "h": 3,
         "w": 3,
         "x": 0,
-        "y": 11
+        "y": 12
       },
       "hideTimeOverride": true,
       "id": 44,
@@ -735,7 +771,7 @@
         "h": 3,
         "w": 3,
         "x": 3,
-        "y": 11
+        "y": 12
       },
       "hideTimeOverride": true,
       "id": 67,
@@ -802,7 +838,7 @@
         "h": 3,
         "w": 3,
         "x": 6,
-        "y": 11
+        "y": 12
       },
       "hideTimeOverride": true,
       "id": 66,
@@ -869,7 +905,7 @@
         "h": 3,
         "w": 3,
         "x": 9,
-        "y": 11
+        "y": 12
       },
       "hideTimeOverride": true,
       "id": 68,
@@ -940,7 +976,7 @@
         "h": 3,
         "w": 3,
         "x": 12,
-        "y": 11
+        "y": 12
       },
       "hideTimeOverride": true,
       "id": 86,
@@ -1010,7 +1046,7 @@
         "h": 3,
         "w": 3,
         "x": 15,
-        "y": 11
+        "y": 12
       },
       "hideTimeOverride": true,
       "id": 101,
@@ -1077,6 +1113,11 @@
                   "index": 6,
                   "text": "Processo di avvio"
                 },
+                "4": {
+                  "color": "green",
+                  "index": 5,
+                  "text": "Produzione"
+                },
                 "5": {
                   "index": 4,
                   "text": "Limitato"
@@ -1092,11 +1133,6 @@
                 "8": {
                   "index": 1,
                   "text": "Manutenzione"
-                },
-                "Producing": {
-                  "color": "green",
-                  "index": 5,
-                  "text": "Produzione"
                 }
               },
               "type": "value"
@@ -1165,7 +1201,7 @@
         "h": 3,
         "w": 4,
         "x": 18,
-        "y": 11
+        "y": 12
       },
       "hideTimeOverride": true,
       "id": 20,
@@ -1245,7 +1281,7 @@
         "h": 5,
         "w": 2,
         "x": 22,
-        "y": 12
+        "y": 13
       },
       "hideTimeOverride": true,
       "id": 63,
@@ -1314,7 +1350,6 @@
           "color": {
             "mode": "thresholds"
           },
-          "decimals": 1,
           "links": [],
           "mappings": [],
           "thresholds": {
@@ -1334,7 +1369,7 @@
         "h": 3,
         "w": 3,
         "x": 0,
-        "y": 14
+        "y": 15
       },
       "hideTimeOverride": true,
       "id": 62,
@@ -1381,10 +1416,9 @@
           "color": {
             "mode": "thresholds"
           },
-          "decimals": 1,
           "links": [],
           "mappings": [],
-          "noValue": "0.0 Wh",
+          "noValue": "0 Wh",
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -1402,7 +1436,7 @@
         "h": 3,
         "w": 3,
         "x": 3,
-        "y": 14
+        "y": 15
       },
       "hideTimeOverride": true,
       "id": 61,
@@ -1469,7 +1503,7 @@
         "h": 3,
         "w": 3,
         "x": 6,
-        "y": 14
+        "y": 15
       },
       "hideTimeOverride": true,
       "id": 70,
@@ -1516,7 +1550,6 @@
             "fixedColor": "light-yellow",
             "mode": "thresholds"
           },
-          "decimals": 2,
           "mappings": [],
           "thresholds": {
             "mode": "absolute",
@@ -1535,7 +1568,7 @@
         "h": 3,
         "w": 3,
         "x": 9,
-        "y": 14
+        "y": 15
       },
       "hideTimeOverride": true,
       "id": 69,
@@ -1606,7 +1639,7 @@
         "h": 3,
         "w": 3,
         "x": 12,
-        "y": 14
+        "y": 15
       },
       "hideTimeOverride": true,
       "id": 60,
@@ -1677,7 +1710,7 @@
         "h": 3,
         "w": 3,
         "x": 15,
-        "y": 14
+        "y": 15
       },
       "hideTimeOverride": true,
       "id": 180,
@@ -1790,7 +1823,7 @@
         "h": 3,
         "w": 4,
         "x": 18,
-        "y": 14
+        "y": 15
       },
       "hideTimeOverride": true,
       "id": 194,
@@ -2021,7 +2054,7 @@
         "h": 12,
         "w": 12,
         "x": 0,
-        "y": 17
+        "y": 18
       },
       "hideTimeOverride": true,
       "id": 183,
@@ -2271,7 +2304,7 @@
         "h": 12,
         "w": 12,
         "x": 12,
-        "y": 17
+        "y": 18
       },
       "hideTimeOverride": true,
       "id": 181,
@@ -2476,7 +2509,7 @@
         "h": 14,
         "w": 23,
         "x": 0,
-        "y": 29
+        "y": 30
       },
       "id": 6,
       "options": {
@@ -2594,7 +2627,7 @@
         "h": 2,
         "w": 1,
         "x": 23,
-        "y": 29
+        "y": 30
       },
       "id": 121,
       "options": {
@@ -2663,7 +2696,7 @@
         "h": 2,
         "w": 1,
         "x": 23,
-        "y": 31
+        "y": 32
       },
       "id": 122,
       "options": {
@@ -2732,7 +2765,7 @@
         "h": 2,
         "w": 1,
         "x": 23,
-        "y": 33
+        "y": 34
       },
       "id": 123,
       "options": {
@@ -2800,7 +2833,7 @@
         "h": 2,
         "w": 1,
         "x": 23,
-        "y": 35
+        "y": 36
       },
       "id": 124,
       "options": {
@@ -2868,7 +2901,7 @@
         "h": 2,
         "w": 1,
         "x": 23,
-        "y": 37
+        "y": 38
       },
       "id": 125,
       "options": {
@@ -2940,7 +2973,7 @@
         "h": 2,
         "w": 1,
         "x": 23,
-        "y": 39
+        "y": 40
       },
       "id": 144,
       "options": {
@@ -2961,7 +2994,7 @@
         "textMode": "auto",
         "wideLayout": true
       },
-      "pluginVersion": "12.2.1",
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -3010,7 +3043,7 @@
         "h": 2,
         "w": 1,
         "x": 23,
-        "y": 41
+        "y": 42
       },
       "id": 172,
       "options": {
@@ -3032,7 +3065,7 @@
         "textMode": "auto",
         "wideLayout": false
       },
-      "pluginVersion": "12.2.1",
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -3179,7 +3212,7 @@
         "h": 14,
         "w": 23,
         "x": 0,
-        "y": 43
+        "y": 44
       },
       "id": 72,
       "options": {
@@ -3209,7 +3242,7 @@
         "xTickLabelRotation": 0,
         "xTickLabelSpacing": 0
       },
-      "pluginVersion": "12.2.1",
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -3283,7 +3316,7 @@
         "h": 2,
         "w": 1,
         "x": 23,
-        "y": 43
+        "y": 44
       },
       "hideTimeOverride": true,
       "id": 173,
@@ -3305,7 +3338,7 @@
         "textMode": "auto",
         "wideLayout": true
       },
-      "pluginVersion": "12.2.1",
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "alias": "Produzione",
@@ -3355,7 +3388,7 @@
         "h": 2,
         "w": 1,
         "x": 23,
-        "y": 45
+        "y": 46
       },
       "hideTimeOverride": true,
       "id": 174,
@@ -3378,7 +3411,7 @@
         "textMode": "auto",
         "wideLayout": true
       },
-      "pluginVersion": "12.2.1",
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -3427,7 +3460,7 @@
         "h": 2,
         "w": 1,
         "x": 23,
-        "y": 47
+        "y": 48
       },
       "hideTimeOverride": true,
       "id": 175,
@@ -3450,7 +3483,7 @@
         "textMode": "auto",
         "wideLayout": true
       },
-      "pluginVersion": "12.2.1",
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -3498,7 +3531,7 @@
         "h": 2,
         "w": 1,
         "x": 23,
-        "y": 49
+        "y": 50
       },
       "hideTimeOverride": true,
       "id": 176,
@@ -3521,7 +3554,7 @@
         "textMode": "auto",
         "wideLayout": true
       },
-      "pluginVersion": "12.2.1",
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -3569,7 +3602,7 @@
         "h": 2,
         "w": 1,
         "x": 23,
-        "y": 51
+        "y": 52
       },
       "hideTimeOverride": true,
       "id": 178,
@@ -3592,7 +3625,7 @@
         "textMode": "auto",
         "wideLayout": true
       },
-      "pluginVersion": "12.2.1",
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -3644,7 +3677,7 @@
         "h": 2,
         "w": 1,
         "x": 23,
-        "y": 53
+        "y": 54
       },
       "hideTimeOverride": true,
       "id": 190,
@@ -3666,7 +3699,7 @@
         "textMode": "auto",
         "wideLayout": false
       },
-      "pluginVersion": "12.2.1",
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -3717,7 +3750,7 @@
         "h": 2,
         "w": 1,
         "x": 23,
-        "y": 55
+        "y": 56
       },
       "hideTimeOverride": true,
       "id": 177,
@@ -3740,7 +3773,7 @@
         "textMode": "auto",
         "wideLayout": false
       },
-      "pluginVersion": "12.2.1",
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -3888,7 +3921,7 @@
         "h": 14,
         "w": 23,
         "x": 0,
-        "y": 57
+        "y": 58
       },
       "hideTimeOverride": true,
       "id": 162,
@@ -3921,7 +3954,7 @@
         "xTickLabelRotation": 0,
         "xTickLabelSpacing": 0
       },
-      "pluginVersion": "12.2.1",
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -3994,7 +4027,7 @@
         "h": 2,
         "w": 1,
         "x": 23,
-        "y": 57
+        "y": 58
       },
       "hideTimeOverride": true,
       "id": 185,
@@ -4016,7 +4049,7 @@
         "textMode": "auto",
         "wideLayout": true
       },
-      "pluginVersion": "12.2.1",
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "alias": "Produzione",
@@ -4066,7 +4099,7 @@
         "h": 2,
         "w": 1,
         "x": 23,
-        "y": 59
+        "y": 60
       },
       "hideTimeOverride": true,
       "id": 186,
@@ -4089,7 +4122,7 @@
         "textMode": "auto",
         "wideLayout": true
       },
-      "pluginVersion": "12.2.1",
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -4138,7 +4171,7 @@
         "h": 2,
         "w": 1,
         "x": 23,
-        "y": 61
+        "y": 62
       },
       "hideTimeOverride": true,
       "id": 187,
@@ -4161,7 +4194,7 @@
         "textMode": "auto",
         "wideLayout": true
       },
-      "pluginVersion": "12.2.1",
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -4209,7 +4242,7 @@
         "h": 2,
         "w": 1,
         "x": 23,
-        "y": 63
+        "y": 64
       },
       "hideTimeOverride": true,
       "id": 188,
@@ -4232,7 +4265,7 @@
         "textMode": "auto",
         "wideLayout": true
       },
-      "pluginVersion": "12.2.1",
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -4280,7 +4313,7 @@
         "h": 2,
         "w": 1,
         "x": 23,
-        "y": 65
+        "y": 66
       },
       "hideTimeOverride": true,
       "id": 189,
@@ -4303,7 +4336,7 @@
         "textMode": "auto",
         "wideLayout": true
       },
-      "pluginVersion": "12.2.1",
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -4355,7 +4388,7 @@
         "h": 2,
         "w": 1,
         "x": 23,
-        "y": 67
+        "y": 68
       },
       "hideTimeOverride": true,
       "id": 179,
@@ -4377,7 +4410,7 @@
         "textMode": "auto",
         "wideLayout": true
       },
-      "pluginVersion": "12.2.1",
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -4429,7 +4462,7 @@
         "h": 2,
         "w": 1,
         "x": 23,
-        "y": 69
+        "y": 70
       },
       "hideTimeOverride": true,
       "id": 191,
@@ -4452,7 +4485,7 @@
         "textMode": "auto",
         "wideLayout": false
       },
-      "pluginVersion": "12.2.1",
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -4523,7 +4556,7 @@
         "h": 12,
         "w": 24,
         "x": 0,
-        "y": 71
+        "y": 72
       },
       "hideTimeOverride": true,
       "id": 193,
@@ -4555,7 +4588,7 @@
         "xTickLabelRotation": 0,
         "xTickLabelSpacing": 0
       },
-      "pluginVersion": "12.2.1",
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -4703,7 +4736,7 @@
         "h": 14,
         "w": 24,
         "x": 0,
-        "y": 83
+        "y": 84
       },
       "id": 99,
       "interval": "15m",
@@ -4720,7 +4753,7 @@
           "sort": "none"
         }
       },
-      "pluginVersion": "12.2.1",
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -4858,7 +4891,7 @@
         "h": 14,
         "w": 24,
         "x": 0,
-        "y": 97
+        "y": 98
       },
       "id": 154,
       "options": {
@@ -4886,7 +4919,7 @@
         "text": {},
         "valueMode": "color"
       },
-      "pluginVersion": "12.2.1",
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -5069,7 +5102,7 @@
         "h": 3,
         "w": 24,
         "x": 0,
-        "y": 111
+        "y": 112
       },
       "hideTimeOverride": true,
       "id": 58,
@@ -5094,7 +5127,7 @@
         "textMode": "value_and_name",
         "wideLayout": true
       },
-      "pluginVersion": "12.2.1",
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -5193,7 +5226,7 @@
         "h": 3,
         "w": 24,
         "x": 0,
-        "y": 114
+        "y": 115
       },
       "id": 192,
       "options": {
@@ -5214,7 +5247,7 @@
         "textMode": "auto",
         "wideLayout": true
       },
-      "pluginVersion": "12.2.1",
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -5385,6 +5418,6 @@
   "timezone": "",
   "title": "Solaredge 3.0",
   "uid": "afb91a6f-d8f7-43ae-8a98-67eab1bb4baa",
-  "version": 266,
+  "version": 286,
   "weekStart": "monday"
 }
