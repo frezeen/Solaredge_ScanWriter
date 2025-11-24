@@ -283,42 +283,9 @@ class RealtimeParser:
                         try:
                             if scale == -32768: continue
                             
-                            # ENERGY COUNTERS: Compensazione sistematica per bug firmware
-                            # Il meter sembra riportare sistematicamente uno scale factor errato di 2 ordini di grandezza.
-                            # Esempio noto: Report scale=1 (x10), ma reale è /10 (x0.1) -> Differenza 10^2
-                            # Esempio osservato: Report scale=-2 (x0.01), ma valori troppo alti -> Probabile reale -4 (x0.0001)
-                            # Soluzione: Applicare sempre (scale - 2) per i contatori di energia
-                            energy_counters = [
-                                'import_energy_active', 'export_energy_active',
-                                'import_energy_apparent', 'export_energy_apparent',
-                                'import_energy_reactive_q1', 'import_energy_reactive_q2',
-                                'export_energy_reactive_q3', 'export_energy_reactive_q4',
-                                # L1
-                                'l1_import_energy_active', 'l1_export_energy_active',
-                                'l1_import_energy_apparent', 'l1_export_energy_apparent',
-                                'l1_import_energy_reactive_q1', 'l1_import_energy_reactive_q2',
-                                'l1_export_energy_reactive_q3', 'l1_export_energy_reactive_q4',
-                                # L2
-                                'l2_import_energy_active', 'l2_export_energy_active',
-                                'l2_import_energy_apparent', 'l2_export_energy_apparent',
-                                'l2_import_energy_reactive_q1', 'l2_import_energy_reactive_q2',
-                                'l2_export_energy_reactive_q3', 'l2_export_energy_reactive_q4',
-                                # L3
-                                'l3_import_energy_active', 'l3_export_energy_active',
-                                'l3_import_energy_apparent', 'l3_export_energy_apparent',
-                                'l3_import_energy_reactive_q1', 'l3_import_energy_reactive_q2',
-                                'l3_export_energy_reactive_q3', 'l3_export_energy_reactive_q4'
-                            ]
-                            
-                            if clean_key in energy_counters:
-                                # Applica correzione sistematica: scale - 2
-                                # scale=1 -> -1 (x0.1)
-                                # scale=-2 -> -4 (x0.0001)
-                                corrected_scale = scale - 2
-                                final_value = value * (10 ** corrected_scale)
-                            else:
-                                # Altri valori: usa scaling normale
-                                final_value = value * (10 ** scale)
+                            # Scaling standard: value * (10 ^ scale)
+                            # Come richiesto, usiamo rigorosamente lo scale factor riportato dal dispositivo
+                            final_value = value * (10 ** scale)
                         except: continue
                     
                     if isinstance(final_value, (int, float)):

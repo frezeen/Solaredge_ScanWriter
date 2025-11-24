@@ -24,7 +24,7 @@
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
-  "id": 1,
+  "id": 0,
   "links": [],
   "panels": [
     {
@@ -48,7 +48,7 @@
         "content": "<div style=\"text-align:center; color:#ffffff; font-size:2.2rem; font-weight:600;\">\r\n  Live Monitoring SolarEdge SE6000H\r\n</div>",
         "mode": "html"
       },
-      "pluginVersion": "12.2.1",
+      "pluginVersion": "12.3.0",
       "title": "",
       "transparent": true,
       "type": "text"
@@ -187,7 +187,7 @@
         "sizing": "auto",
         "text": {}
       },
-      "pluginVersion": "12.2.1",
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -256,7 +256,7 @@
         "sizing": "auto",
         "text": {}
       },
-      "pluginVersion": "12.2.1",
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -333,7 +333,7 @@
         "sizing": "auto",
         "text": {}
       },
-      "pluginVersion": "12.2.1",
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -466,7 +466,7 @@
         "sizing": "manual",
         "text": {}
       },
-      "pluginVersion": "12.2.1",
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "alias": "Temperatura",
@@ -562,7 +562,7 @@
         "sizing": "manual",
         "text": {}
       },
-      "pluginVersion": "12.2.1",
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "alias": "Volt",
@@ -652,7 +652,7 @@
         "textMode": "auto",
         "wideLayout": true
       },
-      "pluginVersion": "12.2.1",
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "alias": "Produzione di oggi",
@@ -677,7 +677,7 @@
           "hide": false,
           "orderByTime": "ASC",
           "policy": "default",
-          "query": "import \"timezone\"\nimport \"date\"\noption location = timezone.location(name: \"Europe/Rome\")\n\nstart = date.truncate(t: now(), unit: 1d)\nstop  = date.add(d: 1d, to: start)\n\ndailyDeltaWh = (tables=<-) => {\n  f = tables\n    |> first()\n    |> keep(columns: [\"device_id\", \"_value\"])\n    |> set(key: \"kind\", value: \"start\")\n\n  l = tables\n    |> last()\n    |> keep(columns: [\"device_id\", \"_value\"])\n    |> set(key: \"kind\", value: \"end\")\n\n  return union(tables: [f, l])\n    |> pivot(rowKey: [\"device_id\"], columnKey: [\"kind\"], valueColumn: \"_value\")\n    |> map(fn: (r) => ({ r with _value: float(v: r.end) - float(v: r.start) }))\n    |> map(fn: (r) => ({ r with _value: if r._value < 0.0 then 0.0 else r._value }))\n    |> group(columns: [])\n    |> sum(column: \"_value\")\n}\n\nfrom(bucket: \"Solaredge_Realtime\")\n  |> range(start: start, stop: stop)\n  |> filter(fn: (r) =>\n    r._measurement == \"realtime\" and\n    r._field == \"Inverter\" and\n    r.endpoint == \"Total Energy\" and\n    r.unit == \"Wh\"\n  )\n  |> group(columns: [\"device_id\"])\n  |> dailyDeltaWh()\n  |> map(fn: (r) => ({\n    r with\n    _time: date.truncate(\n      t: if date.millisecond(t: now()) >= 500 then date.add(d: 1s, to: now()) else now(),\n      unit: 1s\n    )\n  }))\n  |> rename(columns: {_value: \"produzione_oggi_wh\"})\n  |> keep(columns: [\"_time\",\"produzione_oggi_wh\"])\n  |> yield(name: \"produzione_fotovoltaica_oggi_wh\")",
+          "query": "import \"timezone\"\nimport \"date\"\noption location = timezone.location(name: \"Europe/Rome\")\n\nstart = date.truncate(t: now(), unit: 1d)\nstop  = date.add(d: 1d, to: start)\n\ndailyDeltaWh = (tables=<-) => {\n  f = tables\n    |> first()\n    |> keep(columns: [\"device_id\", \"_value\"])\n    |> set(key: \"kind\", value: \"start\")\n\n  l = tables\n    |> last()\n    |> keep(columns: [\"device_id\", \"_value\"])\n    |> set(key: \"kind\", value: \"end\")\n\n  return union(tables: [f, l])\n    |> pivot(rowKey: [\"device_id\"], columnKey: [\"kind\"], valueColumn: \"_value\")\n    |> map(fn: (r) => ({ r with _value: float(v: r.end) - float(v: r.start) }))\n    |> map(fn: (r) => ({ r with _value: if r._value < 0.0 then 0.0 else r._value }))\n    |> group(columns: [])\n    |> sum(column: \"_value\")\n}\n\nfrom(bucket: \"Solaredge_Realtime\")\n  |> range(start: start, stop: stop)\n  |> filter(fn: (r) =>\n    r._measurement == \"realtime\" and\n    r._field == \"Inverter\" and\n    r.endpoint == \"Energy Total\" and\n    r.unit == \"Wh\"\n  )\n  |> group(columns: [\"device_id\"])\n  |> dailyDeltaWh()\n  |> map(fn: (r) => ({\n    r with\n    _time: date.truncate(\n      t: if date.millisecond(t: now()) >= 500 then date.add(d: 1s, to: now()) else now(),\n      unit: 1s\n    )\n  }))\n  |> rename(columns: {_value: \"produzione_oggi_wh\"})\n  |> keep(columns: [\"_time\",\"produzione_oggi_wh\"])\n  |> yield(name: \"produzione_fotovoltaica_oggi_wh\")",
           "queryType": "randomWalk",
           "rawQuery": true,
           "refId": "Produzione",
@@ -756,7 +756,7 @@
         "textMode": "auto",
         "wideLayout": true
       },
-      "pluginVersion": "12.2.1",
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -823,14 +823,14 @@
         "textMode": "auto",
         "wideLayout": true
       },
-      "pluginVersion": "12.2.1",
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
             "type": "influxdb",
             "uid": "ff27vpmruzxtsc"
           },
-          "query": "import \"timezone\"\r\nimport \"date\"\r\nimport \"array\"\r\n\r\noption location = timezone.location(name: \"Europe/Rome\")\r\n\r\nstart = date.truncate(t: now(), unit: 1d)\r\n\r\n// Produzione: ultimo - primo\r\ndata_prod = from(bucket: \"Solaredge_Realtime\")\r\n  |> range(start: start)\r\n  |> filter(fn: (r) =>\r\n      r._measurement == \"realtime\" and\r\n      r._field == \"Inverter\" and\r\n      r.endpoint == \"Total Energy\"\r\n  )\r\n  |> filter(fn: (r) => exists r._value)\r\n\r\nfirst_prod = data_prod |> first() |> findRecord(fn: (key) => true, idx: 0)\r\nlast_prod = data_prod |> last() |> findRecord(fn: (key) => true, idx: 0)\r\nprod_value = last_prod._value - first_prod._value\r\n\r\n// Import: ultimo - primo\r\ndata_imp = from(bucket: \"Solaredge_Realtime\")\r\n  |> range(start: start)\r\n  |> filter(fn: (r) =>\r\n      r._measurement == \"realtime\" and\r\n      r._field == \"Meter\" and\r\n      r.endpoint == \"Import Energy\"\r\n  )\r\n  |> filter(fn: (r) => exists r._value)\r\n\r\nfirst_imp = data_imp |> first() |> findRecord(fn: (key) => true, idx: 0)\r\nlast_imp = data_imp |> last() |> findRecord(fn: (key) => true, idx: 0)\r\nimp_value = last_imp._value - first_imp._value\r\n\r\n// Export: ultimo - primo\r\ndata_exp = from(bucket: \"Solaredge_Realtime\")\r\n  |> range(start: start)\r\n  |> filter(fn: (r) =>\r\n      r._measurement == \"realtime\" and\r\n      r._field == \"Meter\" and\r\n      r.endpoint == \"Export Energy\"\r\n  )\r\n  |> filter(fn: (r) => exists r._value)\r\n\r\nfirst_exp = data_exp |> first() |> findRecord(fn: (key) => true, idx: 0)\r\nlast_exp = data_exp |> last() |> findRecord(fn: (key) => true, idx: 0)\r\nexp_value = last_exp._value - first_exp._value\r\n\r\n// Consumo = Import + Produzione - Export\r\nconsumo_wh = imp_value + prod_value - exp_value\r\n\r\n// Output\r\narray.from(rows: [{\r\n  _time: now(),\r\n  _field: \"consumo_oggi_wh\",\r\n  _value: consumo_wh,\r\n  import_wh: imp_value,\r\n  produzione_wh: prod_value,\r\n  export_wh: exp_value\r\n}])\r\n  |> yield(name: \"consumo_totale_oggi_Wh\")",
+          "query": "import \"timezone\"\r\nimport \"date\"\r\nimport \"array\"\r\n\r\noption location = timezone.location(name: \"Europe/Rome\")\r\n\r\nstart = date.truncate(t: now(), unit: 1d)\r\n\r\n// Produzione: ultimo - primo\r\ndata_prod = from(bucket: \"Solaredge_Realtime\")\r\n  |> range(start: start)\r\n  |> filter(fn: (r) =>\r\n      r._measurement == \"realtime\" and\r\n      r._field == \"Inverter\" and\r\n      r.endpoint == \"Energy Total\"\r\n  )\r\n  |> filter(fn: (r) => exists r._value)\r\n\r\nfirst_prod = data_prod |> first() |> findRecord(fn: (key) => true, idx: 0)\r\nlast_prod = data_prod |> last() |> findRecord(fn: (key) => true, idx: 0)\r\nprod_value = last_prod._value - first_prod._value\r\n\r\n// Import: ultimo - primo\r\ndata_imp = from(bucket: \"Solaredge_Realtime\")\r\n  |> range(start: start)\r\n  |> filter(fn: (r) =>\r\n      r._measurement == \"realtime\" and\r\n      r._field == \"Meter\" and\r\n      r.endpoint == \"Import Energy Active\"\r\n  )\r\n  |> filter(fn: (r) => exists r._value)\r\n\r\nfirst_imp = data_imp |> first() |> findRecord(fn: (key) => true, idx: 0)\r\nlast_imp = data_imp |> last() |> findRecord(fn: (key) => true, idx: 0)\r\nimp_value = last_imp._value - first_imp._value\r\n\r\n// Export: ultimo - primo\r\ndata_exp = from(bucket: \"Solaredge_Realtime\")\r\n  |> range(start: start)\r\n  |> filter(fn: (r) =>\r\n      r._measurement == \"realtime\" and\r\n      r._field == \"Meter\" and\r\n      r.endpoint == \"Export Energy Active\"\r\n  )\r\n  |> filter(fn: (r) => exists r._value)\r\n\r\nfirst_exp = data_exp |> first() |> findRecord(fn: (key) => true, idx: 0)\r\nlast_exp = data_exp |> last() |> findRecord(fn: (key) => true, idx: 0)\r\nexp_value = last_exp._value - first_exp._value\r\n\r\n// Consumo = Import + Produzione - Export\r\nconsumo_wh = imp_value + prod_value - exp_value\r\n\r\n// Output\r\narray.from(rows: [{\r\n  _time: now(),\r\n  _field: \"consumo_oggi_wh\",\r\n  _value: consumo_wh,\r\n  import_wh: imp_value,\r\n  produzione_wh: prod_value,\r\n  export_wh: exp_value\r\n}])\r\n  |> yield(name: \"consumo_totale_oggi_Wh\")",
           "refId": "Consumo"
         }
       ],
@@ -892,14 +892,14 @@
         "textMode": "auto",
         "wideLayout": true
       },
-      "pluginVersion": "12.2.1",
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
             "type": "influxdb",
             "uid": "ff27vpmruzxtsc"
           },
-          "query": "import \"timezone\"\r\nimport \"date\"\r\nimport \"array\"\r\n\r\noption location = timezone.location(name: \"Europe/Rome\")\r\n\r\ntoday_start = date.truncate(t: now(), unit: 1d)\r\n\r\n// Ottieni prima e ultima lettura\r\ndata = from(bucket: \"Solaredge_Realtime\")\r\n  |> range(start: today_start)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"realtime\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"Meter\")\r\n  |> filter(fn: (r) => r[\"endpoint\"] == \"Import Energy\")\r\n  |> filter(fn: (r) => exists r._value)\r\n\r\nfirst_value = data\r\n  |> first()\r\n  |> findRecord(fn: (key) => true, idx: 0)\r\n\r\nlast_value = data\r\n  |> last()\r\n  |> findRecord(fn: (key) => true, idx: 0)\r\n\r\n// Calcola la differenza\r\narray.from(rows: [{\r\n  _time: now(),\r\n  _field: \"prelievo_oggi_kwh\",\r\n  prelievo_oggi_kwh: last_value._value - first_value._value,\r\n  prima_lettura: first_value._value,\r\n  ultima_lettura: last_value._value\r\n}])",
+          "query": "import \"timezone\"\r\nimport \"date\"\r\nimport \"array\"\r\n\r\noption location = timezone.location(name: \"Europe/Rome\")\r\n\r\ntoday_start = date.truncate(t: now(), unit: 1d)\r\n\r\n// Ottieni prima e ultima lettura\r\ndata = from(bucket: \"Solaredge_Realtime\")\r\n  |> range(start: today_start)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"realtime\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"Meter\")\r\n  |> filter(fn: (r) => r[\"endpoint\"] == \"Import Energy Active\")\r\n  |> filter(fn: (r) => exists r._value)\r\n\r\nfirst_value = data\r\n  |> first()\r\n  |> findRecord(fn: (key) => true, idx: 0)\r\n\r\nlast_value = data\r\n  |> last()\r\n  |> findRecord(fn: (key) => true, idx: 0)\r\n\r\n// Calcola la differenza\r\narray.from(rows: [{\r\n  _time: now(),\r\n  _field: \"prelievo_oggi_kwh\",\r\n  prelievo_oggi_kwh: last_value._value - first_value._value,\r\n  prima_lettura: first_value._value,\r\n  ultima_lettura: last_value._value\r\n}])",
           "refId": "Prelievo"
         }
       ],
@@ -963,7 +963,7 @@
         "textMode": "value",
         "wideLayout": true
       },
-      "pluginVersion": "12.2.1",
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -1033,7 +1033,7 @@
         "textMode": "auto",
         "wideLayout": true
       },
-      "pluginVersion": "12.2.1",
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -1195,7 +1195,7 @@
         "textMode": "value",
         "wideLayout": true
       },
-      "pluginVersion": "12.2.1",
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -1266,7 +1266,7 @@
         "sizing": "auto",
         "text": {}
       },
-      "pluginVersion": "12.2.1",
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "alias": "Volt",
@@ -1356,7 +1356,7 @@
         "textMode": "value",
         "wideLayout": true
       },
-      "pluginVersion": "12.2.1",
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -1425,7 +1425,7 @@
         "textMode": "value",
         "wideLayout": true
       },
-      "pluginVersion": "12.2.1",
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -1490,7 +1490,7 @@
         "textMode": "value",
         "wideLayout": true
       },
-      "pluginVersion": "12.2.1",
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -1559,7 +1559,7 @@
         "textMode": "auto",
         "wideLayout": true
       },
-      "pluginVersion": "12.2.1",
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -1630,7 +1630,7 @@
         "textMode": "value",
         "wideLayout": true
       },
-      "pluginVersion": "12.2.1",
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -1701,7 +1701,7 @@
         "textMode": "auto",
         "wideLayout": true
       },
-      "pluginVersion": "12.2.1",
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -1821,7 +1821,7 @@
         "textMode": "value",
         "wideLayout": true
       },
-      "pluginVersion": "12.2.1",
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -2043,7 +2043,7 @@
           "sort": "none"
         }
       },
-      "pluginVersion": "12.2.1",
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -2293,7 +2293,7 @@
           "sort": "none"
         }
       },
-      "pluginVersion": "12.2.1",
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -2506,7 +2506,7 @@
         "xTickLabelRotation": 0,
         "xTickLabelSpacing": 100
       },
-      "pluginVersion": "12.2.1",
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -2616,7 +2616,7 @@
         "textMode": "auto",
         "wideLayout": true
       },
-      "pluginVersion": "12.2.1",
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "alias": "Produzione",
@@ -2686,7 +2686,7 @@
         "textMode": "auto",
         "wideLayout": true
       },
-      "pluginVersion": "12.2.1",
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -5386,6 +5386,6 @@
   "timezone": "",
   "title": "Solaredge 3.0",
   "uid": "afb91a6f-d8f7-43ae-8a98-67eab1bb4baa",
-  "version": 200,
+  "version": 245,
   "weekStart": "monday"
 }
