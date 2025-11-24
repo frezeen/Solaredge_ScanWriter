@@ -51,14 +51,13 @@ class RealtimeParser:
                 if config.get('enabled', False)}
 
     def parse_raw_data(self, raw_data: dict) -> List[Point]:
-        """Parse dati raw (dizionario) e restituisce Point objects InfluxDB."""
+        """Parse dati raw da dizionario strutturato."""
         start_time = time.perf_counter()
+        parsed_data = []
         
         if not raw_data:
             raise ValueError("Dati raw vuoti o None")
             
-        parsed_data = []
-        
         if "inverter" in raw_data:
             parsed_data.extend(self._parse_inverter_raw(raw_data["inverter"]))
             
@@ -187,9 +186,92 @@ class RealtimeParser:
                         
                     endpoint_name = clean_key.replace('_', ' ').title()
                         
-                    scale_key = f"{key}_scale"
+                    # Mappa speciale per scale factor che non seguono pattern standard
+                    # Esempio: import_energy_active -> energy_active_scale
+                    special_scale_keys = {
+                        'import_energy_active': 'energy_active_scale',
+                        'export_energy_active': 'energy_active_scale',
+                        'l1_import_energy_active': 'energy_active_scale',
+                        'l2_import_energy_active': 'energy_active_scale',
+                        'l3_import_energy_active': 'energy_active_scale',
+                        'l1_export_energy_active': 'energy_active_scale',
+                        'l2_export_energy_active': 'energy_active_scale',
+                        'l3_export_energy_active': 'energy_active_scale',
+                        
+                        'import_energy_apparent': 'energy_apparent_scale',
+                        'export_energy_apparent': 'energy_apparent_scale',
+                        'l1_import_energy_apparent': 'energy_apparent_scale',
+                        'l2_import_energy_apparent': 'energy_apparent_scale',
+                        'l3_import_energy_apparent': 'energy_apparent_scale',
+                        'l1_export_energy_apparent': 'energy_apparent_scale',
+                        'l2_export_energy_apparent': 'energy_apparent_scale',
+                        'l3_export_energy_apparent': 'energy_apparent_scale',
+                        
+                        'import_energy_reactive_q1': 'energy_reactive_scale',
+                        'import_energy_reactive_q2': 'energy_reactive_scale',
+                        'export_energy_reactive_q3': 'energy_reactive_scale',
+                        'export_energy_reactive_q4': 'energy_reactive_scale',
+                        'l1_import_energy_reactive_q1': 'energy_reactive_scale',
+                        'l1_import_energy_reactive_q2': 'energy_reactive_scale',
+                        'l1_export_energy_reactive_q3': 'energy_reactive_scale',
+                        'l1_export_energy_reactive_q4': 'energy_reactive_scale',
+                        'l2_import_energy_reactive_q1': 'energy_reactive_scale',
+                        'l2_import_energy_reactive_q2': 'energy_reactive_scale',
+                        'l2_export_energy_reactive_q3': 'energy_reactive_scale',
+                        'l2_export_energy_reactive_q4': 'energy_reactive_scale',
+                        'l3_import_energy_reactive_q1': 'energy_reactive_scale',
+                        'l3_import_energy_reactive_q2': 'energy_reactive_scale',
+                        'l3_export_energy_reactive_q3': 'energy_reactive_scale',
+                        'l3_export_energy_reactive_q4': 'energy_reactive_scale',
+                        
+                        'voltage_ln': 'voltage_scale',
+                        'l1n_voltage': 'voltage_scale',
+                        'l2n_voltage': 'voltage_scale',
+                        'l3n_voltage': 'voltage_scale',
+                        'voltage_ll': 'voltage_scale',
+                        'l12_voltage': 'voltage_scale',
+                        'l23_voltage': 'voltage_scale',
+                        'l31_voltage': 'voltage_scale',
+                        
+                        'frequency': 'frequency_scale',
+                        
+                        'power': 'power_scale',
+                        'l1_power': 'power_scale',
+                        'l2_power': 'power_scale',
+                        'l3_power': 'power_scale',
+                        
+                        'power_apparent': 'power_apparent_scale',
+                        'l1_power_apparent': 'power_apparent_scale',
+                        'l2_power_apparent': 'power_apparent_scale',
+                        'l3_power_apparent': 'power_apparent_scale',
+                        
+                        'power_reactive': 'power_reactive_scale',
+                        'l1_power_reactive': 'power_reactive_scale',
+                        'l2_power_reactive': 'power_reactive_scale',
+                        'l3_power_reactive': 'power_reactive_scale',
+                        
+                        'power_factor': 'power_factor_scale',
+                        'l1_power_factor': 'power_factor_scale',
+                        'l2_power_factor': 'power_factor_scale',
+                        'l3_power_factor': 'power_factor_scale',
+                        
+                        'current': 'current_scale',
+                        'l1_current': 'current_scale',
+                        'l2_current': 'current_scale',
+                        'l3_current': 'current_scale'
+                    }
+                        
+                    scale_key = special_scale_keys.get(clean_key, f"{key}_scale")
                     scale = data.get(scale_key)
                     
+                    # Fallback: se non trovato, prova con suffisso _scale standard
+                    if scale is None and f"{key}_scale" in data:
+                        scale = data.get(f"{key}_scale")
+                    
+                    # DEBUG GENERALE: Logga tutto per capire cosa arriva
+                    # if 'energy' in clean_key and 'scale' not in clean_key:
+                    #      print(f"DEBUG ALL: {clean_key} raw={value} scale_key={scale_key} scale={scale}", flush=True)
+
                     final_value = value
                     # Get unit from config if available
                     measurement_config = enabled_measurements.get(clean_key, {})
@@ -201,10 +283,11 @@ class RealtimeParser:
                         try:
                             if scale == -32768: continue
                             
-                            # ENERGY COUNTERS: Compensazione per bug firmware meter
-                            # Documentazione solaredge_modbus: energy_total_scale dovrebbe essere 0
-                            # Ma alcuni meter riportano scale=1, causando moltiplicazione x10
-                            # Soluzione: se scale=1 per contatori energia, dividi per 10
+                            # ENERGY COUNTERS: Compensazione sistematica per bug firmware
+                            # Il meter sembra riportare sistematicamente uno scale factor errato di 2 ordini di grandezza.
+                            # Esempio noto: Report scale=1 (x10), ma reale è /10 (x0.1) -> Differenza 10^2
+                            # Esempio osservato: Report scale=-2 (x0.01), ma valori troppo alti -> Probabile reale -4 (x0.0001)
+                            # Soluzione: Applicare sempre (scale - 2) per i contatori di energia
                             energy_counters = [
                                 'import_energy_active', 'export_energy_active',
                                 'import_energy_apparent', 'export_energy_apparent',
@@ -228,13 +311,11 @@ class RealtimeParser:
                             ]
                             
                             if clean_key in energy_counters:
-                                # Se scale=1, il meter sta riportando valore x10 (bug firmware)
-                                # Dividi per 10 per compensare (tratta come scale -1)
-                                if scale == 1:
-                                    final_value = value / 10
-                                else:
-                                    # Per tutti gli altri scale (0, -1, -2, etc.), usa scaling standard
-                                    final_value = value * (10 ** scale)
+                                # Applica correzione sistematica: scale - 2
+                                # scale=1 -> -1 (x0.1)
+                                # scale=-2 -> -4 (x0.0001)
+                                corrected_scale = scale - 2
+                                final_value = value * (10 ** corrected_scale)
                             else:
                                 # Altri valori: usa scaling normale
                                 final_value = value * (10 ** scale)
@@ -287,7 +368,6 @@ class RealtimeParser:
                     if enabled_measurements and clean_key not in enabled_measurements:
                         if enabled_measurements: 
                             continue
-                            
                     endpoint_name = clean_key.replace('_', ' ').title()
                             
                     scale_key = f"{key}_scale"
