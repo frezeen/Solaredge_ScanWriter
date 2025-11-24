@@ -118,10 +118,14 @@ class RealtimeParser:
                     try:
                         if scale == -32768: continue
                         
-                        # Skip scale per contatore energia cumulativo (già in Wh corretto)
+                        # ENERGY COUNTER: Compensazione per bug firmware
+                        # Documentazione: energy_total_scale dovrebbe essere 0
+                        # Se scale=1, dividi per 10 per compensare
                         if clean_key == 'energy_total':
-                            final_value = value  # Usa valore raw senza scaling
-                            self._log.debug(f"Inverter {clean_key}: usando valore raw {value} Wh (scale {scale} ignorato)")
+                            if scale == 1:
+                                final_value = value / 10
+                            else:
+                                final_value = value
                         else:
                             final_value = value * (10 ** scale)
                     except: continue
@@ -196,8 +200,10 @@ class RealtimeParser:
                         try:
                             if scale == -32768: continue
                             
-                            # Skip scale per TUTTI i contatori energia cumulativi (già in Wh/VAh/VArh corretti)
-                            # Include: active, apparent, reactive (Q1-Q4) per tutte le fasi (L1/L2/L3)
+                            # ENERGY COUNTERS: Compensazione per bug firmware meter
+                            # Documentazione solaredge_modbus: energy_total_scale dovrebbe essere 0
+                            # Ma alcuni meter riportano scale=1, causando moltiplicazione x10
+                            # Soluzione: se scale=1 per contatori energia, dividi per 10
                             energy_counters = [
                                 'import_energy_active', 'export_energy_active',
                                 'import_energy_apparent', 'export_energy_apparent',
@@ -221,8 +227,15 @@ class RealtimeParser:
                             ]
                             
                             if clean_key in energy_counters:
-                                final_value = value  # Usa valore raw senza scaling
+                                # Se scale=1, il meter sta riportando valore x10 (bug firmware)
+                                # Dividi per 10 per compensare
+                                if scale == 1:
+                                    final_value = value / 10
+                                else:
+                                    # Se scale=0 (corretto), usa valore raw
+                                    final_value = value
                             else:
+                                # Altri valori: usa scaling normale
                                 final_value = value * (10 ** scale)
                         except: continue
                     
