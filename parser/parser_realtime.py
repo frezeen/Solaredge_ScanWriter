@@ -117,7 +117,13 @@ class RealtimeParser:
                 if isinstance(value, (int, float)) and scale is not None:
                     try:
                         if scale == -32768: continue
-                        final_value = value * (10 ** scale)
+                        
+                        # Skip scale per contatore energia cumulativo (già in Wh corretto)
+                        if clean_key == 'energy_total':
+                            final_value = value  # Usa valore raw senza scaling
+                            self._log.debug(f"Inverter {clean_key}: usando valore raw {value} Wh (scale {scale} ignorato)")
+                        else:
+                            final_value = value * (10 ** scale)
                     except: continue
                 
                 if isinstance(final_value, (int, float)):
@@ -189,7 +195,35 @@ class RealtimeParser:
                     if isinstance(value, (int, float)) and scale is not None:
                         try:
                             if scale == -32768: continue
-                            final_value = value * (10 ** scale)
+                            
+                            # Skip scale per TUTTI i contatori energia cumulativi (già in Wh/VAh/VArh corretti)
+                            # Include: active, apparent, reactive (Q1-Q4) per tutte le fasi (L1/L2/L3)
+                            energy_counters = [
+                                'import_energy_active', 'export_energy_active',
+                                'import_energy_apparent', 'export_energy_apparent',
+                                'import_energy_reactive_q1', 'import_energy_reactive_q2',
+                                'export_energy_reactive_q3', 'export_energy_reactive_q4',
+                                # L1
+                                'l1_import_energy_active', 'l1_export_energy_active',
+                                'l1_import_energy_apparent', 'l1_export_energy_apparent',
+                                'l1_import_energy_reactive_q1', 'l1_import_energy_reactive_q2',
+                                'l1_export_energy_reactive_q3', 'l1_export_energy_reactive_q4',
+                                # L2
+                                'l2_import_energy_active', 'l2_export_energy_active',
+                                'l2_import_energy_apparent', 'l2_export_energy_apparent',
+                                'l2_import_energy_reactive_q1', 'l2_import_energy_reactive_q2',
+                                'l2_export_energy_reactive_q3', 'l2_export_energy_reactive_q4',
+                                # L3
+                                'l3_import_energy_active', 'l3_export_energy_active',
+                                'l3_import_energy_apparent', 'l3_export_energy_apparent',
+                                'l3_import_energy_reactive_q1', 'l3_import_energy_reactive_q2',
+                                'l3_export_energy_reactive_q3', 'l3_export_energy_reactive_q4'
+                            ]
+                            
+                            if clean_key in energy_counters:
+                                final_value = value  # Usa valore raw senza scaling
+                            else:
+                                final_value = value * (10 ** scale)
                         except: continue
                     
                     if isinstance(final_value, (int, float)):
