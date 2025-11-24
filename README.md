@@ -55,6 +55,7 @@ Raccogli, analizza e visualizza i dati del tuo impianto fotovoltaico con dashboa
 - 🛡️ **Validazione Dati**: Controllo automatico range, rimozione outlier, sanity check
 - 🔄 **Retry Intelligente**: Gestione automatica errori temporanei e rate limiting
 - 📝 **Logging Dettagliato**: Tracciabilità completa per debugging e monitoraggio
+- 🌊 **Flows Orchestration**: Ogni modalità (API, Web, Realtime) è un flow isolato e indipendente gestito da `main.py`
 
 **Sistema Cache Avanzato**
 
@@ -146,6 +147,9 @@ Raccogli, analizza e visualizza i dati del tuo impianto fotovoltaico con dashboa
 │                     └──────────────┘                        │
 │                                                             │
 └─────────────────────────────────────────────────────────────┘
+```
+
+Il sistema è orchestrato tramite **Flows** (situati in `flows/`), che coordinano le operazioni di raccolta, parsing e scrittura per ogni sorgente dati (API, Web, Realtime). `main.py` agisce da entry point per avviare i vari flow.
 ```
 
 ## 📦 Requisiti
@@ -309,7 +313,20 @@ config/
 │   ├── api_endpoints.yaml      # 22 endpoint API SolarEdge
 │   ├── web_endpoints.yaml      # Device web (auto-generato con --scan)
 │   └── modbus_endpoints.yaml   # Endpoint Modbus realtime
+config/
+├── main.yaml                    # Configurazione principale
+├── sources/
+│   ├── api_endpoints.yaml      # 22 endpoint API SolarEdge
+│   ├── web_endpoints.yaml      # Device web (auto-generato con --scan)
+│   └── modbus_endpoints.yaml   # Endpoint Modbus realtime
 └── .env                         # Credenziali (root directory)
+
+flows/                           # Logica di orchestrazione
+├── api_flow.py                 # Flusso raccolta API
+├── realtime_flow.py            # Flusso Modbus Realtime
+├── web_flow.py                 # Flusso Web Scraping
+└── history_flow.py             # Flusso download storico
+
 ```
 
 ### Endpoint Abilitati di Default
