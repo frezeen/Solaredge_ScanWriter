@@ -95,25 +95,14 @@ class RealtimeParser:
             
             points = []
             
-            # Reverse mapping: config key -> legacy endpoint name
-            key_to_endpoint = {
-                'power_ac': 'Power',
-                'temperature': 'Temperature',
-                'current': 'Current',
-                'frequency': 'Frequency',
-                'manufacturer': 'Manufacturer',
-                'model': 'Model',
-                'serial': 'Serial'
-            }
-            
             for key, value in data.items():
                 clean_key = key[2:] if key.startswith('c_') else key
                 
                 if enabled_measurements and clean_key not in enabled_measurements:
                     continue
                 
-                # Use mapping or fallback to Title Case
-                endpoint_name = key_to_endpoint.get(clean_key, clean_key.replace('_', ' ').title())
+                # Use automatic Title Case conversion for endpoint name
+                endpoint_name = clean_key.replace('_', ' ').title()
                 
                 scale_key = f"{key}_scale"
                 scale = data.get(scale_key)
