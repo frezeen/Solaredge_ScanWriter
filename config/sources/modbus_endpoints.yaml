@@ -235,7 +235,7 @@ modbus:
           enabled: true
           field_name: temperature
           scale_field: temperature_scale
-          unit: °C
+          unit: C
         type:
           description: Tipo inverter (calcolato da SunSpec DID)
           enabled: true

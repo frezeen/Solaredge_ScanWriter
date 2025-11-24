@@ -30,6 +30,12 @@ class RealtimeParser:
             'meters': {},
             'batteries': {}
         }
+        
+        # Mappa di normalizzazione unità (abbreviazioni → forma completa)
+        self._unit_normalization = {
+            'C': '°C',
+            'F': '°F'
+        }
     
     def _get_enabled_measurements(self, endpoint_config: dict) -> dict:
         """Ottieni measurements abilitati da configurazione endpoint.
@@ -116,6 +122,8 @@ class RealtimeParser:
                 # Get unit from config if available
                 measurement_config = enabled_measurements.get(clean_key, {})
                 unit = measurement_config.get('unit', '')
+                # Normalizza unità (C → °C, F → °F)
+                unit = self._unit_normalization.get(unit, unit)
                 
                 if isinstance(value, (int, float)) and scale is not None:
                     try:
@@ -186,6 +194,8 @@ class RealtimeParser:
                     # Get unit from config if available
                     measurement_config = enabled_measurements.get(clean_key, {})
                     unit = measurement_config.get('unit', '')
+                    # Normalizza unità (C → °C, F → °F)
+                    unit = self._unit_normalization.get(unit, unit)
                     
                     if isinstance(value, (int, float)) and scale is not None:
                         try:
@@ -250,6 +260,8 @@ class RealtimeParser:
                     # Get unit from config if available
                     measurement_config = enabled_measurements.get(clean_key, {})
                     unit = measurement_config.get('unit', '')
+                    # Normalizza unità (C → °C, F → °F)
+                    unit = self._unit_normalization.get(unit, unit)
                     
                     if isinstance(value, (int, float)) and scale is not None:
                         try:
