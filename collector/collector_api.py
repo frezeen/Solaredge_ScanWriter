@@ -844,4 +844,3 @@ class CollectorAPI:
         except Exception as e:
             logger.error(f"Errore raccolta site_timeframe_energy smart cache: {e}")
             return {}
-

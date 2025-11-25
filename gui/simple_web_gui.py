@@ -87,6 +87,8 @@ class SimpleWebGUI:
                 self.logger.info("[GUI] ✅ Config manager globale ricaricato")
             except Exception as e:
                 self.logger.error(f"[GUI] ❌ Errore ricaricamento config manager: {e}")
+                config_manager = None
+
             
             # 4. Reset flag di stop e avvia il loop
             self.stop_requested = False
@@ -96,7 +98,16 @@ class SimpleWebGUI:
             # 5. Avvia il loop personalizzato per GUI
             import asyncio
             
-            config = await self.load_config()
+            # IMPORTANTE: Usa config_manager.get_raw_config() invece di self.load_config()
+            # per assicurarsi che i sources (web_scraping, api, modbus) siano caricati
+            # dai file in config/sources/, altrimenti mancano i device_id e category mappings
+            if config_manager:
+                config = config_manager.get_raw_config()
+                self.logger.info("[GUI] ✅ Config completo caricato con sources da config_manager")
+            else:
+                # Fallback a self.load_config() se config_manager non disponibile
+                config = await self.load_config()
+                self.logger.warning("[GUI] ⚠️ Usando config da self.load_config() (senza sources)")
             
             # Usa il cache manager condiviso passato dal main
             if not self.cache:

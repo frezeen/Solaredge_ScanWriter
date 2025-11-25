@@ -6,7 +6,7 @@ version: '3.8'
 services:
   # SolarEdge ScanWriter (Auto-adaptive)
   solaredge:
-    build: 
+    build:
       context: .
       dockerfile: Dockerfile
       args:
@@ -15,15 +15,15 @@ services:
     image: solaredge-scanwriter:latest
     container_name: solaredge-scanwriter
     restart: unless-stopped
-    
+
     environment:
       - DOCKER_MODE=true
       - INFLUXDB_URL=http://influxdb:8086
       - GRAFANA_URL=http://grafana:3000
-    
+
     env_file:
       - .env
-    
+
     volumes:
       - solaredge-logs:/app/logs
       - solaredge-cache:/app/cache
@@ -32,17 +32,17 @@ services:
       - solaredge-data:/app/data
       - ./config:/app/config:rw
       - /etc/localtime:/etc/localtime:ro
-    
+
     ports:
       - "8092:8092"
-    
+
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8092/health"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 60s
-    
+
     deploy:
       resources:
         limits:
@@ -51,17 +51,17 @@ services:
         reservations:
           memory: 256M
           cpus: '0.5'
-    
+
     logging:
       driver: "json-file"
       options:
         max-size: "10m"
         max-file: "3"
-    
+
     depends_on:
       influxdb:
         condition: service_healthy
-    
+
     networks:
       - solaredge-net
 
@@ -70,7 +70,7 @@ services:
     image: influxdb:2.7
     container_name: solaredge-influxdb
     restart: unless-stopped
-    
+
     environment:
       - DOCKER_INFLUXDB_INIT_MODE=setup
       - DOCKER_INFLUXDB_INIT_USERNAME=${INFLUXDB_USERNAME:-admin}
@@ -78,21 +78,21 @@ services:
       - DOCKER_INFLUXDB_INIT_ORG=${INFLUXDB_ORG:-fotovoltaico}
       - DOCKER_INFLUXDB_INIT_BUCKET=${INFLUXDB_BUCKET:-Solaredge}
       - DOCKER_INFLUXDB_INIT_ADMIN_TOKEN=${INFLUXDB_TOKEN:-solaredge-token-2024}
-    
+
     volumes:
       - influxdb-data:/var/lib/influxdb2
       - influxdb-config:/etc/influxdb2
-    
+
     ports:
       - "8086:8086"
-    
+
     healthcheck:
       test: ["CMD", "influx", "ping"]
       interval: 30s
       timeout: 10s
       retries: 5
       start_period: 60s
-    
+
     networks:
       - solaredge-net
 
@@ -101,25 +101,25 @@ services:
     image: grafana/grafana:latest
     container_name: solaredge-grafana
     restart: unless-stopped
-    
+
     environment:
       - GF_SECURITY_ADMIN_USER=${GRAFANA_USER:-admin}
       - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
       - GF_DEFAULT_TIMEZONE=${TZ:-Europe/Rome}
       - GF_INSTALL_PLUGINS=fetzerch-sunandmoon-datasource,grafana-clock-panel
-    
+
     volumes:
       - grafana-data:/var/lib/grafana
       - ./grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
       - /etc/localtime:/etc/localtime:ro
-    
+
     ports:
       - "3000:3000"
-    
+
     depends_on:
       influxdb:
         condition: service_healthy
-    
+
     networks:
       - solaredge-net
 

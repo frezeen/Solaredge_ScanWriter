@@ -11,11 +11,11 @@ echo "📁 Configurazione Git hooks..."
 if [[ -d ".git" ]]; then
     # Copia hooks nella directory Git
     cp .githooks/* .git/hooks/ 2>/dev/null || true
-    
+
     # Rendi eseguibili gli hooks
     chmod +x .git/hooks/post-checkout 2>/dev/null || true
     chmod +x .git/hooks/post-merge 2>/dev/null || true
-    
+
     echo "✅ Git hooks configurati"
 else
     echo "⚠️  Directory .git non trovata - hooks non configurati"

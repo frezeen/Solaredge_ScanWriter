@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env python3
+#!/usr/bin/env python3
 """
 Cache Manager - Gestore cache intelligente con TTL configurabile e compressione
 Struttura: cache/{source}/{endpoint}/{date}_{hash}.json.gz
