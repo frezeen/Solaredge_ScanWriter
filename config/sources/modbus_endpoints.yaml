@@ -42,7 +42,7 @@ modbus:
           description: SunSpec Device ID
           enabled: false
           field_name: c_sunspec_did
-        
+
         # Power specifications
         rated_energy:
           description: Energia nominale
@@ -69,7 +69,7 @@ modbus:
           enabled: false
           field_name: maximum_discharge_peak_power
           unit: W
-        
+
         # Temperature
         average_temperature:
           description: Temperatura media
@@ -81,7 +81,7 @@ modbus:
           enabled: false
           field_name: maximum_temperature
           unit: C
-        
+
         # Instantaneous measurements
         instantaneous_voltage:
           description: Tensione istantanea
@@ -98,7 +98,7 @@ modbus:
           enabled: false
           field_name: instantaneous_power
           unit: W
-        
+
         # Energy counters
         lifetime_export_energy_counter:
           description: Contatore energia esportata totale
@@ -110,7 +110,7 @@ modbus:
           enabled: false
           field_name: lifetime_import_energy_counter
           unit: Wh
-        
+
         # Energy capacity
         maximum_energy:
           description: Energia massima
@@ -122,7 +122,7 @@ modbus:
           enabled: false
           field_name: available_energy
           unit: Wh
-        
+
         # State indicators
         soh:
           description: State of Health (SOH)
@@ -134,7 +134,7 @@ modbus:
           enabled: false
           field_name: soe
           unit: '%'
-        
+
         # Status
         status:
           description: Stato batteria
@@ -144,7 +144,7 @@ modbus:
           description: Stato interno batteria
           enabled: false
           field_name: status_internal
-        
+
         # Event logs
         event_log:
           description: Log eventi

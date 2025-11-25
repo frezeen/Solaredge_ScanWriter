@@ -49,12 +49,12 @@ log_info "🏗️  Building Docker image for $ARCH_NAME..."
 # Try buildx first, fallback to standard build
 if command -v docker &> /dev/null && docker buildx version &> /dev/null 2>&1; then
     log_info "Using Docker Buildx for multi-platform build..."
-    
+
     # Create builder if needed
     if ! docker buildx ls | grep -q "solaredge-builder"; then
         docker buildx create --name solaredge-builder --use --bootstrap 2>/dev/null || true
     fi
-    
+
     # Build with buildx
     if docker buildx build \
         --platform "$DOCKER_ARCH" \
@@ -104,14 +104,14 @@ if [[ $? -eq 0 ]]; then
     else
         log_success "✅ Services started successfully"
     fi
-    
+
     # Wait for services to be ready
     log_info "⏳ Waiting for services to be ready..."
     sleep 15
-    
+
     # Configure Grafana automatically
     log_info "📊 Configuring Grafana..."
-    
+
     # Wait for Grafana to be ready
     for i in {1..30}; do
         if curl -s http://localhost:3000/api/health >/dev/null 2>&1; then
@@ -119,15 +119,15 @@ if [[ $? -eq 0 ]]; then
         fi
         sleep 2
     done
-    
+
     # Protect user configuration files
     log_info "🛡️  Protecting user configuration files..."
-    
+
     # Backup .env if it exists and is different from example
     if [[ -f ".env" ]] && ! cmp -s ".env" ".env.example" 2>/dev/null; then
         log_info "✅ User .env configuration preserved"
     fi
-    
+
     # Configure Sun and Moon data source
     log_info "☀️ Configuring Sun and Moon data source..."
     SUNMOON_RESPONSE=$(curl -s -X POST http://localhost:3000/api/datasources \
@@ -142,24 +142,24 @@ if [[ $? -eq 0 ]]; then
                 \"longitude\": 14.3413
             }
         }" 2>/dev/null)
-    
+
     if echo "$SUNMOON_RESPONSE" | grep -q '"id"'; then
         log_success "✅ Sun and Moon data source configured"
     fi
-    
+
     # Get data source UIDs and fix dashboard
     sleep 5
     DATASOURCES_LIST=$(curl -s http://localhost:3000/api/datasources -u "admin:admin" 2>/dev/null)
     INFLUX_UID=$(echo "$DATASOURCES_LIST" | jq -r '.[] | select(.name=="Solaredge") | .uid' 2>/dev/null)
     SUNMOON_UID=$(echo "$DATASOURCES_LIST" | jq -r '.[] | select(.name=="Sun and Moon") | .uid' 2>/dev/null)
-    
+
     if [[ -n "$INFLUX_UID" && "$INFLUX_UID" != "null" ]]; then
         log_info "🔧 Importing dashboard with correct UIDs..."
-        
+
         # Create temporary dashboard with fixed UIDs
         TEMP_DASHBOARD="/tmp/dashboard-solaredge-temp.json"
         cp "grafana/dashboard-solaredge.json" "$TEMP_DASHBOARD"
-        
+
         # Fix InfluxDB UID
         jq --arg uid "$INFLUX_UID" '
             walk(
@@ -170,7 +170,7 @@ if [[ $? -eq 0 ]]; then
                 end
             )
         ' "$TEMP_DASHBOARD" > "${TEMP_DASHBOARD}.tmp" && mv "${TEMP_DASHBOARD}.tmp" "$TEMP_DASHBOARD"
-        
+
         # Fix Sun and Moon UID if available
         if [[ -n "$SUNMOON_UID" && "$SUNMOON_UID" != "null" ]]; then
             jq --arg uid "$SUNMOON_UID" '
@@ -183,7 +183,7 @@ if [[ $? -eq 0 ]]; then
                 )
             ' "$TEMP_DASHBOARD" > "${TEMP_DASHBOARD}.tmp" && mv "${TEMP_DASHBOARD}.tmp" "$TEMP_DASHBOARD"
         fi
-        
+
         # Import dashboard
         IMPORT_PAYLOAD="/tmp/dashboard-import-payload.json"
         jq -n --slurpfile dashboard "$TEMP_DASHBOARD" '{
@@ -191,21 +191,21 @@ if [[ $? -eq 0 ]]; then
             overwrite: true,
             message: "Imported by Docker setup"
         }' > "$IMPORT_PAYLOAD" 2>/dev/null
-        
+
         if [[ -f "$IMPORT_PAYLOAD" ]]; then
             IMPORT_RESPONSE=$(curl -s -X POST http://localhost:3000/api/dashboards/db \
                 -u "admin:admin" \
                 -H "Content-Type: application/json" \
                 -d @"$IMPORT_PAYLOAD" 2>/dev/null)
-            
+
             if echo "$IMPORT_RESPONSE" | grep -q '"status":"success"'; then
                 log_success "✅ Dashboard imported successfully"
             fi
-            
+
             rm -f "$IMPORT_PAYLOAD" "$TEMP_DASHBOARD"
         fi
     fi
-    
+
     # Generate web endpoints only if not exists (preserve user customizations)
     if [[ ! -f "config/sources/web_endpoints.yaml" ]]; then
         log_info "🔍 Generating web endpoints (first time)..."
@@ -214,7 +214,7 @@ if [[ $? -eq 0 ]]; then
     else
         log_info "✅ Web endpoints already exist (preserved)"
     fi
-    
+
     echo ""
     log_success "🎉 Update completed!"
     echo ""

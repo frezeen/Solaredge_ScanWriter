@@ -69,7 +69,7 @@ if [ -t 0 ]; then
     # Interactive mode - prompt for passwords
     read -p "InfluxDB admin password (default: solaredge123): " CUSTOM_INFLUX_PASSWORD
     INFLUX_PASSWORD="${CUSTOM_INFLUX_PASSWORD:-solaredge123}"
-    
+
     read -p "Grafana admin password (default: admin): " CUSTOM_GRAFANA_PASSWORD
     GRAFANA_PASS="${CUSTOM_GRAFANA_PASSWORD:-admin}"
 else
@@ -112,24 +112,24 @@ log "Python version detected: $PYTHON_VERSION"
 # Check if Python 3.11+ is available
 if ! python3 -c "import sys; sys.exit(0 if sys.version_info >= (3, 11) else 1)" 2>/dev/null; then
     warn "Python $PYTHON_VERSION found, but Python 3.11+ is required"
-    
+
     # Try to install Python 3.11 from deadsnakes PPA (Ubuntu/Debian)
     log "Attempting to install Python 3.11..."
-    
+
     if command -v add-apt-repository &> /dev/null || apt-get install -y -qq software-properties-common >/dev/null 2>&1; then
         log "Adding deadsnakes PPA for Python 3.11..."
         add-apt-repository -y ppa:deadsnakes/ppa >/dev/null 2>&1 || true
         apt-get update -qq >/dev/null 2>&1
-        
+
         if apt-get install -y -qq python3.11 python3.11-dev python3.11-venv >/dev/null 2>&1; then
             log "✅ Python 3.11 installed successfully"
             # Update alternatives to use Python 3.11 as default python3
             update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.11 1 >/dev/null 2>&1
             update-alternatives --set python3 /usr/bin/python3.11 >/dev/null 2>&1
-            
+
             # Reinstall pip for Python 3.11
             curl -sS https://bootstrap.pypa.io/get-pip.py | python3.11 >/dev/null 2>&1
-            
+
             PYTHON_VERSION=$(python3 --version 2>&1 | cut -d' ' -f2 | cut -d'.' -f1,2)
             log "Python updated to version: $PYTHON_VERSION"
         else
@@ -185,17 +185,17 @@ fi
 } >/dev/null 2>&1
 if [[ $? -eq 0 ]]; then
     log "✅ Repository clonato con successo"
-    
+
     # Entra nella directory
     cd "$APP_DIR"
-    
+
     if [[ -d "$APP_DIR" ]]; then
         log "🔧 Starting installation process..."
-        
+
         # Create required directories
         log "📂 Creating required directories..."
         mkdir -p "$APP_DIR"/{logs,cache,cookies,config,systemd,scripts,grafana}
-        
+
         # Create requirements.txt if not exists
         if [[ ! -f "$APP_DIR/requirements.txt" ]]; then
             log "📝 Creating requirements.txt..."
@@ -214,25 +214,25 @@ aiohttp-jinja2>=1.5.0
 pytz>=2023.3
 REQS
         fi
-        
+
         # Install Python dependencies system-wide
         log "🐍 Installing Python dependencies..."
-        
+
         # Raspberry Pi specific optimizations
         if [[ "$IS_RASPBERRY_PI" == "true" ]]; then
             log "🍓 Installing Raspberry Pi specific packages..."
             # Install system packages that are better from apt on RPi
             apt-get install -y -qq python3-yaml python3-requests python3-dateutil python3-tz >/dev/null 2>&1 || true
-            
+
             # Use piwheels for faster ARM builds
             export PIP_EXTRA_INDEX_URL="https://www.piwheels.org/simple"
             log "🔧 Using piwheels for ARM-optimized packages"
         fi
-        
+
         # Try different installation methods
         if ! pip3 install -r "$APP_DIR/requirements.txt"; then
             warn "Failed to install Python dependencies with standard pip3"
-            
+
             if [[ "$IS_RASPBERRY_PI" == "true" ]]; then
                 log "🍓 Trying Raspberry Pi specific installation..."
                 # Try with no-build-isolation for problematic packages
@@ -250,23 +250,23 @@ REQS
                 fi
             fi
         fi
-        
+
         # Install InfluxDB
         log "🗄️ Installing InfluxDB..."
-        
+
         if [[ "$IS_RASPBERRY_PI" == "true" ]]; then
             log "🍓 Installing InfluxDB for Raspberry Pi (ARM)..."
             # For Raspberry Pi, try repository first, then fallback to direct download
             rm -f /usr/share/keyrings/influxdata-archive-keyring.gpg
             curl -s https://repos.influxdata.com/influxdata-archive_compat.key | gpg --dearmor -o /usr/share/keyrings/influxdata-archive-keyring.gpg 2>/dev/null
             echo "deb [signed-by=/usr/share/keyrings/influxdata-archive-keyring.gpg] https://repos.influxdata.com/debian stable main" | tee /etc/apt/sources.list.d/influxdb.list >/dev/null
-            
+
             apt-get update -qq >/dev/null 2>&1
             if ! apt-get install -y -qq influxdb2 >/dev/null 2>&1; then
                 warn "InfluxDB repository failed on ARM, trying direct download..."
                 INFLUX_VERSION="2.7.4"
                 DEB_ARCH=$(dpkg --print-architecture)
-                
+
                 # Map architecture names for InfluxDB downloads
                 case "$DEB_ARCH" in
                     "armhf") INFLUX_ARCH="armhf" ;;
@@ -274,10 +274,10 @@ REQS
                     "amd64") INFLUX_ARCH="amd64" ;;
                     *) INFLUX_ARCH="$DEB_ARCH" ;;
                 esac
-                
+
                 INFLUX_URL="https://dl.influxdata.com/influxdb/releases/influxdb2_${INFLUX_VERSION}-1_${INFLUX_ARCH}.deb"
                 log "Downloading InfluxDB for $INFLUX_ARCH..."
-                
+
                 if curl -LO "$INFLUX_URL" >/dev/null 2>&1; then
                     dpkg -i "influxdb2_${INFLUX_VERSION}-1_${INFLUX_ARCH}.deb" >/dev/null 2>&1 || apt-get install -f -y -qq
                     rm -f "influxdb2_${INFLUX_VERSION}-1_${INFLUX_ARCH}.deb"
@@ -292,7 +292,7 @@ REQS
             rm -f /usr/share/keyrings/influxdata-archive-keyring.gpg
             curl -s https://repos.influxdata.com/influxdata-archive_compat.key | gpg --dearmor -o /usr/share/keyrings/influxdata-archive-keyring.gpg 2>/dev/null
             echo "deb [signed-by=/usr/share/keyrings/influxdata-archive-keyring.gpg] https://repos.influxdata.com/debian stable main" | tee /etc/apt/sources.list.d/influxdb.list >/dev/null
-            
+
             apt-get update -qq >/dev/null 2>&1
             if ! apt-get install -y -qq influxdb2 >/dev/null 2>&1; then
                 warn "Failed to install InfluxDB from repository, trying direct download..."
@@ -303,18 +303,18 @@ REQS
                 rm -f "influxdb2_${INFLUX_VERSION}-1_${ARCH}.deb"
             fi
         fi
-        
+
         systemctl enable influxdb >/dev/null 2>&1
         systemctl start influxdb >/dev/null 2>&1
         sleep 10
-        
+
         # Configure InfluxDB
         log "⚙️ Configuring InfluxDB..."
         # INFLUX_USERNAME and INFLUX_PASSWORD already set at script start
         INFLUX_ORG="fotovoltaico"
         INFLUX_BUCKET="Solaredge"
         INFLUX_BUCKET_REALTIME="Solaredge_Realtime"
-        
+
         # Wait for InfluxDB to be ready
         log "Waiting for InfluxDB to be ready..."
         for i in {1..30}; do
@@ -326,16 +326,16 @@ REQS
             fi
             sleep 2
         done
-        
+
         # Install jq for JSON parsing
         apt-get install -y -qq jq >/dev/null 2>&1
-        
+
         # Check if InfluxDB needs setup
         SETUP_STATUS=$(curl -s http://localhost:8086/api/v2/setup 2>/dev/null)
-        
+
         if [[ -z "$SETUP_STATUS" ]] || echo "$SETUP_STATUS" | jq -e '.allowed == true' >/dev/null 2>&1; then
             log "Setting up InfluxDB initial configuration..."
-            
+
             SETUP_RESPONSE=$(curl -s -X POST http://localhost:8086/api/v2/setup \
                 -H "Content-Type: application/json" \
                 -d "{
@@ -344,31 +344,31 @@ REQS
                     \"org\": \"$INFLUX_ORG\",
                     \"bucket\": \"$INFLUX_BUCKET\"
                 }")
-            
 
-            
+
+
             # Extract token using jq
             INFLUX_TOKEN=$(echo "$SETUP_RESPONSE" | jq -r '.auth.token // empty' 2>/dev/null)
-            
+
             # Fallback: try different JSON structure
             if [[ -z "$INFLUX_TOKEN" || "$INFLUX_TOKEN" == "null" ]]; then
                 INFLUX_TOKEN=$(echo "$SETUP_RESPONSE" | jq -r '.token // empty' 2>/dev/null)
             fi
-            
+
             # Fallback: grep method
             if [[ -z "$INFLUX_TOKEN" || "$INFLUX_TOKEN" == "null" ]]; then
                 INFLUX_TOKEN=$(echo "$SETUP_RESPONSE" | grep -o '"token":"[^"]*"' | cut -d'"' -f4)
             fi
-            
+
             # Validate token
             if [[ -n "$INFLUX_TOKEN" && "$INFLUX_TOKEN" != "null" && ${#INFLUX_TOKEN} -gt 20 ]]; then
                 log "✅ InfluxDB configured successfully (${INFLUX_TOKEN:0:20}...)"
-                
+
                 # Get organization ID for bucket creation
                 ORG_RESPONSE=$(curl -s -X GET http://localhost:8086/api/v2/orgs \
                     -H "Authorization: Token $INFLUX_TOKEN")
                 INFLUX_ORG_ID=$(echo "$ORG_RESPONSE" | jq -r ".orgs[] | select(.name==\"$INFLUX_ORG\") | .id" 2>/dev/null)
-                
+
                 if [[ -n "$INFLUX_ORG_ID" && "$INFLUX_ORG_ID" != "null" ]]; then
                     # Create realtime bucket with 2-day retention
                     log "📦 Creating realtime bucket with 2-day retention..."
@@ -387,7 +387,7 @@ REQS
                 else
                     warn "Could not retrieve organization ID for bucket creation"
                 fi
-                
+
                 if echo "$REALTIME_BUCKET_RESPONSE" | grep -q '"name"'; then
                     log "✅ Realtime bucket created successfully"
                 else
@@ -401,24 +401,24 @@ REQS
             log "InfluxDB already configured"
             INFLUX_TOKEN="ALREADY_CONFIGURED_GET_FROM_UI"
         fi
-        
+
         # Install Grafana
         log "📊 Installing Grafana..."
-        
+
         if [[ "$IS_RASPBERRY_PI" == "true" ]]; then
             log "🍓 Installing Grafana for Raspberry Pi (ARM)..."
-            
+
             # Try repository first
             rm -f /usr/share/keyrings/grafana-archive-keyring.gpg
             curl -s https://packages.grafana.com/gpg.key | gpg --dearmor -o /usr/share/keyrings/grafana-archive-keyring.gpg 2>/dev/null
             echo "deb [signed-by=/usr/share/keyrings/grafana-archive-keyring.gpg] https://packages.grafana.com/oss/deb stable main" | tee /etc/apt/sources.list.d/grafana.list >/dev/null
-            
+
             apt-get update -qq >/dev/null 2>&1
             if ! apt-get install -y -qq grafana >/dev/null 2>&1; then
                 warn "Grafana repository failed on ARM, trying direct download..."
                 GRAFANA_VERSION="10.2.3"
                 DEB_ARCH=$(dpkg --print-architecture)
-                
+
                 # Map architecture names for Grafana downloads
                 case "$DEB_ARCH" in
                     "armhf") GRAFANA_ARCH="armhf" ;;
@@ -426,10 +426,10 @@ REQS
                     "amd64") GRAFANA_ARCH="amd64" ;;
                     *) GRAFANA_ARCH="$DEB_ARCH" ;;
                 esac
-                
+
                 GRAFANA_URL="https://dl.grafana.com/oss/release/grafana_${GRAFANA_VERSION}_${GRAFANA_ARCH}.deb"
                 log "Downloading Grafana for $GRAFANA_ARCH..."
-                
+
                 if curl -LO "$GRAFANA_URL" >/dev/null 2>&1; then
                     dpkg -i "grafana_${GRAFANA_VERSION}_${GRAFANA_ARCH}.deb" >/dev/null 2>&1 || apt-get install -f -y -qq
                     rm -f "grafana_${GRAFANA_VERSION}_${GRAFANA_ARCH}.deb"
@@ -445,7 +445,7 @@ REQS
             rm -f /usr/share/keyrings/grafana-archive-keyring.gpg
             curl -s https://packages.grafana.com/gpg.key | gpg --dearmor -o /usr/share/keyrings/grafana-archive-keyring.gpg 2>/dev/null
             echo "deb [signed-by=/usr/share/keyrings/grafana-archive-keyring.gpg] https://packages.grafana.com/oss/deb stable main" | tee /etc/apt/sources.list.d/grafana.list >/dev/null
-            
+
             apt-get update -qq >/dev/null 2>&1
             if ! apt-get install -y -qq grafana >/dev/null 2>&1; then
                 warn "Failed to install Grafana from repository, trying direct download..."
@@ -456,10 +456,10 @@ REQS
                 rm -f "grafana_${GRAFANA_VERSION}_${ARCH}.deb"
             fi
         fi
-        
+
         # Install Grafana plugins
         log "🔌 Installing Grafana plugins..."
-        
+
         # Check if Grafana was installed successfully
         if command -v grafana-cli &> /dev/null; then
             if [[ "$IS_RASPBERRY_PI" == "true" ]]; then
@@ -474,9 +474,9 @@ REQS
         else
             warn "Grafana CLI not available - skipping plugin installation"
         fi
-        
+
         systemctl enable grafana-server >/dev/null 2>&1
-        
+
         # Configure Grafana date formats BEFORE starting
         log "📅 Configuring Grafana date formats..."
         GRAFANA_INI="/etc/grafana/grafana.ini"
@@ -485,7 +485,7 @@ REQS
             if ! grep -q "^full_date = DD/MM/YYYY HH:mm:ss" "$GRAFANA_INI"; then
                 # Remove existing [date_formats] section if present (including commented lines)
                 sed -i '/^\[date_formats\]/,/^\[/{/^\[date_formats\]/d; /^[^[].*=/d; /^#.*date.*format/d;}' "$GRAFANA_INI"
-                
+
                 # Add new date_formats section at the end
                 cat >> "$GRAFANA_INI" << 'DATEFORMATS'
 
@@ -512,16 +512,16 @@ DATEFORMATS
         else
             warn "Grafana configuration file not found at $GRAFANA_INI"
         fi
-        
+
         # Start Grafana AFTER configuration
         systemctl start grafana-server >/dev/null 2>&1
-        
+
         # Wait for Grafana to be ready
         log "Waiting for Grafana to be ready..."
-        
+
         # Disable exit on error for health checks
         set +e
-        
+
         GRAFANA_READY=false
         for i in {1..60}; do
             # Simple HTTP 200 check is most reliable
@@ -531,40 +531,40 @@ DATEFORMATS
                 GRAFANA_READY=true
                 break
             fi
-            
+
             # Show progress every 10 iterations (20 seconds)
             if [[ $((i % 10)) -eq 0 ]]; then
                 log "Still waiting... (${i}/60 attempts)"
             fi
-            
+
             sleep 2
         done
-        
+
         # Re-enable exit on error
         set -e
-        
+
         if [[ "$GRAFANA_READY" != "true" ]]; then
             warn "Grafana did not become ready after 120 seconds"
             warn "Attempting configuration anyway - you may need to configure manually"
         fi
-        
+
         # Configure Grafana data source
         log "⚙️ Configuring Grafana data source..."
         # Note: GRAFANA_URL, GRAFANA_USER, GRAFANA_PASS already set at script start
-        
+
         # Disable exit on error for Grafana configuration
         set +e
-        
+
         # Test if default credentials work, if not try to set password
         log "Testing Grafana authentication..."
         AUTH_TEST=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3000/api/datasources -u "$GRAFANA_USER:$GRAFANA_PASS" 2>/dev/null)
         log "Auth test with configured credentials: HTTP $AUTH_TEST"
-        
+
         if [[ "$AUTH_TEST" != "200" ]]; then
             # Try with default admin:admin first
             AUTH_TEST_DEFAULT=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3000/api/datasources -u "admin:admin" 2>/dev/null)
             log "Auth test with admin:admin: HTTP $AUTH_TEST_DEFAULT"
-            
+
             if [[ "$AUTH_TEST_DEFAULT" == "200" ]] && [[ "$GRAFANA_PASS" != "admin" ]]; then
                 # Default credentials work, change password
                 log "Setting Grafana admin password..."
@@ -585,7 +585,7 @@ DATEFORMATS
         else
             log "Configured Grafana credentials work"
         fi
-        
+
         # Create InfluxDB data source in Grafana
         DATASOURCE_RESPONSE=$(curl -s -X POST http://localhost:3000/api/datasources \
             -u "$GRAFANA_USER:$GRAFANA_PASS" \
@@ -606,7 +606,7 @@ DATEFORMATS
                 },
                 \"isDefault\": true
             }" 2>/dev/null)
-        
+
         if echo "$DATASOURCE_RESPONSE" | grep -q '"id"'; then
             log "✅ Grafana InfluxDB data source configured successfully"
         else
@@ -614,7 +614,7 @@ DATEFORMATS
             log "Response: $DATASOURCE_RESPONSE"
             warn "You can configure it manually in Grafana UI"
         fi
-        
+
         # Configure Sun and Moon data source
         log "☀️ Configuring Sun and Moon data source..."
         SUNMOON_RESPONSE=$(curl -s -X POST http://localhost:3000/api/datasources \
@@ -629,34 +629,34 @@ DATEFORMATS
                     \"longitude\": 14.3413
                 }
             }" 2>/dev/null)
-        
+
         if echo "$SUNMOON_RESPONSE" | grep -q '"id"'; then
             log "✅ Grafana Sun and Moon data source configured successfully"
         else
             warn "Could not configure Sun and Moon data source automatically. You can configure it manually in Grafana UI."
         fi
-        
+
         # Import Grafana dashboard with correct UIDs
         DASHBOARD_FILE="$APP_DIR/grafana/dashboard-solaredge.json"
-        
+
         if [[ -f "$DASHBOARD_FILE" ]]; then
             log "📊 Importing Grafana dashboard..."
-            
+
             # Disable exit on error for this section
             set +e
-            
+
             # Get data source UIDs
             DATASOURCES_LIST=$(curl -s http://localhost:3000/api/datasources -u "$GRAFANA_USER:$GRAFANA_PASS" 2>/dev/null)
             INFLUX_UID=$(echo "$DATASOURCES_LIST" | jq -r '.[] | select(.name=="Solaredge") | .uid' 2>/dev/null)
             SUNMOON_UID=$(echo "$DATASOURCES_LIST" | jq -r '.[] | select(.name=="Sun and Moon") | .uid' 2>/dev/null)
-            
+
             if [[ -n "$INFLUX_UID" && "$INFLUX_UID" != "null" ]]; then
                 log "Found Solaredge data source UID: $INFLUX_UID"
-                
+
                 # Create temporary dashboard file with updated UIDs
                 TEMP_DASHBOARD="/tmp/dashboard-solaredge-temp.json"
                 cp "$DASHBOARD_FILE" "$TEMP_DASHBOARD"
-                
+
                 # Replace data source UIDs in the dashboard JSON using jq for safer manipulation
                 if command -v jq &> /dev/null; then
                     # Use jq to properly update UIDs
@@ -669,7 +669,7 @@ DATEFORMATS
                             end
                         )
                     ' "$TEMP_DASHBOARD" > "${TEMP_DASHBOARD}.tmp" && mv "${TEMP_DASHBOARD}.tmp" "$TEMP_DASHBOARD"
-                    
+
                     if [[ -n "$SUNMOON_UID" && "$SUNMOON_UID" != "null" ]]; then
                         log "Found Sun and Moon data source UID: $SUNMOON_UID"
                         jq --arg uid "$SUNMOON_UID" '
@@ -685,14 +685,14 @@ DATEFORMATS
                 else
                     # Fallback to sed if jq not available (should not happen as we install jq earlier)
                     sed -i.bak "s/\"uid\": \"[^\"]*\",.*\"type\": \"influxdb\"/\"uid\": \"$INFLUX_UID\", \"type\": \"influxdb\"/g" "$TEMP_DASHBOARD" 2>/dev/null
-                    
+
                     if [[ -n "$SUNMOON_UID" && "$SUNMOON_UID" != "null" ]]; then
                         log "Found Sun and Moon data source UID: $SUNMOON_UID"
                         sed -i.bak "s/\"uid\": \"[^\"]*\",.*\"type\": \"fetzerch-sunandmoon-datasource\"/\"uid\": \"$SUNMOON_UID\", \"type\": \"fetzerch-sunandmoon-datasource\"/g" "$TEMP_DASHBOARD" 2>/dev/null
                     fi
                     rm -f "${TEMP_DASHBOARD}.bak"
                 fi
-                
+
                 # Import dashboard via API using file directly
                 # Create wrapper JSON for import
                 IMPORT_PAYLOAD="/tmp/dashboard-import-payload.json"
@@ -705,25 +705,25 @@ DATEFORMATS
                     rm -f "$TEMP_DASHBOARD" "$IMPORT_PAYLOAD"
                     continue
                 }
-                
+
                 IMPORT_RESPONSE=$(curl -s -X POST http://localhost:3000/api/dashboards/db \
                     -u "$GRAFANA_USER:$GRAFANA_PASS" \
                     -H "Content-Type: application/json" \
                     -d @"$IMPORT_PAYLOAD" 2>/dev/null)
-                
+
                 rm -f "$IMPORT_PAYLOAD"
-                
+
                 if echo "$IMPORT_RESPONSE" | grep -q '"status":"success"'; then
                     DASHBOARD_URL=$(echo "$IMPORT_RESPONSE" | jq -r '.url' 2>/dev/null)
                     log "✅ Grafana dashboard imported successfully"
-                    
+
                     if [[ -n "$DASHBOARD_URL" && "$DASHBOARD_URL" != "null" ]]; then
                         log "Dashboard URL: http://$(hostname -I | awk '{print $1}'):3000$DASHBOARD_URL"
                     fi
                 else
                     warn "Could not import Grafana dashboard automatically. You can import it manually from grafana/dashboard-solaredge.json"
                 fi
-                
+
                 rm -f "$TEMP_DASHBOARD"
             else
                 warn "Could not retrieve data source UIDs. Dashboard import skipped."
@@ -731,10 +731,10 @@ DATEFORMATS
         else
             warn "Dashboard file not found at $APP_DIR/grafana/dashboard-solaredge.json"
         fi
-        
+
         # Re-enable exit on error
         set -e
-        
+
         # Create .env file
         log "📝 Creating configuration file..."
         if [[ ! -f "$APP_DIR/.env" ]]; then
@@ -819,7 +819,7 @@ SOLAREDGE_COOKIE_FILE=cookies/web_cookies.json
 SOLAREDGE_SESSION_TIMEOUT_SECONDS=3600
 ENV
         fi
-        
+
         # Create systemd service
         log "🔧 Creating systemd service..."
         tee /etc/systemd/system/solaredge-scanwriter.service > /dev/null << 'SERVICE'
@@ -859,34 +859,34 @@ ReadWritePaths=/opt/Solaredge_ScanWriter
 [Install]
 WantedBy=multi-user.target
 SERVICE
-        
+
         systemctl daemon-reload >/dev/null 2>&1
-        
+
         # Configure log rotation
         log "🔄 Configuring log rotation..."
         if [[ -f "$APP_DIR/config/logrotate.conf" ]]; then
             cp "$APP_DIR/config/logrotate.conf" /etc/logrotate.d/solaredge-collector
             chown root:root /etc/logrotate.d/solaredge-collector
             chmod 644 /etc/logrotate.d/solaredge-collector
-            
+
             # Update paths in logrotate config to match actual installation
             sed -i "s|/opt/solaredge-collector|$APP_DIR|g" /etc/logrotate.d/solaredge-collector
-            
+
             # Update service names to match actual systemd service
             sed -i "s|solaredge-collector|solaredge-scanwriter|g" /etc/logrotate.d/solaredge-collector
             sed -i "s|solaredge-gui|solaredge-scanwriter|g" /etc/logrotate.d/solaredge-collector
-            
+
             log "✅ Log rotation configured - logs will be rotated daily and kept for 7 days"
         else
             warn "Logrotate configuration file not found at $APP_DIR/config/logrotate.conf, skipping log rotation setup"
         fi
-        
+
         # Configure systemd journal retention
         log "📰 Configuring systemd journal retention..."
-        
+
         # Create journald configuration directory if not exists
         mkdir -p /etc/systemd/journald.conf.d
-        
+
         # Configure journal retention for our service specifically
         tee /etc/systemd/journald.conf.d/solaredge-retention.conf > /dev/null << 'JOURNAL'
 # SolarEdge Data Collector - Journal Retention Configuration
@@ -911,21 +911,21 @@ Compress=yes
 # Forward to syslog (optional - disable if not needed)
 ForwardToSyslog=no
 JOURNAL
-        
+
         # Apply journal configuration
         systemctl restart systemd-journald >/dev/null 2>&1 || warn "Could not restart journald service"
-        
+
         # Configure journal vacuum for immediate cleanup of old logs
         log "🧹 Cleaning up old journal logs..."
         journalctl --vacuum-time=48h >/dev/null 2>&1 || warn "Could not vacuum old journal logs"
         journalctl --vacuum-size=100M >/dev/null 2>&1 || warn "Could not vacuum journal by size"
-        
+
         log "✅ Journal retention configured - systemd logs kept for max 48 hours (100MB limit)"
-        
+
         # Optional: Create cron job for automatic journal cleanup (runs daily at 3 AM)
         log "⏰ Setting up automatic journal cleanup..."
         CRON_JOB="0 3 * * * /usr/bin/journalctl --vacuum-time=48h --vacuum-size=100M >/dev/null 2>&1"
-        
+
         # Add cron job for root user (journalctl requires root privileges)
         if ! crontab -l 2>/dev/null | grep -q "journalctl --vacuum"; then
             (crontab -l 2>/dev/null; echo "$CRON_JOB") | crontab -
@@ -933,7 +933,7 @@ JOURNAL
         else
             log "ℹ️ Journal cleanup cron job already exists"
         fi
-        
+
         # Create helper scripts
         log "📝 Creating helper scripts..."
         tee "$APP_DIR/test.sh" > /dev/null << 'TEST'
@@ -1004,7 +1004,7 @@ fi
 echo ""
 echo "=== Test Complete ==="
 TEST
-        
+
         tee "$APP_DIR/status.sh" > /dev/null << 'STATUS'
 #!/bin/bash
 # SolarEdge Service Status Script
@@ -1145,12 +1145,12 @@ if command -v curl &> /dev/null; then
     echo "🔍 Verifica connessione InfluxDB..."
     if curl -s "$INFLUXDB_URL/health" >/dev/null 2>&1; then
         echo "✅ InfluxDB raggiungibile"
-        
+
         if command -v jq &> /dev/null; then
             echo ""
             echo "📦 Bucket esistenti:"
             BUCKETS=$(curl -s -H "Authorization: Token $INFLUXDB_TOKEN" "$INFLUXDB_URL/api/v2/buckets" 2>/dev/null)
-            
+
             if echo "$BUCKETS" | jq -e '.buckets' >/dev/null 2>&1; then
                 echo "$BUCKETS" | jq -r '.buckets[] | "  • \(.name) (retention: \(if .retentionRules[0].everySeconds then "\(.retentionRules[0].everySeconds)s" else "infinite" end))"' 2>/dev/null || echo "  Errore parsing bucket"
             else
@@ -1186,7 +1186,7 @@ if [[ -f /etc/logrotate.d/solaredge-collector ]]; then
     echo "📋 Configurazione attuale:"
     cat /etc/logrotate.d/solaredge-collector
     echo ""
-    
+
     # Test logrotate configuration
     echo "🧪 Test configurazione logrotate..."
     if sudo logrotate -d /etc/logrotate.d/solaredge-collector 2>/dev/null; then
@@ -1194,21 +1194,21 @@ if [[ -f /etc/logrotate.d/solaredge-collector ]]; then
     else
         echo "❌ Errore nella configurazione logrotate"
     fi
-    
+
     echo ""
     echo "📁 File di log attuali:"
     find /opt/Solaredge_ScanWriter/logs -name "*.log" -type f 2>/dev/null | head -10 | while read file; do
         size=$(du -h "$file" 2>/dev/null | cut -f1)
         echo "  • $(basename "$file"): $size"
     done
-    
+
     echo ""
     echo "🗂️ File di log ruotati (se presenti):"
     find /opt/Solaredge_ScanWriter/logs -name "*.log.*" -type f 2>/dev/null | head -5 | while read file; do
         size=$(du -h "$file" 2>/dev/null | cut -f1)
         echo "  • $(basename "$file"): $size"
     done
-    
+
 else
     echo "❌ File configurazione logrotate non trovato"
     echo "   Dovrebbe essere in: /etc/logrotate.d/solaredge-collector"
@@ -1232,12 +1232,12 @@ case "${1:-status}" in
     "status"|"")
         echo "📊 Stato attuale del journal:"
         echo ""
-        
+
         # Journal disk usage
         echo "💾 Utilizzo disco journal:"
         sudo journalctl --disk-usage 2>/dev/null || echo "  Errore recupero utilizzo disco"
         echo ""
-        
+
         # Journal configuration
         echo "⚙️ Configurazione journal:"
         if [[ -f /etc/systemd/journald.conf.d/solaredge-retention.conf ]]; then
@@ -1247,12 +1247,12 @@ case "${1:-status}" in
             echo "  ⚠️ Configurazione personalizzata non trovata"
         fi
         echo ""
-        
+
         # Recent logs for our service
         echo "📋 Log recenti del servizio (ultime 10 righe):"
         sudo journalctl -u solaredge-scanwriter --lines=10 --no-pager 2>/dev/null || echo "  Servizio non trovato o non attivo"
         echo ""
-        
+
         # Journal files info
         echo "📁 File journal attuali:"
         sudo find /var/log/journal -name "*.journal*" -type f 2>/dev/null | head -5 | while read file; do
@@ -1261,41 +1261,41 @@ case "${1:-status}" in
             echo "  • $(basename "$file"): $size (modificato: $modified)"
         done
         ;;
-        
+
     "clean")
         echo "🧹 Pulizia journal logs..."
         echo ""
-        
+
         echo "Prima della pulizia:"
         sudo journalctl --disk-usage
         echo ""
-        
+
         # Clean logs older than 48 hours
         echo "Rimozione log più vecchi di 48 ore..."
         sudo journalctl --vacuum-time=48h
         echo ""
-        
+
         # Limit total size to 100MB
         echo "Limitazione dimensione totale a 100MB..."
         sudo journalctl --vacuum-size=100M
         echo ""
-        
+
         echo "Dopo la pulizia:"
         sudo journalctl --disk-usage
         ;;
-        
+
     "logs")
         echo "📋 Log del servizio SolarEdge (ultime 50 righe):"
         echo ""
         sudo journalctl -u solaredge-scanwriter --lines=50 --no-pager
         ;;
-        
+
     "follow")
         echo "📡 Monitoraggio log in tempo reale (Ctrl+C per uscire):"
         echo ""
         sudo journalctl -u solaredge-scanwriter -f
         ;;
-        
+
     "help")
         echo "Utilizzo: $0 [comando]"
         echo ""
@@ -1306,7 +1306,7 @@ case "${1:-status}" in
         echo "  follow  - Monitora log in tempo reale"
         echo "  help    - Mostra questo aiuto"
         ;;
-        
+
     *)
         echo "❌ Comando non riconosciuto: $1"
         echo "Usa '$0 help' per vedere i comandi disponibili"
@@ -1314,9 +1314,9 @@ case "${1:-status}" in
         ;;
 esac
 JOURNAL_SCRIPT
-        
+
         chmod +x "$APP_DIR"/{test.sh,status.sh,check-buckets.sh,check-logrotate.sh,manage-journal.sh}
-        
+
         # Configure executable permissions for all scripts
         log "🔧 Configuring script permissions..."
         EXECUTABLE_FILES=(
@@ -1334,18 +1334,18 @@ JOURNAL_SCRIPT
             "run-manual.sh"
             "# venv.sh removed"
         )
-        
+
         for file in "${EXECUTABLE_FILES[@]}"; do
             if [[ -f "$APP_DIR/$file" ]]; then
                 chmod +x "$APP_DIR/$file"
             fi
         done
-        
+
         # Configure directory and file permissions for config files
         log "🔧 Configuring config directory permissions..."
         chmod -R 755 "$APP_DIR/config"
         chmod -R 664 "$APP_DIR/config"/*.yaml "$APP_DIR/config"/*/*.yaml 2>/dev/null || true
-        
+
         # Ensure specific directories have correct permissions
         CONFIG_DIRS=(
             "config"
@@ -1356,13 +1356,13 @@ JOURNAL_SCRIPT
             "storage"
             "backups"
         )
-        
+
         for dir in "${CONFIG_DIRS[@]}"; do
             if [[ -d "$APP_DIR/$dir" ]] || mkdir -p "$APP_DIR/$dir"; then
                 chmod -R 755 "$APP_DIR/$dir"
             fi
         done
-        
+
         # Ensure config files are writable by the solaredge user
         CONFIG_FILES=(
             "config/main.yaml"
@@ -1371,26 +1371,26 @@ JOURNAL_SCRIPT
             "config/sources/modbus_endpoints.yaml"
             ".env"
         )
-        
+
         for file in "${CONFIG_FILES[@]}"; do
             if [[ -f "$APP_DIR/$file" ]]; then
                 chmod 664 "$APP_DIR/$file"
             fi
         done
-        
+
         # Setup Git hooks for automatic permission restoration
         if [[ -d "$APP_DIR/.git" ]]; then
             log "📁 Setting up Git hooks for automatic permissions..."
-            
+
             # Create Git hooks directory if not exists
             mkdir -p "$APP_DIR/.git/hooks"
-            
+
             # Copy hooks from .githooks if they exist
             if [[ -d "$APP_DIR/.githooks" ]]; then
                 cp "$APP_DIR/.githooks"/* "$APP_DIR/.git/hooks/" 2>/dev/null || true
                 chmod +x "$APP_DIR/.git/hooks"/* 2>/dev/null || true
             fi
-            
+
             # Configure Git to preserve file permissions
             if [[ $EUID -eq 0 ]]; then
                 su solaredge -c "cd $APP_DIR && git config core.filemode true" 2>/dev/null || true
@@ -1398,7 +1398,7 @@ JOURNAL_SCRIPT
                 sudo -u solaredge bash -c "cd $APP_DIR && git config core.filemode true" 2>/dev/null || true
             fi
         fi
-        
+
         # Configure firewall
         if command -v ufw &> /dev/null; then
             log "🔥 Configuring firewall..."
@@ -1407,7 +1407,7 @@ JOURNAL_SCRIPT
             ufw allow 8086/tcp comment "InfluxDB" >/dev/null 2>&1 || true
             ufw allow 3000/tcp comment "Grafana" >/dev/null 2>&1 || true
         fi
-        
+
         log "✅ Installation completed successfully!"
         echo ""
         echo "╔════════════════════════════════════════════════════════════╗"
@@ -1473,14 +1473,14 @@ JOURNAL_SCRIPT
         echo ""
         echo "⚠️  Important: Configure .env before starting the service!"
         echo ""
-        
+
         # Create installation report file
         REPORT_FILE="/opt/Solaredge_ScanWriter/install_report.md"
         cat > "$REPORT_FILE" << REPORT_EOF
 # SolarEdge Data Collector - Installation Report
 
-**Installation Date:** $(date '+%Y-%m-%d %H:%M:%S')  
-**Hostname:** $(hostname)  
+**Installation Date:** $(date '+%Y-%m-%d %H:%M:%S')
+**Hostname:** $(hostname)
 **IP Address:** $(hostname -I | awk '{print $1}')
 
 ---
@@ -1508,12 +1508,12 @@ JOURNAL_SCRIPT
 
 **Token:** \`$INFLUX_TOKEN\`
 
-**Organization:** fotovoltaico  
+**Organization:** fotovoltaico
 **Buckets:**
 - \`Solaredge\` - Main data (API/Web)
 - \`Solaredge_Realtime\` - Realtime data (2-day retention)
 
-> ⚠️ **Important:** This token is already configured in \`.env\` file.  
+> ⚠️ **Important:** This token is already configured in \`.env\` file.
 > If you get 401 errors, verify the token with:
 > \`\`\`bash
 > cat /opt/Solaredge_ScanWriter/.env | grep INFLUXDB_TOKEN
@@ -1626,7 +1626,7 @@ pip3 install -r requirements.txt
 REPORT_EOF
 
         chmod 644 "$REPORT_FILE"
-        
+
         echo "📄 Installation report saved to: $REPORT_FILE"
         echo ""
         echo "╔════════════════════════════════════════════════════════════╗"
@@ -1636,7 +1636,7 @@ REPORT_EOF
         echo "║                                                            ║"
         echo "╚════════════════════════════════════════════════════════════╝"
         echo ""
-        
+
     else
         error "Git clone failed or directory not created"
         exit 1
