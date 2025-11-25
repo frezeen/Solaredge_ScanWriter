@@ -83,11 +83,20 @@ class RealtimeParser:
             if not inverter_config.get('enabled', False):
                 return []
                 
-            # Cache-first per consistenza device_id
-            device_id = self._cached_device_ids.get('inverter')
-            if not device_id:
-                device_id = data.get('c_model') or inverter_config.get('device_name') or 'Unknown'
+            # Cache-first: usa cache se disponibile, altrimenti aspetta c_model valido
+            cached_id = self._cached_device_ids.get('inverter')
+            c_model = data.get('c_model')
+            
+            if cached_id:
+                device_id = cached_id
+            elif c_model:
+                device_id = c_model
                 self._cached_device_ids['inverter'] = device_id
+                self._log.info(f"Inverter device_id cached: {device_id}")
+            else:
+                # Nessun c_model valido e nessuna cache: salta questa lettura
+                self._log.warning("Inverter c_model not available, skipping this reading")
+                return []
             enabled_measurements = self._get_enabled_measurements(inverter_config)
             
             points = []
@@ -163,12 +172,25 @@ class RealtimeParser:
             enabled_measurements = self._get_enabled_measurements(meters_config)
             
             for meter_name, data in meters_data.items():
-                # Cache-first per consistenza device_id
-                device_id = self._cached_device_ids['meters'].get(meter_name)
-                if not device_id:
-                    serial = data.get('c_serialnumber')
-                    device_id = f"meter_{serial}" if serial else (data.get('c_model') or meter_name)
+                # Cache-first: usa cache se disponibile, altrimenti aspetta serial/model valido
+                cached_id = self._cached_device_ids['meters'].get(meter_name)
+                serial = data.get('c_serialnumber')
+                c_model = data.get('c_model')
+                
+                if cached_id:
+                    device_id = cached_id
+                elif serial:
+                    device_id = f"meter_{serial}"
                     self._cached_device_ids['meters'][meter_name] = device_id
+                    self._log.info(f"Meter {meter_name} device_id cached: {device_id}")
+                elif c_model:
+                    device_id = c_model
+                    self._cached_device_ids['meters'][meter_name] = device_id
+                    self._log.info(f"Meter {meter_name} device_id cached: {device_id}")
+                else:
+                    # Nessun ID valido: salta questo meter
+                    self._log.warning(f"Meter {meter_name} has no valid ID, skipping")
+                    continue
                 
                 for key, value in data.items():
                     clean_key = key[2:] if key.startswith('c_') else key
@@ -314,11 +336,20 @@ class RealtimeParser:
             enabled_measurements = self._get_enabled_measurements(batteries_config)
             
             for battery_name, data in batteries_data.items():
-                # Cache-first per consistenza device_id
-                device_id = self._cached_device_ids['batteries'].get(battery_name)
-                if not device_id:
-                    device_id = data.get('c_model') or battery_name
+                # Cache-first: usa cache se disponibile, altrimenti aspetta c_model valido
+                cached_id = self._cached_device_ids['batteries'].get(battery_name)
+                c_model = data.get('c_model')
+                
+                if cached_id:
+                    device_id = cached_id
+                elif c_model:
+                    device_id = c_model
                     self._cached_device_ids['batteries'][battery_name] = device_id
+                    self._log.info(f"Battery {battery_name} device_id cached: {device_id}")
+                else:
+                    # Nessun c_model valido: salta questa battery
+                    self._log.warning(f"Battery {battery_name} has no valid c_model, skipping")
+                    continue
                 
                 for key, value in data.items():
                     clean_key = key[2:] if key.startswith('c_') else key
