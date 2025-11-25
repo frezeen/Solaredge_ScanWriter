@@ -1382,7 +1382,7 @@
         "percentChangeColorMode": "standard",
         "reduceOptions": {
           "calcs": [],
-          "fields": "/^picco_w$/",
+          "fields": "/.*/",
           "values": false
         },
         "showPercentChange": false,
@@ -1397,7 +1397,7 @@
             "type": "influxdb",
             "uid": "ff27vpmruzxtsc"
           },
-          "query": "import \"timezone\"\r\nimport \"date\"\r\noption location = timezone.location(name: \"Europe/Rome\")\r\n\r\nstart = date.truncate(t: now(), unit: 1d)\r\nstop  = date.add(d: 1d, to: start)\r\n\r\n// Somma potenza AC degli inverter (W) ogni 5s, senza smussare\r\ninv_total = from(bucket: \"Solaredge_Realtime\")\r\n  |> range(start: start, stop: stop)\r\n  |> filter(fn: (r) =>\r\n    r._measurement == \"realtime\" and\r\n    r._field == \"Inverter\" and\r\n    r.endpoint == \"Power Ac\"  // <--- AGGIORNATO QUI\r\n    and r.unit == \"W\"\r\n  )\r\n  |> aggregateWindow(every: 5s, fn: last, createEmpty: false)\r\n  |> group(columns: [\"_time\"])\r\n  |> sum()\r\n  |> keep(columns: [\"_time\",\"_value\"])\r\n\r\n// Picco massimo giornaliero (W) con timestamp del picco\r\ninv_total\r\n  |> group(columns: [])\r\n  |> max(column: \"_value\")\r\n  |> rename(columns: {_value: \"picco_w\"})\r\n  |> yield(name: \"picco_produzione_oggi_W\")",
+          "query": "import \"timezone\"\r\nimport \"date\"\r\nimport \"strings\"\r\n\r\noption location = timezone.location(name: \"Europe/Rome\")\r\n\r\nstart = date.truncate(t: now(), unit: 1d)\r\n\r\nfrom(bucket: \"Solaredge_Realtime\")\r\n  |> range(start: start)\r\n  |> filter(fn: (r) =>\r\n    r._measurement == \"realtime\" and\r\n    r._field == \"Inverter\" and\r\n    r.endpoint == \"Power Ac\" and\r\n    r.unit == \"W\"\r\n  )\r\n  |> max()\r\n  |> map(fn: (r) => ({\r\n    orario: strings.substring(v: string(v: r._time), start: 11, end: 16),\r\n    picco_w: r._value\r\n  }))",
           "refId": "Picco Produzione"
         }
       ],
@@ -1447,10 +1447,8 @@
         "orientation": "vertical",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
-          "calcs": [
-            "max"
-          ],
-          "fields": "/^Picco_Massimo_OGGI picco_immissione$/",
+          "calcs": [],
+          "fields": "/.*/",
           "values": false
         },
         "showPercentChange": false,
@@ -1465,7 +1463,7 @@
             "type": "influxdb",
             "uid": "ff27vpmruzxtsc"
           },
-          "query": "import \"timezone\"\r\nimport \"date\"\r\n\r\noption location = timezone.location(name: \"Europe/Rome\")\r\n\r\ntoday_start = date.truncate(t: now(), unit: 1d)\r\n\r\nfrom(bucket: \"Solaredge_Realtime\")\r\n  |> range(start: today_start)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"realtime\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"Meter\")\r\n  |> filter(fn: (r) => r[\"endpoint\"] == \"Power\")\r\n  |> filter(fn: (r) => exists r._value and r._value > 0)\r\n  |> max()\r\n  |> map(fn: (r) => ({\r\n    _time: now(),\r\n    \"Picco_Massimo_OGGI\": r._value,\r\n    _field: \"picco_immissione\"\r\n  }))\r\n",
+          "query": "import \"timezone\"\r\nimport \"date\"\r\nimport \"strings\"\r\n\r\noption location = timezone.location(name: \"Europe/Rome\")\r\n\r\nstart = date.truncate(t: now(), unit: 1d)\r\n\r\nfrom(bucket: \"Solaredge_Realtime\")\r\n  |> range(start: start)\r\n  |> filter(fn: (r) =>\r\n    r._measurement == \"realtime\" and\r\n    r._field == \"Meter\" and\r\n    r.endpoint == \"Power\"\r\n  )\r\n  |> filter(fn: (r) => exists r._value and r._value > 0)\r\n  |> max()\r\n  |> map(fn: (r) => ({\r\n    orario: strings.substring(v: string(v: r._time), start: 11, end: 16),\r\n    picco_immissione: r._value\r\n  }))",
           "refId": "Picco Massimo Immissione"
         }
       ],
@@ -1515,7 +1513,7 @@
         "percentChangeColorMode": "standard",
         "reduceOptions": {
           "calcs": [],
-          "fields": "/^Picco_Massimo_Consumo_OGGI$/",
+          "fields": "/.*/",
           "values": false
         },
         "showPercentChange": false,
@@ -1530,7 +1528,7 @@
             "type": "influxdb",
             "uid": "ff27vpmruzxtsc"
           },
-          "query": "import \"timezone\"\r\nimport \"date\"\r\n\r\noption location = timezone.location(name: \"Europe/Rome\")\r\n\r\ntoday_start = date.truncate(t: now(), unit: 1d)\r\n\r\ninverter_data = from(bucket: \"Solaredge_Realtime\")\r\n  |> range(start: today_start)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"realtime\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"Inverter\")\r\n  |> filter(fn: (r) => r[\"endpoint\"] == \"Power Ac\")\r\n  |> filter(fn: (r) => exists r._value)\r\n  |> aggregateWindow(every: 30s, fn: mean, createEmpty: false)\r\n\r\nmeter_data = from(bucket: \"Solaredge_Realtime\")\r\n  |> range(start: today_start)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"realtime\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"Meter\")\r\n  |> filter(fn: (r) => r[\"endpoint\"] == \"Power\")\r\n  |> filter(fn: (r) => exists r._value)\r\n  |> aggregateWindow(every: 30s, fn: mean, createEmpty: false)\r\n\r\njoin(tables: {inverter: inverter_data, meter: meter_data}, on: [\"_time\"])\r\n  |> map(fn: (r) => ({\r\n    _time: r._time,\r\n    _value: if r._value_meter >= 0.0 then r._value_inverter - r._value_meter else r._value_inverter + (r._value_meter * -1.0)\r\n  }))\r\n  |> filter(fn: (r) => r._value > 0)\r\n  |> max()\r\n  |> map(fn: (r) => ({\r\n    _time: now(),\r\n    \"Picco_Massimo_Consumo_OGGI\": r._value,\r\n    _field: \"picco_consumo_oggi\"\r\n  }))\r\n",
+          "query": "import \"timezone\"\r\nimport \"date\"\r\n\r\noption location = timezone.location(name: \"Europe/Rome\")\r\n\r\n// 1️⃣ Inizio della giornata (ora locale)\r\ntoday_start = date.truncate(t: now(), unit: 1d)\r\n\r\n// 2️⃣ Serie Inverter – potenza AC prodotta dall’impianto\r\ninv = from(bucket: \"Solaredge_Realtime\")\r\n  |> range(start: today_start)\r\n  |> filter(fn: (r) =>\r\n      r._measurement == \"realtime\" and\r\n      r._field == \"Inverter\" and\r\n      r.endpoint == \"Power Ac\")\r\n  |> aggregateWindow(every: 1m, fn: mean, createEmpty: false)\r\n\r\n// 3️⃣ Serie Meter – energia scambiata con la rete\r\nmet = from(bucket: \"Solaredge_Realtime\")\r\n  |> range(start: today_start)\r\n  |> filter(fn: (r) =>\r\n      r._measurement == \"realtime\" and\r\n      r._field == \"Meter\" and\r\n      r.endpoint == \"Power\")\r\n  |> aggregateWindow(every: 1m, fn: mean, createEmpty: false)\r\n\r\n// 4️⃣ Unione delle due serie e calcolo **consumo netto**\r\njoin(tables: {inv: inv, met: met}, on: [\"_time\"])\r\n  |> map(fn: (r) => ({\r\n      _time:  r._time,\r\n      // ---------- FORMULA ----------\r\n      // r._value_met  : valore del meter (W)\r\n      //   > 0  → **esportazione** (energia che l’impianto dà alla rete)\r\n      //   < 0  → **importazione** (energia che la casa prende dalla rete)\r\n      // r._value_inv  : potenza prodotta dall’inverter (W)\r\n      // --------------------------------------------------------------\r\n      // Se il meter è POSITIVO (export) → il consumo netto è\r\n      //      produzione - export\r\n      // Se il meter è NEGATIVO (import) → il consumo netto è\r\n      //      produzione + |import|\r\n      _value: if r._value_met >= 0.0\r\n                then r._value_inv - r._value_met          // export\r\n                else r._value_inv + (r._value_met * -1.0) // import (valore assoluto)\r\n  }))\r\n  // 5️⃣ Scartiamo eventuali valori negativi (non hanno senso per “consumo”)\r\n  |> filter(fn: (r) => r._value > 0.0)\r\n\r\n// 6️⃣ Troviamo il **picco** (valore massimo) e manteniamo il timestamp originale\r\n  |> max()          // restituisce una sola riga: il valore più alto e il suo _time\r\n\r\n// 7️⃣ Formattiamo l’orario (HH:mm) e rinominiamo i campi\r\n  |> map(fn: (r) => ({\r\n      picco_consumo: r._value,                                 // valore massimo (W)\r\n      orario: string(v: date.hour(t: r._time)) + \":\" +\r\n              (if date.minute(t: r._time) < 10 then \"0\" else \"\") +\r\n              string(v: date.minute(t: r._time))               // HH:mm in fuso Europe/Rome\r\n  }))",
           "refId": "Picco Consumo"
         }
       ],
@@ -5418,6 +5416,6 @@
   "timezone": "",
   "title": "Solaredge 3.0",
   "uid": "afb91a6f-d8f7-43ae-8a98-67eab1bb4baa",
-  "version": 287,
+  "version": 303,
   "weekStart": "monday"
 }
