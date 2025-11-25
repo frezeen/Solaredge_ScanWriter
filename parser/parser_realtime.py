@@ -83,13 +83,11 @@ class RealtimeParser:
             if not inverter_config.get('enabled', False):
                 return []
                 
-            # Usa c_model dai dati, o cache, o device_name da config, o fallback a 'Unknown'
-            current_model = data.get('c_model')
-            if current_model:
-                self._cached_device_ids['inverter'] = current_model
-                device_id = current_model
-            else:
-                device_id = self._cached_device_ids['inverter'] or inverter_config.get('device_name') or 'Unknown'
+            # Cache-first per consistenza device_id
+            device_id = self._cached_device_ids.get('inverter')
+            if not device_id:
+                device_id = data.get('c_model') or inverter_config.get('device_name') or 'Unknown'
+                self._cached_device_ids['inverter'] = device_id
             enabled_measurements = self._get_enabled_measurements(inverter_config)
             
             points = []
@@ -165,18 +163,12 @@ class RealtimeParser:
             enabled_measurements = self._get_enabled_measurements(meters_config)
             
             for meter_name, data in meters_data.items():
-                serial = data.get('c_serialnumber')
-                if serial:
-                    device_id = f"meter_{serial}"
+                # Cache-first per consistenza device_id
+                device_id = self._cached_device_ids['meters'].get(meter_name)
+                if not device_id:
+                    serial = data.get('c_serialnumber')
+                    device_id = f"meter_{serial}" if serial else (data.get('c_model') or meter_name)
                     self._cached_device_ids['meters'][meter_name] = device_id
-                else:
-                    # Prova a usare cache o model
-                    current_model = data.get('c_model')
-                    if current_model:
-                        device_id = current_model
-                        self._cached_device_ids['meters'][meter_name] = device_id
-                    else:
-                        device_id = self._cached_device_ids['meters'].get(meter_name) or meter_name
                 
                 for key, value in data.items():
                     clean_key = key[2:] if key.startswith('c_') else key
@@ -322,12 +314,11 @@ class RealtimeParser:
             enabled_measurements = self._get_enabled_measurements(batteries_config)
             
             for battery_name, data in batteries_data.items():
-                current_model = data.get('c_model')
-                if current_model:
-                    device_id = current_model
+                # Cache-first per consistenza device_id
+                device_id = self._cached_device_ids['batteries'].get(battery_name)
+                if not device_id:
+                    device_id = data.get('c_model') or battery_name
                     self._cached_device_ids['batteries'][battery_name] = device_id
-                else:
-                    device_id = self._cached_device_ids['batteries'].get(battery_name) or battery_name
                 
                 for key, value in data.items():
                     clean_key = key[2:] if key.startswith('c_') else key
