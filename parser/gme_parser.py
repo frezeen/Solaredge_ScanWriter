@@ -78,8 +78,8 @@ class GMEParser:
         Crea un singolo InfluxDB Point per un prezzo orario
         
         Args:
-            price_data: Dizionario con hour, pun_mwh, pun_kwh
-            date_str: Data in formato YYYY-MM-DD
+            price_data: Dizionario con hour, pun_mwh, pun_kwh, e opzionalmente date
+            date_str: Data di fallback in formato YYYY-MM-DD
             source: Fonte dati (es. "GME")
             market: Mercato (es. "MGP")
         
@@ -90,6 +90,9 @@ class GMEParser:
         pun_mwh = price_data.get('pun_mwh')
         pun_kwh = price_data.get('pun_kwh')
         
+        # Usa la data specifica del prezzo se presente (per history mode), altrimenti quella del contenitore
+        item_date_str = price_data.get('date', date_str)
+        
         if hour is None or pun_kwh is None:
             logger.warning(f"Dati incompleti per punto GME: {price_data}")
             return None
@@ -97,7 +100,7 @@ class GMEParser:
         # Crea timestamp per l'ora specifica
         # Ora 1 = 00:00-01:00, Ora 2 = 01:00-02:00, etc.
         # Usiamo l'inizio dell'ora (hour - 1)
-        timestamp_str = f"{date_str} {hour-1:02d}:00:00"
+        timestamp_str = f"{item_date_str} {hour-1:02d}:00:00"
         
         try:
             # Parse timestamp con timezone
@@ -117,7 +120,7 @@ class GMEParser:
         point.tag("market", market)
         point.tag("hour", str(hour))
         point.tag("year", str(ts_local.year))
-        point.tag("month", str(ts_local.month))
+        point.tag("month", ts_local.strftime('%B'))
         point.tag("day", str(ts_local.day))
         
         # Fields (manteniamo i nomi standard PUN del mercato elettrico)
