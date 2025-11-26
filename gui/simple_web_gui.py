@@ -1414,10 +1414,13 @@ class SimpleWebGUI:
         api_interval_minutes = int(os.getenv('LOOP_API_INTERVAL_MINUTES', '15'))
         web_interval_minutes = int(os.getenv('LOOP_WEB_INTERVAL_MINUTES', '15'))
         realtime_interval_seconds = int(os.getenv('LOOP_REALTIME_INTERVAL_SECONDS', '5'))
+        gme_interval_minutes = int(os.getenv('LOOP_GME_INTERVAL_MINUTES', '1440'))
         
         api_web_interval = timedelta(minutes=max(api_interval_minutes, web_interval_minutes))
         realtime_interval = timedelta(seconds=realtime_interval_seconds)
+        gme_interval = timedelta(minutes=gme_interval_minutes)
         last_realtime_run = datetime.min
+        last_gme_run = datetime.min
         
         # Controlla quali flow sono abilitati nella configurazione
         # Carica i file sources separatamente perché non sono nel config principale
@@ -1465,6 +1468,7 @@ class SimpleWebGUI:
         api_enabled = load_source_enabled_with_check('config/sources/api_endpoints.yaml', 'api_ufficiali')
         web_enabled = load_source_enabled_with_check('config/sources/web_endpoints.yaml', 'web_scraping')
         modbus_enabled = load_source_enabled_with_check('config/sources/modbus_endpoints.yaml', 'modbus')
+        gme_enabled = os.getenv('GME_ENABLED', 'false').lower() == 'true'
         
         # Log configurazione dettagliata per ogni flow
         status_parts = []
@@ -1487,6 +1491,12 @@ class SimpleWebGUI:
         else:
             status_parts.append("Realtime: DISABILITATO")
         
+        # GME
+        if gme_enabled:
+            status_parts.append(f"GME: {gme_interval_minutes} min")
+        else:
+            status_parts.append("GME: DISABILITATO")
+        
         self.logger.info(f"[GUI] Intervalli configurati - {', '.join(status_parts)}")
         
         # Log dettagliato per flow disabilitati
@@ -1496,6 +1506,8 @@ class SimpleWebGUI:
             self.logger.info("[GUI] ℹ️ Web scraping disabilitato nella configurazione, Web flow non verrà eseguito")
         if not modbus_enabled:
             self.logger.info("[GUI] ℹ️ Modbus disabilitato nella configurazione, Realtime flow non verrà eseguito")
+        if not gme_enabled:
+            self.logger.info("[GUI] ℹ️ GME disabilitato nella configurazione, GME flow non verrà eseguito")
         
         try:
             while self.loop_running and not self.stop_requested:
@@ -1504,6 +1516,7 @@ class SimpleWebGUI:
                 # Calcola tempo fino alla prossima operazione
                 time_until_api_web = (last_api_web_run + api_web_interval - current_time).total_seconds()
                 time_until_realtime = (last_realtime_run + realtime_interval - current_time).total_seconds()
+                time_until_gme = (last_gme_run + gme_interval - current_time).total_seconds()
                 
                 # Esegui API e Web ogni intervallo configurato (solo se almeno uno è abilitato)
                 if (api_enabled or web_enabled) and time_until_api_web <= 0:
@@ -1578,9 +1591,30 @@ class SimpleWebGUI:
                     # Imposta a un valore alto per non influenzare il next_wake
                     time_until_realtime = 999999
                 
+                # Esegui GME solo se abilitato
+                if gme_enabled and time_until_gme <= 0:
+                    from main import run_gme_flow
+                    self.logger.info("[GUI] 🔋 Esecuzione raccolta GME...")
+                    try:
+                        await asyncio.get_event_loop().run_in_executor(
+                            None, run_gme_flow, log, cache, config
+                        )
+                        self.logger.info("[GUI] ✅ Raccolta GME completata")
+                    except Exception as e:
+                        self.logger.error(f"[GUI] ❌ Errore raccolta GME: {e}")
+                    
+                    last_gme_run = datetime.now()
+                    self.loop_stats['last_update'] = datetime.now()
+                    
+                    # Ricalcola tempo dopo l'esecuzione
+                    time_until_gme = gme_interval.total_seconds()
+                elif not gme_enabled:
+                    # Se GME disabilitato, imposta a un valore alto
+                    time_until_gme = 999999
+                
                 # Sleep intelligente: dormi fino alla prossima operazione (max 5 secondi per responsività)
                 # Questo riduce drasticamente l'utilizzo CPU quando non ci sono operazioni da fare
-                next_wake = min(max(time_until_api_web, 0), max(time_until_realtime, 0), 5.0)
+                next_wake = min(max(time_until_api_web, 0), max(time_until_realtime, 0), max(time_until_gme, 0), 5.0)
                 if next_wake > 0:
                     await asyncio.sleep(next_wake)
                 else:

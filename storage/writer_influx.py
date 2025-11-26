@@ -96,6 +96,17 @@ class InfluxWriter:
                     retention_rules=[retention_rules]
                 )
                 self._log.info(f"Bucket realtime creato con retention 2 giorni: {self._influx_config.bucket_realtime}")
+            
+            # Bucket GME (se diverso dal principale)
+            if (self._influx_config.bucket_gme != self._influx_config.bucket and 
+                not buckets_api.find_buckets(name=self._influx_config.bucket_gme).buckets):
+                
+                buckets_api.create_bucket(
+                    bucket_name=self._influx_config.bucket_gme, 
+                    org=self._influx_config.org, 
+                    retention_rules=[]
+                )
+                self._log.info(f"Bucket GME creato: {self._influx_config.bucket_gme}")
                 
         except Exception as e:
             raise RuntimeError(f"Errore creazione bucket: {e}")
@@ -126,6 +137,8 @@ class InfluxWriter:
         """
         if measurement == "realtime":
             return self._influx_config.bucket_realtime
+        elif measurement in ("gme_prices", "gme_monthly_avg"):
+            return self._influx_config.bucket_gme
         else:
             # API e Web vanno nel bucket principale
             return self._influx_config.bucket

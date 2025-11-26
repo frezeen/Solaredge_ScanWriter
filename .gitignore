@@ -49,6 +49,7 @@ logs/*
 # Cache data (contains API responses with potentially sensitive data)
 cache/api_ufficiali/
 cache/web/
+cache/gme/
 cache/snapshots/*
 !cache/snapshots/.gitkeep
 cache/*.json

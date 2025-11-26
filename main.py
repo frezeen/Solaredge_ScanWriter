@@ -16,29 +16,13 @@ from utils.color_logger import color
 from flows.api_flow import run_api_flow
 from flows.web_flow import run_web_flow
 from flows.realtime_flow import run_realtime_flow
-#!/usr/bin/env python3
-"""main.py - Orchestratore ottimizzato e data-driven"""
-
-import sys
-import argparse
-import os
-from typing import Any, Dict, Callable
-
-from config.env_loader import load_env
-from app_logging import configure_logging, get_logger
-from cache.cache_manager import CacheManager
-from config.config_manager import get_config_manager
-from utils.color_logger import color
-
-# Import Flows
-from flows.api_flow import run_api_flow
-from flows.web_flow import run_web_flow
-from flows.realtime_flow import run_realtime_flow
 from flows.scan_flow import run_scan_flow
 from flows.gui_flow import run_gui_mode
+from flows.gme_flow import run_gme_flow
 from tools.history_manager import run_history_flow
 
 load_env()
+
 
 # Definizione delle modalita' operative
 # Ogni modalita' ha configurazione di log e funzione handler
@@ -66,6 +50,12 @@ MODES: Dict[str, Dict[str, Any]] = {
         'log_env': 'LOG_FILE_REALTIME',
         'default_log': 'realtime_flow.log',
         'handler': run_realtime_flow
+    },
+    'gme': {
+        'help': 'Esegui raccolta dati GME (Mercato Elettrico Italiano)',
+        'log_env': 'LOG_FILE_GME',
+        'default_log': 'gme_flow.log',
+        'handler': run_gme_flow
     },
     'scan': {
         'help': 'Esegui scansione web tree e aggiorna configurazione',

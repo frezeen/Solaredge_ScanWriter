@@ -135,6 +135,21 @@ class HistoryManager:
                                              start_date=month_data['start'], 
                                              end_date=month_data['end'])
                     
+                    # 1b. GME Flow (Nuovo) - Eseguito in parallelo logico
+                    try:
+                        year_str, month_str = month_data['label'].split('-')
+                        year, month = int(year_str), int(month_str)
+                        
+                        # Import locale per evitare cicli
+                        from flows.gme_flow import run_gme_month_flow
+                        
+                        # Esegui flow GME (gestisce internamente cache check)
+                        gme_result = run_gme_month_flow(self.log, self.cache, self.config, year, month)
+                        
+                    except Exception as e:
+                        self.log.warning(color.warning(f"   ⚠️ GME {month_data['label']} errore: {e}"))
+
+                    
                     # 2. Web Flow solo per gli ultimi 7 giorni (alla fine)
                     web_result = 0
                     if idx == len(months) and not web_executed:
