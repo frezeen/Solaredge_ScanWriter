@@ -33,7 +33,8 @@ class CacheManager:
     TTL_CONFIG = {
         'api_ufficiali': 15,    # API ufficiali: 15 minuti, poi hash check
         'web': 15,              # Web scraping: 15 minuti, poi hash check
-        'realtime': 5           # Real-time: 5 minuti auto-refresh (no hash check)
+        'realtime': 5,          # Real-time: 5 minuti auto-refresh (no hash check)
+        'gme': 1440             # GME: 24 ore (dati giornalieri)
     }
     
     CACHE_MAPPINGS = {
@@ -397,7 +398,27 @@ class CacheManager:
             return True
         
         # Altrimenti verifica validità con TTL
+        # Altrimenti verifica validità con TTL
         return self.is_cache_valid(cache_path, source)
+
+    def has_gme_day_cached(self, date_str: str) -> bool:
+        """
+        Verifica se esiste cache valida per un giorno GME
+        
+        Args:
+            date_str: Data in formato YYYY-MM-DD
+            
+        Returns:
+            True se esiste cache valida (considerando dati storici infiniti)
+        """
+        # Per GME usiamo source='gme' e endpoint='data'
+        cache_path = self._find_latest_cache_file('gme', 'data', date_str)
+        
+        if not cache_path or not cache_path.exists():
+            return False
+            
+        # Verifica validità (gestisce automaticamente storico vs recente)
+        return self.is_cache_valid(cache_path, source='gme', target_date=date_str)
 
     def _check_database_data_exists(self, source: str, date: str) -> bool:
         """Verifica se esistono dati nel database per una data specifica.

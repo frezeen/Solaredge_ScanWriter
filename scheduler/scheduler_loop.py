@@ -15,6 +15,7 @@ class SourceType(Enum):
     API = "api"
     WEB = "web"
     REALTIME = "realtime"
+    GME = "gme"
 
 
 @dataclass(frozen=True)
@@ -23,6 +24,7 @@ class SchedulerConfig:
     api_delay_seconds: float
     web_delay_seconds: float
     realtime_delay_seconds: float
+    gme_delay_seconds: float
     skip_delay_on_cache_hit: bool
 
     @classmethod
@@ -33,6 +35,7 @@ class SchedulerConfig:
             api_delay_seconds=float(scheduler_config.get('api_delay_seconds', 1.0)),
             web_delay_seconds=float(scheduler_config.get('web_delay_seconds', 2.0)),
             realtime_delay_seconds=float(scheduler_config.get('realtime_delay_seconds', 0.0)),
+            gme_delay_seconds=float(scheduler_config.get('gme_delay_seconds', 6.0)),
             skip_delay_on_cache_hit=bool(scheduler_config.get('skip_delay_on_cache_hit', True))
         )
 
@@ -110,7 +113,8 @@ class SchedulerLoop:
         delay_config = {
             SourceType.API: self._config.api_delay_seconds,
             SourceType.WEB: self._config.web_delay_seconds,
-            SourceType.REALTIME: self._config.realtime_delay_seconds
+            SourceType.REALTIME: self._config.realtime_delay_seconds,
+            SourceType.GME: self._config.gme_delay_seconds
         }
         
         required_delay = delay_config.get(source_type, 0.0)
@@ -153,7 +157,8 @@ class SchedulerLoop:
         delay_config = {
             SourceType.API: self._config.api_delay_seconds,
             SourceType.WEB: self._config.web_delay_seconds,
-            SourceType.REALTIME: self._config.realtime_delay_seconds
+            SourceType.REALTIME: self._config.realtime_delay_seconds,
+            SourceType.GME: self._config.gme_delay_seconds
         }
         
         required_delay = delay_config.get(source_type, 0.0)

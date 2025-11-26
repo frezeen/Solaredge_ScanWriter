@@ -81,6 +81,7 @@ class InfluxDBConfig:
     org: str
     bucket: str
     bucket_realtime: str
+    bucket_gme: str
     token: str
     dry_mode: bool = False
     dry_file: str = "influx_dry_output.txt"
@@ -237,13 +238,14 @@ class ConfigManager:
     def get_influxdb_config(self) -> InfluxDBConfig:
         """Ottieni configurazione InfluxDB dalle variabili d'ambiente.
         
-        Supporta bucket separati per dati API/Web e Realtime con retention diverse.
+        Supporta bucket separati per dati API/Web, Realtime e GME con retention diverse.
         """
         return InfluxDBConfig(
             url=os.environ.get('INFLUXDB_URL', ''),
             org=os.environ.get('INFLUXDB_ORG', ''),
             bucket=os.environ.get('INFLUXDB_BUCKET', ''),
             bucket_realtime=os.environ.get('INFLUXDB_BUCKET_REALTIME', os.environ.get('INFLUXDB_BUCKET', '')),
+            bucket_gme=os.environ.get('INFLUXDB_BUCKET_GME', os.environ.get('INFLUXDB_BUCKET', '')),
             token=os.environ.get('INFLUXDB_TOKEN', ''),
             dry_mode=os.environ.get('INFLUX_DRY_MODE', 'false').lower() == 'true',
             dry_file=os.environ.get('INFLUX_DRY_FILE', 'influx_dry_output.txt'),
