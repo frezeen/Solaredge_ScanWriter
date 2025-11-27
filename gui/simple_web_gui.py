@@ -11,13 +11,11 @@ import socket
 from pathlib import Path
 from aiohttp import web
 from datetime import datetime
-from concurrent.futures import ThreadPoolExecutor
 from app_logging.universal_logger import get_logger
 
 class SimpleWebGUI:
     def __init__(self, config_file="config/main.yaml", port=8092, cache=None, auto_start_loop=False):
         self.config_file = Path(config_file)
-        self.port = port
         self.logger = get_logger("SimpleWebGUI")
         self.real_ip = self._get_real_ip()
         self.app = None
@@ -25,63 +23,35 @@ class SimpleWebGUI:
         self.cache = cache  # Cache manager condiviso
         self.auto_start_loop = auto_start_loop  # Flag per avvio automatico
         
+        # Server configuration (immutable)
+        from gui.components.web_server import ServerConfig
+        import os
+        self.server_config = ServerConfig(
+            host=os.getenv('GUI_HOST', '0.0.0.0'),
+            port=port or int(os.getenv('GUI_PORT', 8092)),
+            template_dir=Path("gui/templates"),
+            static_dir=Path("gui/static")
+        )
+        self.port = self.server_config.port  # Backward compatibility
+        
         # REFACTORED: Usa componenti separati per Single Responsibility
         from gui.core.config_handler import ConfigHandler
         from gui.core.state_manager import StateManager
-        from gui.core.toggle_handler import ToggleHandler
+        from gui.core.unified_toggle_handler import UnifiedToggleHandler
         
         self.config_handler = ConfigHandler()
         self.state_manager = StateManager(max_log_buffer=1000, max_runs_per_flow=3)
-        self.toggle_handler = ToggleHandler()
+        self.unified_toggle_handler = UnifiedToggleHandler(auto_update_source_callback=self._auto_update_source_enabled)
         
         # Setup log capture per la GUI
         self._setup_log_capture()
     
-    # Backward compatibility properties (puntano a StateManager)
-    @property
-    def loop_mode(self):
-        return self.state_manager.loop_mode
-    
-    @loop_mode.setter
-    def loop_mode(self, value):
-        self.state_manager.loop_mode = value
-    
-    @property
-    def loop_running(self):
-        return self.state_manager.loop_running
-    
-    @loop_running.setter
-    def loop_running(self, value):
-        self.state_manager.loop_running = value
-    
-    @property
-    def log_buffer(self):
-        return self.state_manager.log_buffer
-    
-    @property
-    def flow_runs(self):
-        return self.state_manager.flow_runs
-    
-    @property
-    def loop_stats(self):
-        return self.state_manager.loop_stats
-    
-    @property
-    def stop_requested(self):
-        return self.state_manager.stop_requested
-    
-    @stop_requested.setter
-    def stop_requested(self, value):
-        self.state_manager.stop_requested = value
-    
-    @property
-    def max_runs_per_flow(self):
-        return self.state_manager.max_runs_per_flow
+
 
     async def _auto_start_loop(self):
         """Avvia automaticamente il loop senza richiesta HTTP"""
         try:
-            if self.loop_running:
+            if self.state_manager.loop_running:
                 self.logger.info("[GUI] Loop già in esecuzione")
                 return
             
@@ -114,9 +84,9 @@ class SimpleWebGUI:
 
             
             # 4. Reset flag di stop e avvia il loop
-            self.stop_requested = False
-            self.loop_running = True
-            self.loop_mode = True  # Abilita modalità loop
+            self.state_manager.stop_requested = False
+            self.state_manager.loop_running = True
+            self.state_manager.loop_mode = True  # Abilita modalità loop
             
             # 5. Avvia il loop personalizzato per GUI
             import asyncio
@@ -202,18 +172,7 @@ class SimpleWebGUI:
         """Delega a ConfigHandler - REFACTORED"""
         return await self.config_handler.load_source_config(source_type)
 
-    # Backward compatibility wrappers (deprecati ma mantenuti per compatibilità)
-    async def _get_web_devices(self):
-        """DEPRECATED: Usa _load_source_config('web')"""
-        return await self._load_source_config('web')
 
-    async def _get_api_endpoints(self):
-        """DEPRECATED: Usa _load_source_config('api')"""
-        return await self._load_source_config('api')
-
-    async def _get_modbus_endpoints(self):
-        """DEPRECATED: Usa _load_source_config('modbus')"""
-        return await self._load_source_config('modbus')
 
     async def handle_index(self, request):
         """Serve la pagina principale"""
@@ -395,27 +354,12 @@ class SimpleWebGUI:
             self.logger.error(f"[GUI] Errore loop logs: {e}")
             return web.json_response({"error": str(e)}, status=500)
 
-    def add_log_entry(self, level, message, timestamp=None):
-        """Aggiunge un entry al buffer dei log - REFACTORED (delega a StateManager)"""
-        # Delega a StateManager (gestisce flow_type='general' di default)
-        self.state_manager.add_log_entry(level, message, 'general', timestamp)
-    
-    def _is_run_start_marker(self, message):
-        """Verifica se il messaggio è un marker di inizio run - REFACTORED (delega a StateManager)"""
-        return self.state_manager._is_run_start_marker(message)
-    
-    def _add_log_to_flow_runs(self, log_entry):
-        """Aggiunge un log alla struttura delle run per flow type - REFACTORED (delega a StateManager)"""
-        self.state_manager._add_log_to_flow_runs(log_entry)
-    
-    def _get_filtered_logs(self, flow_filter='all', limit=500):
-        """Ottiene i log filtrati per flow type - REFACTORED (delega a StateManager)"""
-        return self.state_manager.get_filtered_logs(flow_filter, limit)
+
 
     async def handle_loop_start(self, request):
         """Avvia il loop mode con ricaricamento configurazione"""
         try:
-            if self.loop_running:
+            if self.state_manager.loop_running:
                 return web.json_response({
                     "status": "info",
                     "message": "Loop già in esecuzione"
@@ -448,9 +392,9 @@ class SimpleWebGUI:
                 self.logger.error(f"[GUI] ❌ Errore ricaricamento config manager: {e}")
             
             # 4. Reset flag di stop e avvia il loop
-            self.stop_requested = False
-            self.loop_running = True
-            self.loop_mode = True  # Abilita modalità loop
+            self.state_manager.stop_requested = False
+            self.state_manager.loop_running = True
+            self.state_manager.loop_mode = True  # Abilita modalità loop
             
             # 5. Avvia il loop personalizzato per GUI
             import asyncio
@@ -482,12 +426,12 @@ class SimpleWebGUI:
             self.logger.info("[GUI] Richiesta stop loop ricevuta")
             
             # Imposta il flag per fermare il loop
-            self.stop_requested = True
-            self.loop_running = False
-            self.loop_mode = False  # Disabilita modalità loop
+            self.state_manager.stop_requested = True
+            self.state_manager.loop_running = False
+            self.state_manager.loop_mode = False  # Disabilita modalità loop
             
             # Aggiorna statistiche
-            self.loop_stats['status'] = 'stopped'
+            self.state_manager.loop_stats['status'] = 'stopped'
             
             self.logger.info("[GUI] ✅ Loop fermato con successo")
             
@@ -543,6 +487,11 @@ class SimpleWebGUI:
     def create_app(self):
         """Crea l'applicazione web"""
         self.app = web.Application()
+        
+        # Setup middleware stack
+        from gui.core.middleware import create_middleware_stack
+        self.app.middlewares.extend(create_middleware_stack(self.logger))
+        self.logger.info("[GUI] ✅ Middleware stack configurato (Error, Logging, CORS, Security)")
 
         # Routes
         self.app.router.add_get('/', self.handle_index)
@@ -573,19 +522,21 @@ class SimpleWebGUI:
 
     async def start(self, host=None, port=None):
         """Metodo start per compatibilità con main.py"""
-        if port:
-            self.port = port
-        # Usa host fornito o default a 0.0.0.0 per accesso remoto
-        bind_host = host if host else '0.0.0.0'
-        runner, site = await self.start_server(bind_host)
+        # Usa configurazione da server_config o parametri forniti
+        bind_host = host if host else self.server_config.host
+        bind_port = port if port else self.server_config.port
+        runner, site = await self.start_server(bind_host, bind_port)
         
         # Ritorna subito dopo aver avviato il server, senza loop infinito
         return runner, site
 
-    async def start_server(self, host='0.0.0.0'):
+    async def start_server(self, host='0.0.0.0', port=None):
         """Avvia il server web"""
         try:
             await self.load_config()
+            
+            # Usa port da parametro o da server_config
+            bind_port = port if port else self.server_config.port
             
             self.logger.info("[GUI] Avvio GUI Web...")
             
@@ -599,15 +550,15 @@ class SimpleWebGUI:
             await runner.setup()
             
             # TCPSite con backlog limitato per ridurre overhead
-            site = web.TCPSite(runner, host, self.port, backlog=128)
+            site = web.TCPSite(runner, host, bind_port, backlog=128)
             await site.start()
             
-            self.logger.info(f"[GUI] Uso porta {self.port}")
-            self.logger.info(f"[GUI] GUI Web avviata su: http://{self.real_ip}:{self.port}")
+            self.logger.info(f"[GUI] Uso porta {bind_port}")
+            self.logger.info(f"[GUI] GUI Web avviata su: http://{self.real_ip}:{bind_port}")
             
             self.logger.info("="*50)
             self.logger.info("🚀 SOLAREDGE DASHBOARD MODERNA")
-            self.logger.info(f"URL: http://{self.real_ip}:{self.port}")
+            self.logger.info(f"URL: http://{self.real_ip}:{bind_port}")
             self.logger.info(f"Config: {self.config_file}")
             self.logger.info("Premi Ctrl+C per fermare")
             self.logger.info("="*50)
@@ -711,339 +662,82 @@ class SimpleWebGUI:
             return web.json_response({'error': f'Internal server error: {str(e)}'}, status=500)
     
     async def handle_toggle_device(self, request):
-        """Toggle web device enabled/disabled state"""
+        """Toggle web device enabled/disabled state - Uses UnifiedToggleHandler"""
         try:
-            # Get device ID from query parameters
             device_id = request.query.get('id')
             if not device_id:
                 return web.json_response({'error': 'Missing device ID'}, status=400)
             
-            # Load web endpoints configuration
-            import yaml
-            from pathlib import Path
+            success, response_data = await self.unified_toggle_handler.handle_toggle_device(device_id)
             
-            config_file = 'config/sources/web_endpoints.yaml'
-            config_path = Path(config_file)
-            if not config_path.exists():
-                return web.json_response({'error': f'Config file not found: {config_file}'}, status=404)
+            if not success:
+                status = 404 if 'not found' in response_data.get('error', '').lower() else 400
+                return web.json_response(response_data, status=status)
             
-            with open(config_path, 'r', encoding='utf-8') as f:
-                config = yaml.safe_load(f)
-            
-            # Navigate to the device and toggle its enabled state
-            if 'web_scraping' in config and 'endpoints' in config['web_scraping']:
-                devices = config['web_scraping']['endpoints']
-                if device_id in devices:
-                    # Toggle the enabled state
-                    current_state = devices[device_id].get('enabled', False)
-                    new_state = not current_state
-                    devices[device_id]['enabled'] = new_state
-                    
-                    # Cascade toggle to all metrics of this device
-                    metrics_updated = 0
-                    updated_measurements = {}
-                    if 'measurements' in devices[device_id]:
-                        for metric_name, metric_config in devices[device_id]['measurements'].items():
-                            if isinstance(metric_config, dict):
-                                metric_config['enabled'] = new_state
-                                updated_measurements[metric_name] = {'enabled': new_state}
-                                metrics_updated += 1
-                    
-                    # Auto-aggiorna web_scraping.enabled basandosi sugli endpoint
-                    web_auto_updated, any_endpoint_enabled = self._auto_update_source_enabled(
-                        config, 'web_scraping', devices, config_path, 'Web scraping'
-                    )
-                    
-                    # Save the updated configuration
-                    with open(config_path, 'w', encoding='utf-8') as f:
-                        yaml.dump(config, f, default_flow_style=False, allow_unicode=True, indent=2)
-                    
-                    self.logger.info(f"Toggled web device {device_id}: {current_state} -> {new_state} (cascaded to {metrics_updated} metrics)")
-                    
-                    response_data = {
-                        'success': True,
-                        'device_id': device_id,
-                        'enabled': new_state,
-                        'measurements': updated_measurements,
-                        'metrics_updated': metrics_updated,
-                        'message': f'Device {device_id} {"enabled" if new_state else "disabled"} (with {metrics_updated} metrics)'
-                    }
-                    
-                    # Aggiungi info su web_scraping.enabled se è stato aggiornato
-                    if web_auto_updated:
-                        response_data['web_auto_updated'] = True
-                        response_data['web_enabled'] = any_endpoint_enabled
-                        response_data['message'] += f" - Web scraping {'abilitato' if any_endpoint_enabled else 'disabilitato'} automaticamente"
-                    
-                    return web.json_response(response_data)
-                else:
-                    return web.json_response({'error': f'Device not found: {device_id}'}, status=404)
-            else:
-                return web.json_response({'error': f'Invalid config structure in {config_file}'}, status=500)
+            return web.json_response(response_data)
                 
         except Exception as e:
             self.logger.error(f"Error toggling web device: {e}")
             return web.json_response({'error': f'Internal server error: {str(e)}'}, status=500)
 
     async def handle_toggle_modbus_device(self, request):
-        """Toggle modbus device enabled/disabled state"""
+        """Toggle modbus device enabled/disabled state - Uses UnifiedToggleHandler"""
         try:
-            # Get device ID from query parameters
             device_id = request.query.get('id')
             if not device_id:
                 return web.json_response({'error': 'Missing device ID'}, status=400)
             
-            # Load modbus endpoints configuration
-            import yaml
-            from pathlib import Path
+            success, response_data = await self.unified_toggle_handler.handle_toggle_modbus_device(device_id)
             
-            config_file = 'config/sources/modbus_endpoints.yaml'
-            config_path = Path(config_file)
-            if not config_path.exists():
-                return web.json_response({'error': f'Config file not found: {config_file}'}, status=404)
+            if not success:
+                status = 404 if 'not found' in response_data.get('error', '').lower() else 400
+                return web.json_response(response_data, status=status)
             
-            with open(config_path, 'r', encoding='utf-8') as f:
-                config = yaml.safe_load(f)
-            
-            # Navigate to the device and toggle its enabled state
-            if 'modbus' in config and 'endpoints' in config['modbus']:
-                devices = config['modbus']['endpoints']
-                if device_id in devices:
-                    # Toggle the enabled state
-                    current_state = devices[device_id].get('enabled', False)
-                    new_state = not current_state
-                    devices[device_id]['enabled'] = new_state
-                    
-                    # Cascade toggle to all metrics of this device
-                    metrics_updated = 0
-                    updated_measurements = {}
-                    if 'measurements' in devices[device_id]:
-                        for metric_name, metric_config in devices[device_id]['measurements'].items():
-                            if isinstance(metric_config, dict):
-                                metric_config['enabled'] = new_state
-                                updated_measurements[metric_name] = {'enabled': new_state}
-                                metrics_updated += 1
-                    
-                    # Auto-aggiorna modbus.enabled basandosi sugli endpoint
-                    modbus_auto_updated, any_endpoint_enabled = self._auto_update_source_enabled(
-                        config, 'modbus', devices, config_path, 'Modbus'
-                    )
-                    
-                    # Save the updated configuration
-                    with open(config_path, 'w', encoding='utf-8') as f:
-                        yaml.dump(config, f, default_flow_style=False, allow_unicode=True, indent=2)
-                    
-                    self.logger.info(f"Toggled modbus device {device_id}: {current_state} -> {new_state} (cascaded to {metrics_updated} metrics)")
-                    
-                    response_data = {
-                        'success': True,
-                        'device_id': device_id,
-                        'enabled': new_state,
-                        'measurements': updated_measurements,
-                        'metrics_updated': metrics_updated,
-                        'message': f'Modbus device {device_id} {"enabled" if new_state else "disabled"} (with {metrics_updated} metrics)'
-                    }
-                    
-                    # Aggiungi info su modbus.enabled se è stato aggiornato
-                    if modbus_auto_updated:
-                        response_data['modbus_auto_updated'] = True
-                        response_data['modbus_enabled'] = any_endpoint_enabled
-                        response_data['message'] += f" - Modbus {'abilitato' if any_endpoint_enabled else 'disabilitato'} automaticamente"
-                    
-                    return web.json_response(response_data)
-                else:
-                    return web.json_response({'error': f'Modbus device not found: {device_id}'}, status=404)
-            else:
-                return web.json_response({'error': f'Invalid config structure in {config_file}'}, status=500)
+            return web.json_response(response_data)
                 
         except Exception as e:
             self.logger.error(f"Error toggling modbus device: {e}")
             return web.json_response({'error': f'Internal server error: {str(e)}'}, status=500)
     
     async def handle_toggle_device_metric(self, request):
-        """Toggle web device metric enabled/disabled state"""
+        """Toggle web device metric enabled/disabled state - Uses UnifiedToggleHandler"""
         try:
-            # Get device ID and metric from query parameters
             device_id = request.query.get('id')
             metric = request.query.get('metric')
             if not device_id or not metric:
                 return web.json_response({'error': 'Missing device ID or metric'}, status=400)
             
-            # Load web endpoints configuration
-            import yaml
-            from pathlib import Path
+            success, response_data = await self.unified_toggle_handler.handle_toggle_device_metric(device_id, metric)
             
-            config_file = 'config/sources/web_endpoints.yaml'
-            config_path = Path(config_file)
-            if not config_path.exists():
-                return web.json_response({'error': f'Config file not found: {config_file}'}, status=404)
+            if not success:
+                status = 404 if 'not found' in response_data.get('error', '').lower() else 400
+                return web.json_response(response_data, status=status)
             
-            with open(config_path, 'r', encoding='utf-8') as f:
-                config = yaml.safe_load(f)
-            
-            # Navigate to the device metric and toggle its enabled state
-            if 'web_scraping' in config and 'endpoints' in config['web_scraping']:
-                devices = config['web_scraping']['endpoints']
-                if device_id in devices and 'measurements' in devices[device_id]:
-                    measurements = devices[device_id]['measurements']
-                    if metric in measurements:
-                        # Toggle the enabled state
-                        current_state = measurements[metric].get('enabled', False)
-                        new_state = not current_state
-                        measurements[metric]['enabled'] = new_state
-                        
-                        # Smart device auto-toggle logic
-                        device_current_state = devices[device_id].get('enabled', False)
-                        device_new_state = device_current_state
-                        device_changed = False
-                        
-                        if new_state and not device_current_state:
-                            # Case 1: Enabling a metric when device is OFF -> enable device
-                            devices[device_id]['enabled'] = True
-                            device_new_state = True
-                            device_changed = True
-                            self.logger.info(f"Auto-enabled device {device_id} because metric {metric} was enabled")
-                        elif not new_state and device_current_state:
-                            # Case 2: Disabling a metric when device is ON -> check if it's the last enabled metric
-                            enabled_metrics = [m for m, cfg in measurements.items() if cfg.get('enabled', False)]
-                            if len(enabled_metrics) == 0:  # No metrics left enabled
-                                devices[device_id]['enabled'] = False
-                                device_new_state = False
-                                device_changed = True
-                                self.logger.info(f"Auto-disabled device {device_id} because no metrics are enabled")
-                        
-                        # Auto-aggiorna web_scraping.enabled basandosi sugli endpoint
-                        web_auto_updated, any_endpoint_enabled = self._auto_update_source_enabled(
-                            config, 'web_scraping', devices, config_path, 'Web scraping'
-                        )
-                        
-                        # Save the updated configuration
-                        with open(config_path, 'w', encoding='utf-8') as f:
-                            yaml.dump(config, f, default_flow_style=False, allow_unicode=True, indent=2)
-                        
-                        self.logger.info(f"Toggled web device metric {device_id}.{metric}: {current_state} -> {new_state}")
-                        
-                        response_data = {
-                            'success': True,
-                            'device_id': device_id,
-                            'metric': metric,
-                            'enabled': new_state,
-                            'device_enabled': device_new_state,
-                            'device_changed': device_changed,
-                            'message': f'Metric {device_id}.{metric} {"enabled" if new_state else "disabled"}'
-                        }
-                        
-                        if device_changed:
-                            response_data['message'] += f' (device auto-{"enabled" if device_new_state else "disabled"})'
-                        
-                        if web_auto_updated:
-                            response_data['web_auto_updated'] = True
-                            response_data['web_enabled'] = any_endpoint_enabled
-                            response_data['message'] += f' - Web scraping {'abilitato' if any_endpoint_enabled else 'disabilitato'} automaticamente'
-                        
-                        return web.json_response(response_data)
-                    else:
-                        return web.json_response({'error': f'Metric not found: {metric}'}, status=404)
-                else:
-                    return web.json_response({'error': f'Device not found: {device_id}'}, status=404)
-            else:
-                return web.json_response({'error': f'Invalid config structure in {config_file}'}, status=500)
+            return web.json_response(response_data)
                 
         except Exception as e:
             self.logger.error(f"Error toggling web device metric: {e}")
             return web.json_response({'error': f'Internal server error: {str(e)}'}, status=500)
 
     async def handle_toggle_modbus_metric(self, request):
-        """Toggle modbus device metric enabled/disabled state"""
+        """Toggle modbus device metric enabled/disabled state - Uses UnifiedToggleHandler"""
         try:
-            # Get device ID and metric from query parameters
             device_id = request.query.get('id')
             metric = request.query.get('metric')
             if not device_id or not metric:
                 return web.json_response({'error': 'Missing device ID or metric'}, status=400)
             
-            # Load modbus endpoints configuration
-            import yaml
-            from pathlib import Path
+            success, response_data = await self.unified_toggle_handler.handle_toggle_modbus_metric(device_id, metric)
             
-            config_file = 'config/sources/modbus_endpoints.yaml'
-            config_path = Path(config_file)
-            if not config_path.exists():
-                return web.json_response({'error': f'Config file not found: {config_file}'}, status=404)
+            if not success:
+                status = 404 if 'not found' in response_data.get('error', '').lower() else 400
+                return web.json_response(response_data, status=status)
             
-            with open(config_path, 'r', encoding='utf-8') as f:
-                config = yaml.safe_load(f)
-            
-            # Navigate to the device metric and toggle its enabled state
-            if 'modbus' in config and 'endpoints' in config['modbus']:
-                devices = config['modbus']['endpoints']
-                if device_id in devices and 'measurements' in devices[device_id]:
-                    measurements = devices[device_id]['measurements']
-                    if metric in measurements:
-                        # Toggle the enabled state
-                        current_state = measurements[metric].get('enabled', False)
-                        new_state = not current_state
-                        measurements[metric]['enabled'] = new_state
-                        
-                        # Smart device auto-toggle logic
-                        device_current_state = devices[device_id].get('enabled', False)
-                        device_new_state = device_current_state
-                        device_changed = False
-                        
-                        if new_state and not device_current_state:
-                            # Case 1: Enabling a metric when device is OFF -> enable device
-                            devices[device_id]['enabled'] = True
-                            device_new_state = True
-                            device_changed = True
-                            self.logger.info(f"Auto-enabled modbus device {device_id} because metric {metric} was enabled")
-                        elif not new_state and device_current_state:
-                            # Case 2: Disabling a metric when device is ON -> check if it's the last enabled metric
-                            enabled_metrics = [m for m, cfg in measurements.items() if cfg.get('enabled', False)]
-                            if len(enabled_metrics) == 0:  # No metrics left enabled
-                                devices[device_id]['enabled'] = False
-                                device_new_state = False
-                                device_changed = True
-                                self.logger.info(f"Auto-disabled modbus device {device_id} because no metrics are enabled")
-                        
-                        # Auto-aggiorna modbus.enabled basandosi sugli endpoint
-                        modbus_auto_updated, any_endpoint_enabled = self._auto_update_source_enabled(
-                            config, 'modbus', devices, config_path, 'Modbus'
-                        )
-                        
-                        # Save the updated configuration
-                        with open(config_path, 'w', encoding='utf-8') as f:
-                            yaml.dump(config, f, default_flow_style=False, allow_unicode=True, indent=2)
-                        
-                        self.logger.info(f"Toggled modbus device metric {device_id}.{metric}: {current_state} -> {new_state}")
-                        
-                        response_data = {
-                            'success': True,
-                            'device_id': device_id,
-                            'metric': metric,
-                            'enabled': new_state,
-                            'device_enabled': device_new_state,
-                            'device_changed': device_changed,
-                            'message': f'Modbus metric {device_id}.{metric} {"enabled" if new_state else "disabled"}'
-                        }
-                        
-                        if device_changed:
-                            response_data['message'] += f' (device auto-{"enabled" if device_new_state else "disabled"})'
-                        
-                        if modbus_auto_updated:
-                            response_data['modbus_auto_updated'] = True
-                            response_data['modbus_enabled'] = any_endpoint_enabled
-                            response_data['message'] += f' - Modbus {'abilitato' if any_endpoint_enabled else 'disabilitato'} automaticamente'
-                        
-                        return web.json_response(response_data)
-                    else:
-                        return web.json_response({'error': f'Metric not found: {metric}'}, status=404)
-                else:
-                    return web.json_response({'error': f'Modbus device not found: {device_id}'}, status=404)
-            else:
-                return web.json_response({'error': f'Invalid config structure in {config_file}'}, status=500)
+            return web.json_response(response_data)
+                
         except Exception as e:
-            self.logger.error(f"[GUI] Errore toggle modbus metric: {e}")
-            return web.json_response({'error': str(e)}, status=500)
+            self.logger.error(f"Error toggling modbus device metric: {e}")
+            return web.json_response({'error': f'Internal server error: {str(e)}'}, status=500)
 
     def _setup_log_capture(self):
         """Setup log capture per la GUI con identificazione flow"""
@@ -1249,9 +943,9 @@ class SimpleWebGUI:
         
         # Aggiorna statistiche per il nuovo loop
         from datetime import datetime
-        self.loop_stats['start_time'] = datetime.now()
-        self.loop_stats['status'] = 'running'
-        self.loop_stats['last_api_web_run'] = datetime.min
+        self.state_manager.loop_stats['start_time'] = datetime.now()
+        self.state_manager.loop_stats['status'] = 'running'
+        self.state_manager.loop_stats['last_api_web_run'] = datetime.min
         
         # Usa il loop personalizzato che aggiorna le statistiche della GUI
         from datetime import datetime, timedelta
@@ -1281,16 +975,6 @@ class SimpleWebGUI:
         # Carica i file sources separatamente perché non sono nel config principale
         import yaml
         from pathlib import Path
-        
-        def load_source_enabled(file_path, key):
-            try:
-                if Path(file_path).exists():
-                    with open(file_path, 'r', encoding='utf-8') as f:
-                        data = yaml.safe_load(f)
-                    return data.get(key, {}).get('enabled', False)
-            except:
-                pass
-            return False
         
         # Carica stato enabled dai file, ma verifica anche se ci sono endpoint attivi
         def load_source_enabled_with_check(file_path, key):
@@ -1365,7 +1049,7 @@ class SimpleWebGUI:
             self.logger.info("[GUI] ℹ️ GME disabilitato nella configurazione, GME flow non verrà eseguito")
         
         try:
-            while self.loop_running and not self.stop_requested:
+            while self.state_manager.loop_running and not self.state_manager.stop_requested:
                 current_time = datetime.now()
                 
                 # Calcola tempo fino alla prossima operazione
@@ -1379,37 +1063,37 @@ class SimpleWebGUI:
                     
                     # Esegui Web flow solo se abilitato (in thread separato per non bloccare GUI)
                     if web_enabled:
-                        self.loop_stats['web_stats']['executed'] += 1
+                        self.state_manager.loop_stats['web_stats']['executed'] += 1
                         try:
                             await asyncio.get_event_loop().run_in_executor(
                                 None, run_web_flow, log, cache, config
                             )
-                            self.loop_stats['web_stats']['success'] += 1
+                            self.state_manager.loop_stats['web_stats']['success'] += 1
                             self.logger.info("[GUI] ✅ Raccolta web completata")
                         except Exception as e:
-                            self.loop_stats['web_stats']['failed'] += 1
+                            self.state_manager.loop_stats['web_stats']['failed'] += 1
                             self.logger.error(f"[GUI] ❌ Errore raccolta web: {e}")
                     
                     # Esegui API flow solo se abilitato (in thread separato per non bloccare GUI)
                     if api_enabled:
-                        self.loop_stats['api_stats']['executed'] += 1
+                        self.state_manager.loop_stats['api_stats']['executed'] += 1
                         try:
                             await asyncio.get_event_loop().run_in_executor(
                                 None, run_api_flow, log, cache, config
                             )
-                            self.loop_stats['api_stats']['success'] += 1
+                            self.state_manager.loop_stats['api_stats']['success'] += 1
                             self.logger.info("[GUI] ✅ Raccolta API completata")
                         except Exception as e:
-                            self.loop_stats['api_stats']['failed'] += 1
+                            self.state_manager.loop_stats['api_stats']['failed'] += 1
                             self.logger.error(f"[GUI] ❌ Errore raccolta API: {e}")
                     
                     last_api_web_run = current_time
-                    self.loop_stats['last_api_web_run'] = current_time
-                    self.loop_stats['last_update'] = current_time
+                    self.state_manager.loop_stats['last_api_web_run'] = current_time
+                    self.state_manager.loop_stats['last_update'] = current_time
                     
                     # Calcola next run per API/Web
                     next_api_web_run = current_time + api_web_interval
-                    self.loop_stats['next_api_web_run'] = next_api_web_run
+                    self.state_manager.loop_stats['next_api_web_run'] = next_api_web_run
                     
                     # Ricalcola tempi dopo l'esecuzione
                     time_until_api_web = api_web_interval.total_seconds()
@@ -1420,7 +1104,7 @@ class SimpleWebGUI:
                 
                 # Esegui Realtime solo se Modbus è abilitato
                 if modbus_enabled and time_until_realtime <= 0:
-                    self.loop_stats['realtime_stats']['executed'] += 1
+                    self.state_manager.loop_stats['realtime_stats']['executed'] += 1
                     try:
                         # Esegui in thread separato per evitare blocco su timeout Modbus
                         result = await asyncio.get_event_loop().run_in_executor(
@@ -1428,16 +1112,16 @@ class SimpleWebGUI:
                         )
                         # result == 0 significa successo
                         if result == 0:
-                            self.loop_stats['realtime_stats']['success'] += 1
+                            self.state_manager.loop_stats['realtime_stats']['success'] += 1
                             self.logger.debug("[GUI] ✅ Raccolta realtime completata")
                         else:
-                            self.loop_stats['realtime_stats']['failed'] += 1
+                            self.state_manager.loop_stats['realtime_stats']['failed'] += 1
                     except Exception as e:
-                        self.loop_stats['realtime_stats']['failed'] += 1
+                        self.state_manager.loop_stats['realtime_stats']['failed'] += 1
                         self.logger.error(f"[GUI] ❌ Errore raccolta realtime: {e}")
                     
                     last_realtime_run = datetime.now()
-                    self.loop_stats['last_update'] = datetime.now()
+                    self.state_manager.loop_stats['last_update'] = datetime.now()
                     
                     # Ricalcola tempo dopo l'esecuzione
                     time_until_realtime = realtime_interval.total_seconds()
@@ -1450,24 +1134,24 @@ class SimpleWebGUI:
                 if gme_enabled and time_until_gme <= 0:
                     from main import run_gme_flow
                     self.logger.info("[GUI] 🔋 Esecuzione raccolta GME...")
-                    self.loop_stats['gme_stats']['executed'] += 1
+                    self.state_manager.loop_stats['gme_stats']['executed'] += 1
                     try:
                         await asyncio.get_event_loop().run_in_executor(
                             None, run_gme_flow, log, cache, config
                         )
-                        self.loop_stats['gme_stats']['success'] += 1
+                        self.state_manager.loop_stats['gme_stats']['success'] += 1
                         self.logger.info("[GUI] ✅ Raccolta GME completata")
                     except Exception as e:
-                        self.loop_stats['gme_stats']['failed'] += 1
+                        self.state_manager.loop_stats['gme_stats']['failed'] += 1
                         self.logger.error(f"[GUI] ❌ Errore raccolta GME: {e}")
                     
                     last_gme_run = current_time
-                    self.loop_stats['last_gme_run'] = current_time
-                    self.loop_stats['last_update'] = current_time
+                    self.state_manager.loop_stats['last_gme_run'] = current_time
+                    self.state_manager.loop_stats['last_update'] = current_time
                     
                     # Calcola next run per GME
                     next_gme_run = current_time + gme_interval
-                    self.loop_stats['next_gme_run'] = next_gme_run
+                    self.state_manager.loop_stats['next_gme_run'] = next_gme_run
                     
                     # Ricalcola tempi dopo l'esecuzione
                     time_until_gme = gme_interval.total_seconds()
@@ -1487,8 +1171,8 @@ class SimpleWebGUI:
                 
         except Exception as e:
             self.logger.error(f"[GUI] Errore nel loop: {e}")
-            self.loop_running = False
+            self.state_manager.loop_running = False
         finally:
-            self.loop_stats['status'] = 'stopped'
-            self.loop_mode = False  # Disabilita modalità loop
+            self.state_manager.loop_stats['status'] = 'stopped'
+            self.state_manager.loop_mode = False  # Disabilita modalità loop
             self.logger.info("[GUI] Loop terminato")
