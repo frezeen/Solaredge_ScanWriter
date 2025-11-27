@@ -195,6 +195,20 @@ class SolarDashboard {
         }
     }
 
+    // Helper: Create device header HTML
+    createDeviceHeader(id, data, type) {
+        return `
+            <div class="device-header">
+                <div class="device-info">
+                    <div class="device-title">${data.device_name || id}</div>
+                    <div class="device-type">${type}</div>
+                    ${data.device_id ? `<div class="device-id">ID: ${data.device_id}</div>` : ''}
+                </div>
+                ${this.createToggle(data.enabled, `dashboard.toggle('device','${id}',this.checked)`, '', `Abilita device ${data.device_name || id}`)}
+            </div>
+        `;
+    }
+
     createDeviceCard(id, data) {
         const card = document.createElement('div');
         card.className = 'device-card';
@@ -204,14 +218,7 @@ class SolarDashboard {
         const metrics = Object.entries(data.measurements || {});
 
         card.innerHTML = `
-            <div class="device-header">
-                <div class="device-info">
-                    <div class="device-title">${data.device_name || id}</div>
-                    <div class="device-type">${type}</div>
-                    ${data.device_id ? `<div class="device-id">ID: ${data.device_id}</div>` : ''}
-                </div>
-                ${this.createToggle(data.enabled, `dashboard.toggle('device','${id}',this.checked)`, '', `Abilita device ${data.device_name || id}`)}
-            </div>
+            ${this.createDeviceHeader(id, data, type)}
             ${metrics.length ? this.createMetricsSection(id, metrics) : ''}
         `;
 
@@ -308,14 +315,16 @@ class SolarDashboard {
         const card = document.createElement('div');
         card.className = 'endpoint-card';
 
-        const category = data.category || 'Info';
-        const categoryIcons = {
+        // Lookup table for category icons
+        const CATEGORY_ICONS = {
             'Info': 'ℹ️',
             'Inverter': '⚡',
             'Meter': '📊',
             'Flusso': '🔄'
         };
-        const icon = categoryIcons[category] || '❓';
+        
+        const category = data.category || 'Info';
+        const icon = CATEGORY_ICONS[category] || '❓';
 
         card.innerHTML = `
             <div class="endpoint-header">
@@ -360,14 +369,17 @@ class SolarDashboard {
         card.className = 'device-card modbus-card';
         card.dataset.deviceId = id;
 
-        const category = data.category || 'Modbus';
-        const deviceType = data.device_type || 'Unknown';
-        const metrics = Object.entries(data.measurements || {});
-        const categoryIcon = {
+        // Lookup table for modbus category icons
+        const MODBUS_CATEGORY_ICONS = {
             'Inverter': '🔋',
             'Meter': '⚡',
             'Battery': '🔋'
-        }[category] || '⚡';
+        };
+        
+        const category = data.category || 'Modbus';
+        const deviceType = data.device_type || 'Unknown';
+        const metrics = Object.entries(data.measurements || {});
+        const categoryIcon = MODBUS_CATEGORY_ICONS[category] || '⚡';
 
         card.innerHTML = `
             <div class="device-header">
@@ -610,11 +622,17 @@ class SolarDashboard {
     }
 
     inferDeviceType(id) {
-        const types = { inverter: 'INVERTER', meter: 'METER', site: 'SITE', weather: 'WEATHER' };
-        for (const [key, value] of Object.entries(types)) {
-            if (id.includes(key)) return value;
-        }
-        return 'DEVICE';
+        // Lookup table for device type inference
+        const typePatterns = {
+            'inverter': 'INVERTER',
+            'meter': 'METER',
+            'site': 'SITE',
+            'weather': 'WEATHER'
+        };
+        
+        // Find first matching pattern
+        const matchedType = Object.entries(typePatterns).find(([pattern]) => id.includes(pattern));
+        return matchedType ? matchedType[1] : 'DEVICE';
     }
 
     animateCard(card, delay) {
@@ -711,12 +729,25 @@ class SolarDashboard {
     }
 
     notify(message, type = 'info') {
-        const el = document.createElement('div');
-        const colors = { success: 'var(--accent-green)', error: 'var(--accent-red)', info: 'var(--accent-blue)' };
+        // Lookup table for notification colors
+        const NOTIFICATION_COLORS = {
+            'success': 'var(--accent-green)',
+            'error': 'var(--accent-red)',
+            'info': 'var(--accent-blue)'
+        };
+        
+        // Lookup table for notification durations
+        const NOTIFICATION_DURATIONS = {
+            'error': 8000,
+            'success': 3000,
+            'info': 3000
+        };
 
+        const el = document.createElement('div');
         Object.assign(el.style, {
             position: 'fixed', top: '20px', right: '20px',
-            background: colors[type], color: 'white',
+            background: NOTIFICATION_COLORS[type] || NOTIFICATION_COLORS.info,
+            color: 'white',
             padding: '1rem 1.5rem', borderRadius: '8px',
             boxShadow: 'var(--shadow-lg)', zIndex: '1000',
             fontWeight: '500', transform: 'translateX(100%)',
@@ -730,7 +761,7 @@ class SolarDashboard {
         setTimeout(() => {
             el.style.transform = 'translateX(100%)';
             setTimeout(() => el.remove(), 300);
-        }, type === 'error' ? 8000 : 3000);
+        }, NOTIFICATION_DURATIONS[type] || NOTIFICATION_DURATIONS.info);
     }
 
     startLoopMonitoring() {
@@ -988,6 +1019,16 @@ let currentLogFlow = 'all';
 let autoScrollEnabled = true;
 let logUpdateInterval = null;
 
+// Lookup table for filter names (defined at module level)
+const FILTER_NAMES = {
+    'all': 'Tutti',
+    'api': 'API',
+    'web': 'Web',
+    'realtime': 'Realtime',
+    'gme': 'GME',
+    'general': 'Sistema'
+};
+
 function switchLogTab(flow) {
     currentLogFlow = flow;
 
@@ -995,15 +1036,7 @@ function switchLogTab(flow) {
         tab.classList.toggle('active', tab.dataset.flow === flow);
     });
 
-    const filterNames = {
-        'all': 'Tutti',
-        'api': 'API',
-        'web': 'Web',
-        'realtime': 'Realtime',
-        'gme': 'GME',
-        'general': 'Sistema'
-    };
-    document.getElementById('logsFilter').textContent = `Filtro: ${filterNames[flow]}`;
+    document.getElementById('logsFilter').textContent = `Filtro: ${FILTER_NAMES[flow] || flow}`;
 
     loadFilteredLogs();
 
@@ -1026,6 +1059,69 @@ async function loadFilteredLogs() {
     }
 }
 
+// Helper: Create empty log entry
+function createEmptyLogEntry() {
+    const entry = document.createElement('div');
+    entry.className = 'log-entry info';
+    const message = document.createElement('span');
+    message.className = 'log-message';
+    message.textContent = 'Nessun log disponibile per questo filtro';
+    entry.appendChild(message);
+    return entry;
+}
+
+// Lookup table for flow icons (defined at module level for reuse)
+const FLOW_ICONS = {
+    'api': '🌐',
+    'web': '🔌',
+    'realtime': '⚡',
+    'gme': '💰',
+    'general': 'ℹ️'
+};
+
+// Helper: Create log entry element
+function createLogEntry(log) {
+    const flowType = log.flow_type || 'general';
+    const entry = document.createElement('div');
+    entry.className = `log-entry ${log.level.toLowerCase()}`;
+    
+    const timestamp = document.createElement('span');
+    timestamp.className = 'log-timestamp';
+    timestamp.textContent = log.timestamp;
+    
+    const level = document.createElement('span');
+    level.className = `log-level ${log.level.toLowerCase()}`;
+    level.textContent = log.level;
+    
+    const flow = document.createElement('span');
+    flow.className = 'log-flow';
+    flow.dataset.flow = flowType;
+    flow.textContent = `${FLOW_ICONS[flowType] || 'ℹ️'} ${flowType.toUpperCase()}`;
+    
+    const message = document.createElement('span');
+    message.className = 'log-message';
+    message.textContent = log.message;
+    
+    entry.appendChild(timestamp);
+    entry.appendChild(level);
+    entry.appendChild(flow);
+    entry.appendChild(message);
+    
+    return entry;
+}
+
+// Helper: Update log count display
+function updateLogCount(total, runCounts) {
+    let countText = `${total} log visualizzati`;
+    if (runCounts) {
+        const totalRuns = Object.values(runCounts).reduce((sum, count) => sum + count, 0);
+        if (totalRuns > 0) {
+            countText += ` (ultime ${totalRuns} run)`;
+        }
+    }
+    document.getElementById('logsCount').textContent = countText;
+}
+
 function renderFilteredLogs(logs, total, runCounts) {
     const container = document.getElementById('logsContent');
     if (!container || !logs) return;
@@ -1036,64 +1132,13 @@ function renderFilteredLogs(logs, total, runCounts) {
     const fragment = document.createDocumentFragment();
     
     if (logs.length === 0) {
-        const emptyEntry = document.createElement('div');
-        emptyEntry.className = 'log-entry info';
-        const message = document.createElement('span');
-        message.className = 'log-message';
-        message.textContent = 'Nessun log disponibile per questo filtro';
-        emptyEntry.appendChild(message);
-        fragment.appendChild(emptyEntry);
+        fragment.appendChild(createEmptyLogEntry());
     } else {
-        const flowIcons = {
-            'api': '🌐',
-            'web': '🔌',
-            'realtime': '⚡',
-            'gme': '💰',
-            'general': 'ℹ️'
-        };
-        
-        logs.forEach(log => {
-            const flowType = log.flow_type || 'general';
-            const entry = document.createElement('div');
-            entry.className = `log-entry ${log.level.toLowerCase()}`;
-            
-            // Timestamp
-            const timestamp = document.createElement('span');
-            timestamp.className = 'log-timestamp';
-            timestamp.textContent = log.timestamp;
-            
-            // Level
-            const level = document.createElement('span');
-            level.className = `log-level ${log.level.toLowerCase()}`;
-            level.textContent = log.level;
-            
-            const flow = document.createElement('span');
-            flow.className = 'log-flow';
-            flow.dataset.flow = flowType;
-            flow.textContent = `${flowIcons[flowType]} ${flowType.toUpperCase()}`;
-            
-            const message = document.createElement('span');
-            message.className = 'log-message';
-            message.textContent = log.message;
-            
-            entry.appendChild(timestamp);
-            entry.appendChild(level);
-            entry.appendChild(flow);
-            entry.appendChild(message);
-            fragment.appendChild(entry);
-        });
+        logs.forEach(log => fragment.appendChild(createLogEntry(log)));
     }
     
     container.replaceChildren(fragment);
-
-    let countText = `${total} log visualizzati`;
-    if (runCounts) {
-        const totalRuns = Object.values(runCounts).reduce((sum, count) => sum + count, 0);
-        if (totalRuns > 0) {
-            countText += ` (ultime ${totalRuns} run)`;
-        }
-    }
-    document.getElementById('logsCount').textContent = countText;
+    updateLogCount(total, runCounts);
 
     if (shouldScroll) container.scrollTop = container.scrollHeight;
 }

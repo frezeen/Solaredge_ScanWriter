@@ -14,6 +14,13 @@ from app_logging.universal_logger import get_logger
 from utils.yaml_loader import load_yaml, save_yaml
 
 class SimpleWebGUI:
+    # Lookup table for endpoint config file paths (class-level constant)
+    ENDPOINT_CONFIG_FILES = {
+        'api_ufficiali': 'config/sources/api_endpoints.yaml',
+        'web': 'config/sources/web_endpoints.yaml',
+        'modbus': 'config/sources/modbus_endpoints.yaml'
+    }
+    
     def __init__(self, config_file="config/main.yaml", port=8092, cache=None, auto_start_loop=False):
         self.config_file = Path(config_file)
         self.logger = get_logger("SimpleWebGUI")
@@ -249,18 +256,13 @@ class SimpleWebGUI:
                 status = 404 if 'non trovato' in error else 400
                 return web.json_response({'error': error}, status=status)
             
-            # Mappa path per response
-            config_files = {
-                'main': 'config/main.yaml',
-                'web_endpoints': 'config/sources/web_endpoints.yaml',
-                'api_endpoints': 'config/sources/api_endpoints.yaml',
-                'modbus_endpoints': 'config/sources/modbus_endpoints.yaml',
-                'env': '.env'
-            }
+            # Use ConfigHandler's lookup table for consistency
+            from gui.core.config_handler import ConfigHandler
+            config_file_path = ConfigHandler.CONFIG_FILE_PATHS.get(file_type, '')
             
             return web.json_response({
                 'file': file_type,
-                'path': config_files.get(file_type, ''),
+                'path': config_file_path,
                 'content': content
             })
             
@@ -280,20 +282,15 @@ class SimpleWebGUI:
             if not success:
                 return web.json_response({'error': error}, status=400)
             
-            # Mappa path per response
-            config_files = {
-                'main': 'config/main.yaml',
-                'web_endpoints': 'config/sources/web_endpoints.yaml',
-                'api_endpoints': 'config/sources/api_endpoints.yaml',
-                'modbus_endpoints': 'config/sources/modbus_endpoints.yaml',
-                'env': '.env'
-            }
+            # Use ConfigHandler's lookup table for consistency
+            from gui.core.config_handler import ConfigHandler
+            config_file_path = ConfigHandler.CONFIG_FILE_PATHS.get(file_type, '')
             
             return self.error_handler.create_success_response(
                 f'File {file_type} salvato con successo',
                 {
                     'file': file_type,
-                    'path': config_files.get(file_type, '')
+                    'path': config_file_path
                 }
             )
             
@@ -557,86 +554,100 @@ class SimpleWebGUI:
             self.logger.error(f"[GUI] Errore avvio server: {e}")
             raise  
     
+    def _parse_endpoint_id(self, endpoint_id):
+        """Parse endpoint ID to determine source type and endpoint name"""
+        parts = endpoint_id.split('.')
+        if len(parts) >= 2:
+            return parts[0], parts[1]  # source_type, endpoint_name
+        return 'api_ufficiali', endpoint_id  # Default to API for simple names
+    
+    def _get_config_file_path(self, source_type):
+        """Map source type to config file path using class-level lookup table"""
+        return self.ENDPOINT_CONFIG_FILES.get(source_type)
+    
+    def _load_endpoint_config(self, config_path):
+        """Load endpoint configuration from file"""
+        try:
+            return load_yaml(config_path, substitute_env=True, use_cache=True), None
+        except FileNotFoundError:
+            return None, f'Config file not found: {config_path}'
+        except Exception as e:
+            return None, f'Error loading config: {str(e)}'
+    
+    def _toggle_endpoint_state(self, config, source_type, endpoint_name):
+        """Toggle endpoint enabled state and return result"""
+        if source_type not in config or 'endpoints' not in config[source_type]:
+            return None, f'Invalid config structure'
+        
+        endpoints = config[source_type]['endpoints']
+        if endpoint_name not in endpoints:
+            return None, f'Endpoint not found: {endpoint_name}'
+        
+        current_state = endpoints[endpoint_name].get('enabled', False)
+        new_state = not current_state
+        endpoints[endpoint_name]['enabled'] = new_state
+        
+        return (current_state, new_state, endpoints), None
+    
+    def _save_endpoint_config(self, config_path, config):
+        """Save endpoint configuration to file"""
+        if not save_yaml(config_path, config, invalidate_cache=True):
+            return False, 'Failed to save configuration'
+        return True, None
+
     async def handle_toggle_endpoint(self, request):
         """Toggle endpoint enabled/disabled state"""
         try:
-            # Get endpoint ID from query parameters
             endpoint_id = request.query.get('id')
             if not endpoint_id:
                 return web.json_response({'error': 'Missing endpoint ID'}, status=400)
             
-            # Parse endpoint ID to determine source file and path
-            # Format: "api_ufficiali.site_overview" or simple "site_overview" for API endpoints
-            parts = endpoint_id.split('.')
-            if len(parts) >= 2:
-                source_type = parts[0]  # api_ufficiali, web, modbus
-                endpoint_name = parts[1]  # site_overview, measurements, etc.
-            else:
-                # For simple endpoint names (like from API tab), assume it's an API endpoint
-                source_type = 'api_ufficiali'
-                endpoint_name = endpoint_id
+            source_type, endpoint_name = self._parse_endpoint_id(endpoint_id)
             
-            # Map source type to config file
-            config_files = {
-                'api_ufficiali': 'config/sources/api_endpoints.yaml',
-                'web': 'config/sources/web_endpoints.yaml', 
-                'modbus': 'config/sources/modbus_endpoints.yaml'
-            }
-            
-            config_file = config_files.get(source_type)
+            config_file = self._get_config_file_path(source_type)
             if not config_file:
                 return web.json_response({'error': f'Unknown source type: {source_type}'}, status=400)
             
-            # Load current configuration (using unified YAML loader)
             config_path = Path(config_file)
-            try:
-                config = load_yaml(config_path, substitute_env=True, use_cache=True)
-            except FileNotFoundError:
-                return web.json_response({'error': f'Config file not found: {config_file}'}, status=404)
-            except Exception as e:
-                return web.json_response({'error': f'Error loading config: {str(e)}'}, status=500)
+            config, error = self._load_endpoint_config(config_path)
+            if error:
+                status = 404 if 'not found' in error else 500
+                return web.json_response({'error': error}, status=status)
             
-            # Navigate to the endpoint and toggle its enabled state
-            if source_type in config and 'endpoints' in config[source_type]:
-                endpoints = config[source_type]['endpoints']
-                if endpoint_name in endpoints:
-                    # Toggle the enabled state
-                    current_state = endpoints[endpoint_name].get('enabled', False)
-                    new_state = not current_state
-                    endpoints[endpoint_name]['enabled'] = new_state
-                    
-                    # Auto-aggiorna source.enabled basandosi sugli endpoint (solo per API)
-                    source_auto_updated = False
-                    any_endpoint_enabled = False
-                    if source_type == 'api_ufficiali':
-                        source_auto_updated, any_endpoint_enabled = self._auto_update_source_enabled(
-                            config, source_type, endpoints, config_path, 'API'
-                        )
-                    
-                    # Save the updated configuration (using unified YAML saver)
-                    if not save_yaml(config_path, config, invalidate_cache=True):
-                        return web.json_response({'error': 'Failed to save configuration'}, status=500)
-                    
-                    self.logger.info(f"Toggled endpoint {endpoint_id}: {current_state} -> {new_state}")
-                    
-                    response_data = {
-                        'success': True,
-                        'endpoint_id': endpoint_id,
-                        'enabled': new_state,
-                        'message': f'Endpoint {endpoint_id} {"enabled" if new_state else "disabled"}'
-                    }
-                    
-                    # Aggiungi info su source.enabled se è stato aggiornato
-                    if source_auto_updated:
-                        response_data['source_auto_updated'] = True
-                        response_data['source_enabled'] = any_endpoint_enabled
-                        response_data['message'] += f" - API {'abilitato' if any_endpoint_enabled else 'disabilitato'} automaticamente"
-                    
-                    return web.json_response(response_data)
-                else:
-                    return web.json_response({'error': f'Endpoint not found: {endpoint_name}'}, status=404)
-            else:
-                return web.json_response({'error': f'Invalid config structure in {config_file}'}, status=500)
+            toggle_result, error = self._toggle_endpoint_state(config, source_type, endpoint_name)
+            if error:
+                status = 404 if 'not found' in error else 500
+                return web.json_response({'error': error}, status=status)
+            
+            current_state, new_state, endpoints = toggle_result
+            
+            # Auto-update source.enabled for API endpoints
+            source_auto_updated = False
+            any_endpoint_enabled = False
+            if source_type == 'api_ufficiali':
+                source_auto_updated, any_endpoint_enabled = self._auto_update_source_enabled(
+                    config, source_type, endpoints, config_path, 'API'
+                )
+            
+            success, error = self._save_endpoint_config(config_path, config)
+            if not success:
+                return web.json_response({'error': error}, status=500)
+            
+            self.logger.info(f"Toggled endpoint {endpoint_id}: {current_state} -> {new_state}")
+            
+            response_data = {
+                'success': True,
+                'endpoint_id': endpoint_id,
+                'enabled': new_state,
+                'message': f'Endpoint {endpoint_id} {"enabled" if new_state else "disabled"}'
+            }
+            
+            if source_auto_updated:
+                response_data['source_auto_updated'] = True
+                response_data['source_enabled'] = any_endpoint_enabled
+                response_data['message'] += f" - API {'abilitato' if any_endpoint_enabled else 'disabilitato'} automaticamente"
+            
+            return web.json_response(response_data)
                 
         except Exception as e:
             self.logger.error(f"Error toggling endpoint: {e}")
@@ -719,200 +730,207 @@ class SimpleWebGUI:
     def _setup_log_capture(self):
         """Setup log capture per la GUI con identificazione flow"""
         import logging
+        
+        gui_handler = self._create_gui_log_handler()
+        gui_handler.setLevel(logging.INFO)
+        
+        loggers_to_capture = [
+            'main', 'SimpleWebGUI', 'collector', 'parser', 
+            'storage', 'scheduler', 'cache_manager'
+        ]
+        for logger_name in loggers_to_capture:
+            logger = logging.getLogger(logger_name)
+            logger.addHandler(gui_handler)
+    
+    def _create_gui_log_handler(self):
+        """Create and configure GUI log handler"""
+        import logging
         from datetime import datetime
+        import re
         
         class GUILogHandler(logging.Handler):
             def __init__(self, gui_instance):
                 super().__init__()
                 self.gui = gui_instance
-                # Regex per rimuovere codici ANSI
-                import re
                 self.ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
-                # Tracking del flow corrente (per assegnare log senza marker)
                 self.current_flow = None
                 
             def emit(self, record):
                 try:
-                    message = record.getMessage()
-                    
-                    # Rimuovi codici ANSI dal messaggio
-                    message = self.ansi_escape.sub('', message)
-                    
-                    # Identifica il flow type dal messaggio o dal logger
+                    message = self.ansi_escape.sub('', record.getMessage())
                     flow_type = self._detect_flow_type(record.name, message)
                     
-                    # Aggiorna il flow corrente se troviamo un marker di inizio
-                    if '🚀 avvio flusso' in message.lower():
-                        if 'api' in message.lower():
-                            self.current_flow = 'api'
-                        elif 'web' in message.lower():
-                            self.current_flow = 'web'
-                        elif 'realtime' in message.lower():
-                            self.current_flow = 'realtime'
+                    self._update_current_flow(message)
+                    flow_type = self._apply_flow_context(flow_type, message)
                     
-                    # Se il flow type è general ma abbiamo un flow corrente attivo,
-                    # e il messaggio sembra essere parte di un flow, usa il flow corrente
-                    if flow_type == 'general' and self.current_flow:
-                        # Messaggi che fanno parte di un flow
-                        if any(keyword in message.lower() for keyword in [
-                            'collector', 'parser', 'filtro', 'scritti', 'punti',
-                            'bucket', 'influxwriter', 'cache hit', 'cache miss'
-                        ]):
-                            flow_type = self.current_flow
-                    
-                    # Reset del flow corrente se troviamo un marker di fine
-                    if 'pipeline' in message.lower() and 'completata' in message.lower():
-                        self.current_flow = None
-                    
-                    # REFACTORED: Usa StateManager per aggiungere log
-                    # StateManager gestisce automaticamente buffer, flow_runs e deque
                     self.gui.state_manager.add_log_entry(
                         level=record.levelname,
                         message=message,
                         flow_type=flow_type,
                         timestamp=datetime.now()
                     )
-                        
                 except Exception:
-                    pass  # Ignora errori nel logging per evitare loop infiniti
+                    pass
+            
+            def _update_current_flow(self, message):
+                """Update current flow based on pipeline markers"""
+                message_lower = message.lower()
+                if '🚀 avvio flusso' in message_lower:
+                    for flow in ['api', 'web', 'realtime']:
+                        if flow in message_lower:
+                            self.current_flow = flow
+                            break
+                elif 'pipeline' in message_lower and 'completata' in message_lower:
+                    self.current_flow = None
+            
+            def _apply_flow_context(self, flow_type, message):
+                """Apply current flow context to general messages using guard clauses"""
+                # Guard clause: Only apply context to general messages with current flow
+                if flow_type != 'general' or not self.current_flow:
+                    return flow_type
+                
+                # Guard clause: Check if message contains flow keywords
+                flow_keywords = ['collector', 'parser', 'filtro', 'scritti', 
+                               'punti', 'bucket', 'influxwriter', 'cache hit', 'cache miss']
+                if any(kw in message.lower() for kw in flow_keywords):
+                    return self.current_flow
+                
+                return flow_type
             
             def _detect_flow_type(self, logger_name, message):
-                """Rileva il tipo di flow dal logger o dal messaggio usando i marker delle pipeline"""
+                """Detect flow type from logger name and message using guard clauses"""
                 message_lower = message.lower()
                 logger_lower = logger_name.lower()
                 
-                # 0. PRIORITÀ MASSIMA: Controlla marker di inizio/fine pipeline e keywords flow
-                # Questi hanno priorità su tutto, anche su [GUI]
-                if 'gme' in message_lower and ('raccolta' in message_lower or 'esecuzione' in message_lower or 'completata' in message_lower):
+                # Guard clause: Check GME first (highest priority)
+                if self._is_gme_flow(message_lower):
                     return 'gme'
                 
-                # 1. Controlla marker di inizio/fine pipeline (più affidabili)
-                if 'avvio flusso api' in message_lower or 'pipeline api completata' in message_lower:
-                    return 'api'
-                elif 'avvio flusso web' in message_lower or 'pipeline web completata' in message_lower:
-                    return 'web'
-                elif 'avvio flusso realtime' in message_lower or 'pipeline realtime completata' in message_lower:
-                    return 'realtime'
-                elif 'avvio flusso gme' in message_lower or 'pipeline gme completata' in message_lower:
-                    return 'gme'
+                # Guard clause: Check pipeline markers
+                flow = self._check_pipeline_markers(message_lower)
+                if flow:
+                    return flow
                 
-                # 2. Controlla il nome del logger (più affidabile del messaggio)
-                if any(name in logger_lower for name in ['collector.collector_api', 'parser.api', 'api_parser']):
-                    return 'api'
-                elif any(name in logger_lower for name in ['collector.collector_web', 'parser.web', 'web_parser']):
-                    return 'web'
-                elif any(name in logger_lower for name in ['collector.collector_realtime', 'parser.parser_realtime', 'realtime', 'modbus']):
-                    return 'realtime'
+                # Guard clause: Check logger name
+                flow = self._check_logger_name(logger_lower)
+                if flow:
+                    return flow
                 
-                # 3. Controlla keywords specifiche nel messaggio (più ampie)
-                api_keywords = [
-                    'api flow', 'collector_api', 'api_parser', 'flusso api', 
-                    'endpoint', 'raccolta api', 'raccolti dati da', 'endpoint equipment',
-                    'endpoint site', 'parser api', 'influxdb points da api',
-                    '[api_ufficiali]'  # Cache logs con tag source
-                ]
-                web_keywords = [
-                    'web flow', 'collector_web', 'web_parser', 'flusso web', 
-                    'web scraping', 'raccolta web', 'raccogliendo dati web',
-                    'parser web', 'influxdb points da web', 'dispositivo', 'measurements',
-                    '[web]'  # Cache logs con tag source
-                ]
-                realtime_keywords = [
-                    'realtime', 'modbus', 'collector_realtime', 'parser_realtime', 
-                    'flusso realtime', 'raccolta realtime', 'inverter', 'meter',
-                    'metriche abilitate', 'parsing completato',
-                    '[realtime]'  # Cache logs con tag source
-                ]
-                gme_keywords = [
-                    'gme', 'mercato elettrico', 'pun', 'prezzo energia',
-                    'elaborazione data', 'download dati gme', 'generati', 'influxdb points gme',
-                    'media mensile', 'bucket gme', 'punti orari',
-                    '[gme]'  # Cache logs con tag source
-                ]
+                # Guard clause: Check message keywords
+                flow = self._check_message_keywords(message_lower)
+                if flow:
+                    return flow
                 
-                if any(keyword in message_lower for keyword in api_keywords):
-                    return 'api'
-                elif any(keyword in message_lower for keyword in web_keywords):
-                    return 'web'
-                elif any(keyword in message_lower for keyword in realtime_keywords):
-                    return 'realtime'
-                elif any(keyword in message_lower for keyword in gme_keywords):
-                    return 'gme'
-                
-                # 4. Controlla logger generico 'main' - usa context dal messaggio
+                # Guard clause: Check main logger context
                 if logger_lower == 'main':
-                    # Messaggi che contengono questi pattern vanno nei flow
-                    if any(pattern in message_lower for pattern in [
-                        'collector:', 'parser:', 'filtro:', 'storage:', 'writer:',
-                        'pipeline', 'punti', 'bucket', 'scritti', 'generati',
-                        'raccolti', 'raccogliendo', 'processando', 'validati'
-                    ]):
-                        # Cerca indizi nel messaggio per capire quale flow
-                        if any(word in message_lower for word in ['api', 'endpoint']):
-                            return 'api'
-                        elif any(word in message_lower for word in ['web', 'scraping', 'dispositivo']):
-                            return 'web'
-                        elif any(word in message_lower for word in ['realtime', 'modbus', 'inverter', 'meter']):
-                            return 'realtime'
-                        # Se non riesci a capire quale flow, ma è chiaramente un flow, metti in general
-                        # (meglio che perderlo)
+                    flow = self._check_main_logger_context(message_lower)
+                    if flow:
+                        return flow
                 
-                # 5. Log di storage/influx - assegna al flow corrente se possibile
-                if 'storage' in logger_lower or 'influx' in logger_lower:
-                    if 'solaredge_realtime' in message_lower or 'realtime' in message_lower:
-                        return 'realtime'
-                    elif 'solaredge' in message_lower and 'realtime' not in message_lower:
-                        # Bucket Solaredge generico - prova a dedurre dal contesto
-                        # Se il messaggio precedente era di un flow, probabilmente è quello
-                        # Per ora, se non possiamo dedurre, lasciamo in general
-                        pass
-                    # Log generici di InfluxWriter (inizializzazione, etc.)
-                    if 'inizializzato' in message_lower or 'influxwriter' in message_lower:
-                        # Questi sono log di setup, possono stare in general
-                        pass
+                # Guard clause: Check storage/influx logs for realtime
+                if ('storage' in logger_lower or 'influx' in logger_lower) and \
+                   ('solaredge_realtime' in message_lower or 'realtime' in message_lower):
+                    return 'realtime'
                 
-                # 6. ULTIMO: Controlla system keywords (dopo tutti i flow checks)
+                # Guard clause: Check system keywords
+                if self._is_system_message(message_lower):
+                    return 'general'
+                
+                # Default fallback
+                return 'general'
+            
+            def _is_gme_flow(self, message_lower):
+                """Check if message is GME flow"""
+                return 'gme' in message_lower and any(
+                    kw in message_lower for kw in ['raccolta', 'esecuzione', 'completata']
+                )
+            
+            def _check_pipeline_markers(self, message_lower):
+                """Check for pipeline start/end markers"""
+                markers = {
+                    'api': ['avvio flusso api', 'pipeline api completata'],
+                    'web': ['avvio flusso web', 'pipeline web completata'],
+                    'realtime': ['avvio flusso realtime', 'pipeline realtime completata'],
+                    'gme': ['avvio flusso gme', 'pipeline gme completata']
+                }
+                for flow, patterns in markers.items():
+                    if any(p in message_lower for p in patterns):
+                        return flow
+                return None
+            
+            def _check_logger_name(self, logger_lower):
+                """Check logger name for flow identification"""
+                logger_patterns = {
+                    'api': ['collector.collector_api', 'parser.api', 'api_parser'],
+                    'web': ['collector.collector_web', 'parser.web', 'web_parser'],
+                    'realtime': ['collector.collector_realtime', 'parser.parser_realtime', 'realtime', 'modbus']
+                }
+                for flow, patterns in logger_patterns.items():
+                    if any(p in logger_lower for p in patterns):
+                        return flow
+                return None
+            
+            def _check_message_keywords(self, message_lower):
+                """Check message for flow-specific keywords"""
+                keyword_sets = {
+                    'api': ['api flow', 'collector_api', 'api_parser', 'flusso api', 
+                           'endpoint', 'raccolta api', 'raccolti dati da', 'endpoint equipment',
+                           'endpoint site', 'parser api', 'influxdb points da api', '[api_ufficiali]'],
+                    'web': ['web flow', 'collector_web', 'web_parser', 'flusso web', 
+                           'web scraping', 'raccolta web', 'raccogliendo dati web',
+                           'parser web', 'influxdb points da web', 'dispositivo', 'measurements', '[web]'],
+                    'realtime': ['realtime', 'modbus', 'collector_realtime', 'parser_realtime', 
+                                'flusso realtime', 'raccolta realtime', 'inverter', 'meter',
+                                'metriche abilitate', 'parsing completato', '[realtime]'],
+                    'gme': ['gme', 'mercato elettrico', 'pun', 'prezzo energia',
+                           'elaborazione data', 'download dati gme', 'generati', 'influxdb points gme',
+                           'media mensile', 'bucket gme', 'punti orari', '[gme]']
+                }
+                for flow, keywords in keyword_sets.items():
+                    if any(kw in message_lower for kw in keywords):
+                        return flow
+                return None
+            
+            def _check_main_logger_context(self, message_lower):
+                """Check main logger messages for flow context using guard clauses"""
+                flow_patterns = ['collector:', 'parser:', 'filtro:', 'storage:', 'writer:',
+                               'pipeline', 'punti', 'bucket', 'scritti', 'generati',
+                               'raccolti', 'raccogliendo', 'processando', 'validati']
+                
+                # Guard clause: Return early if no flow patterns found
+                if not any(p in message_lower for p in flow_patterns):
+                    return None
+                
+                # Guard clause: Check for API keywords
+                if any(w in message_lower for w in ['api', 'endpoint']):
+                    return 'api'
+                
+                # Guard clause: Check for Web keywords
+                if any(w in message_lower for w in ['web', 'scraping', 'dispositivo']):
+                    return 'web'
+                
+                # Guard clause: Check for Realtime keywords
+                if any(w in message_lower for w in ['realtime', 'modbus', 'inverter', 'meter']):
+                    return 'realtime'
+                
+                return None
+            
+            def _is_system_message(self, message_lower):
+                """Check if message is a system message"""
                 system_keywords = [
                     'scheduler inizializzato', 'intervalli configurati', 
                     '[gui]', 'gui web', 'server gui', 'loop avviato', 'loop personalizzato',
                     'config manager', 'variabili d\'ambiente', 'configurazione yaml',
                     'avvio gui', 'porta 8092', 'dashboard moderna', 'ctrl+c',
                     'accesso rete locale', 'firewall', 'usa la gui',
-                    'device_id cached',  # Cache hits per device_id
-                    'influxwriter inizializzato',  # InfluxDB init
+                    'device_id cached', 'influxwriter inizializzato'
                 ]
+                system_prefixes = ['✅ server gui', '🌐 gui disponibile', '📡 accesso rete']
                 
-                # Escludi anche log che iniziano con certi pattern (con emoji)
-                system_prefixes = [
-                    '✅ server gui', '🌐 gui disponibile', '📡 accesso rete'
-                    # NOTA: cache hit/saved NON sono qui, vanno nei rispettivi flow
-                ]
-                if any(message_lower.startswith(prefix.lower()) for prefix in system_prefixes):
-                    return 'general'
-                
-                if any(keyword in message_lower for keyword in system_keywords):
-                    return 'general'
-                
-                # Default: general (solo per log veramente di sistema: GUI, cache, scheduler, config)
-                return 'general'
+                return (any(message_lower.startswith(p.lower()) for p in system_prefixes) or
+                       any(kw in message_lower for kw in system_keywords))
         
-        # Aggiungi handler ai logger principali
-        gui_handler = GUILogHandler(self)
-        gui_handler.setLevel(logging.INFO)
-        
-        # Aggiungi ai logger che ci interessano
-        loggers_to_capture = [
-            'main',           # Logger principale
-            'SimpleWebGUI',   # Logger GUI
-            'collector',      # Tutti i collector (api, web, realtime)
-            'parser',         # Tutti i parser
-            'storage',        # Storage/InfluxDB
-            'scheduler',      # Scheduler
-            'cache_manager'   # Cache manager (aggiunto!)
-        ]
-        for logger_name in loggers_to_capture:
-            logger = logging.getLogger(logger_name)
-            logger.addHandler(gui_handler)
+        return GUILogHandler(self)
 
     async def _run_existing_loop(self, cache, config):
         """Avvia il loop esistente di main.py in modalità asincrona"""
