@@ -851,6 +851,7 @@ class SolarDashboard {
                 'apiRuns': formatStats(stats.api_stats),
                 'webRuns': formatStats(stats.web_stats),
                 'realtimeRuns': formatStats(stats.realtime_stats),
+                'gmeRuns': formatStats(stats.gme_stats),
                 'lastUpdate': stats.last_update_formatted || '--'
             };
 
@@ -871,6 +872,13 @@ class SolarDashboard {
                 const webTimingEl = document.getElementById('webTiming');
                 if (webTimingEl) {
                     webTimingEl.innerHTML = `last: ${stats.web_last_run}<br>next: ${stats.web_next_run}`;
+                }
+            }
+
+            if (stats.gme_last_run && stats.gme_next_run) {
+                const gmeTimingEl = document.getElementById('gmeTiming');
+                if (gmeTimingEl) {
+                    gmeTimingEl.innerHTML = `last: ${stats.gme_last_run}<br>next: ${stats.gme_next_run}`;
                 }
             }
         }
@@ -1053,6 +1061,7 @@ function switchLogTab(flow) {
         'api': 'API',
         'web': 'Web',
         'realtime': 'Realtime',
+        'gme': 'GME',
         'general': 'Sistema'
     };
     document.getElementById('logsFilter').textContent = `Filtro: ${filterNames[flow]}`;
@@ -1104,6 +1113,7 @@ function renderFilteredLogs(logs, total, runCounts) {
             'api': '🌐',
             'web': '🔌',
             'realtime': '⚡',
+            'gme': '💰',
             'general': 'ℹ️'
         };
         
