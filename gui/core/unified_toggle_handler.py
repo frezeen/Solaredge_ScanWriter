@@ -5,10 +5,10 @@ Follows REDUNDANCY_DUPLICATION_REPORT.md recommendations
 Single Responsibility: Unified toggle operations for all entity types
 """
 
-import yaml
 from pathlib import Path
 from typing import Tuple, Dict, Optional
 from app_logging.universal_logger import get_logger
+from utils.yaml_loader import load_yaml, save_yaml
 
 
 class UnifiedToggleHandler:
@@ -96,13 +96,14 @@ class UnifiedToggleHandler:
             source_name = config_info['source_name']
             entity_container = config_info['entity_container']
             
-            # Step 1: Load configuration
+            # Step 1: Load configuration (using unified YAML loader)
             config_path = Path(config_file)
-            if not config_path.exists():
+            try:
+                config = load_yaml(config_path, substitute_env=True, use_cache=True)
+            except FileNotFoundError:
                 return False, {'error': f'Config file not found: {config_file}'}
-            
-            with open(config_path, 'r', encoding='utf-8') as f:
-                config = yaml.safe_load(f)
+            except Exception as e:
+                return False, {'error': f'Error loading config: {str(e)}'}
             
             # Step 2: Navigate to entity
             if source_key not in config or entity_container not in config[source_key]:
@@ -131,9 +132,9 @@ class UnifiedToggleHandler:
             if not success:
                 return False, response_data
             
-            # Step 6: Save configuration
-            with open(config_path, 'w', encoding='utf-8') as f:
-                yaml.dump(config, f, default_flow_style=False, allow_unicode=True, indent=2)
+            # Step 6: Save configuration (using unified YAML saver)
+            if not save_yaml(config_path, config, invalidate_cache=True):
+                return False, {'error': 'Failed to save configuration'}
             
             # Step 7: Return response
             return True, response_data

@@ -63,6 +63,42 @@ class SolarDashboard {
         } catch { }
     }
 
+    // Unified error handler
+    async handleError(error, context, userMessage = null) {
+        // Log the error
+        await this.log('error', `Error ${context}`, error);
+        
+        // Show user notification
+        const message = userMessage || `Errore ${context}`;
+        this.notify(message, 'error');
+        
+        // Return false to indicate failure
+        return false;
+    }
+
+    // Unified API call wrapper with error handling
+    async apiCall(method, url, options = {}) {
+        try {
+            const response = await fetch(url, {
+                method,
+                signal: this.abortController.signal,
+                ...options
+            });
+            
+            if (!response.ok) {
+                const data = await response.json().catch(() => ({ error: 'Unknown error' }));
+                throw new Error(data.error || `HTTP ${response.status}`);
+            }
+            
+            return await response.json();
+        } catch (error) {
+            if (error.name === 'AbortError') {
+                throw error; // Re-throw abort errors
+            }
+            throw error;
+        }
+    }
+
     setupEventListeners() {
         // Delegate event handling con cleanup tracking
         const clickHandler = e => {
@@ -108,10 +144,10 @@ class SolarDashboard {
         try {
             // Usa AbortController per cancellare fetch se necessario
             const [devices, endpoints, modbus, config] = await Promise.all([
-                fetch('/api/sources?type=web', { signal: this.abortController.signal }).then(r => r.json()),
-                fetch('/api/sources?type=api', { signal: this.abortController.signal }).then(r => r.json()),
-                fetch('/api/sources?type=modbus', { signal: this.abortController.signal }).then(r => r.json()),
-                fetch('/api/config', { signal: this.abortController.signal }).then(r => r.json())
+                this.apiCall('GET', '/api/sources?type=web'),
+                this.apiCall('GET', '/api/sources?type=api'),
+                this.apiCall('GET', '/api/sources?type=modbus'),
+                this.apiCall('GET', '/api/config')
             ]);
 
             Object.assign(this.state, { devices, endpoints, modbus, config });
@@ -128,8 +164,7 @@ class SolarDashboard {
                 console.log('Data loading aborted');
                 return;
             }
-            this.log('error', 'Error loading data', error);
-            this.notify('Errore nel caricamento dati', 'error');
+            await this.handleError(error, 'loading data', 'Errore nel caricamento dati');
         }
     }
 
@@ -399,56 +434,52 @@ class SolarDashboard {
     async toggleDevice(id, enabled) {
         if (!this.validateId(id, 'device')) return;
         try {
-            const res = await fetch(`/api/devices/toggle?id=${id}`, { method: 'POST' });
-            if (res.ok) {
-                const data = await res.json();
-                Object.assign(this.state.devices[id], data);
-                this.updateDeviceUI(id, data);
-                this.notify(`Device ${id} ${enabled ? 'abilitato' : 'disabilitato'}`, 'success');
-            }
+            const data = await this.apiCall('POST', `/api/devices/toggle?id=${id}`);
+            Object.assign(this.state.devices[id], data);
+            this.updateDeviceUI(id, data);
+            this.notify(`Device ${id} ${enabled ? 'abilitato' : 'disabilitato'}`, 'success');
         } catch (error) {
-            this.log('error', `Error toggling device ${id}`, error);
-            this.notify('Errore nel toggle device', 'error');
+            if (error.name !== 'AbortError') {
+                await this.handleError(error, `toggling device ${id}`, 'Errore nel toggle device');
+            }
         }
     }
 
     async toggleMetric(deviceId, metric, enabled) {
         if (!this.validateId(deviceId, 'device') || !this.validateMetric(metric)) return;
         try {
-            const res = await fetch(`/api/devices/metrics/toggle?id=${deviceId}&metric=${metric}`, { method: 'POST' });
-            if (res.ok) {
-                const data = await res.json();
+            const data = await this.apiCall('POST', `/api/devices/metrics/toggle?id=${deviceId}&metric=${metric}`);
 
-                // Update state with new metric state
-                if (!this.state.devices[deviceId].measurements) {
-                    this.state.devices[deviceId].measurements = {};
-                }
-                this.state.devices[deviceId].measurements[metric] = { enabled: data.enabled };
-
-                // Update device state if it changed
-                if (data.device_changed) {
-                    this.state.devices[deviceId].enabled = data.device_enabled;
-                }
-
-                // Update UI to reflect all changes
-                this.updateDeviceUI(deviceId, {
-                    enabled: data.device_enabled,
-                    measurements: this.state.devices[deviceId].measurements
-                });
-
-                // If this device belongs to the optimizer group, refresh group UI counts
-                this.updateGroupUI();
-
-                // Show notification with device auto-toggle info
-                let message = `Metrica ${metric.replace(/_/g, ' ')} ${enabled ? 'abilitata' : 'disabilitata'}`;
-                if (data.device_changed) {
-                    message += ` (device auto-${data.device_enabled ? 'abilitato' : 'disabilitato'})`;
-                }
-                this.notify(message, 'success');
+            // Update state with new metric state
+            if (!this.state.devices[deviceId].measurements) {
+                this.state.devices[deviceId].measurements = {};
             }
+            this.state.devices[deviceId].measurements[metric] = { enabled: data.enabled };
+
+            // Update device state if it changed
+            if (data.device_changed) {
+                this.state.devices[deviceId].enabled = data.device_enabled;
+            }
+
+            // Update UI to reflect all changes
+            this.updateDeviceUI(deviceId, {
+                enabled: data.device_enabled,
+                measurements: this.state.devices[deviceId].measurements
+            });
+
+            // If this device belongs to the optimizer group, refresh group UI counts
+            this.updateGroupUI();
+
+            // Show notification with device auto-toggle info
+            let message = `Metrica ${metric.replace(/_/g, ' ')} ${enabled ? 'abilitata' : 'disabilitata'}`;
+            if (data.device_changed) {
+                message += ` (device auto-${data.device_enabled ? 'abilitato' : 'disabilitato'})`;
+            }
+            this.notify(message, 'success');
         } catch (error) {
-            this.log('error', `Error toggling metric ${deviceId}.${metric}`, error);
-            this.notify('Errore nel toggle metrica', 'error');
+            if (error.name !== 'AbortError') {
+                await this.handleError(error, `toggling metric ${deviceId}.${metric}`, 'Errore nel toggle metrica');
+            }
         }
     }
 
@@ -457,13 +488,14 @@ class SolarDashboard {
         // Fallback to toggling each optimizer individually (original behavior)
         await Promise.all(optimizers.map(async id => {
             try {
-                const res = await fetch(`/api/devices/toggle?id=${id}`, { method: 'POST' });
-                if (res.ok) {
-                    const data = await res.json();
-                    Object.assign(this.state.devices[id], data);
-                    this.updateDeviceUI(id, data);
+                const data = await this.apiCall('POST', `/api/devices/toggle?id=${id}`);
+                Object.assign(this.state.devices[id], data);
+                this.updateDeviceUI(id, data);
+            } catch (e) { 
+                if (e.name !== 'AbortError') {
+                    console.warn(`Failed to toggle optimizer ${id}:`, e);
                 }
-            } catch (e) { /* ignore per-device errors */ }
+            }
         }));
         this.updateGroupUI();
         this.notify(`Gruppo optimizers ${enabled ? 'abilitato' : 'disabilitato'}`, 'success');
@@ -472,30 +504,33 @@ class SolarDashboard {
     async toggleGroupMetric(metric, enabled) {
         if (!this.validateMetric(metric)) return;
         const optimizers = this.getOptimizers();
-        await Promise.all(optimizers.map(id => {
-            if (!this.state.devices[id].measurements?.[metric]) return Promise.resolve();
-            return fetch(`/api/devices/metrics/toggle?id=${id}&metric=${metric}`, { method: 'POST' })
-                .then(r => r.ok ? r.json() : null)
-                .then(data => {
-                    if (data) {
-                        // Update state with new metric state (same logic as toggleMetric)
-                        if (!this.state.devices[id].measurements) {
-                            this.state.devices[id].measurements = {};
-                        }
-                        this.state.devices[id].measurements[metric] = { enabled: data.enabled };
-
-                        // Update device state if it changed
-                        if (data.device_changed) {
-                            this.state.devices[id].enabled = data.device_enabled;
-                        }
-
-                        // Update UI to reflect all changes
-                        this.updateDeviceUI(id, {
-                            enabled: data.device_enabled,
-                            measurements: this.state.devices[id].measurements
-                        });
+        await Promise.all(optimizers.map(async id => {
+            if (!this.state.devices[id].measurements?.[metric]) return;
+            try {
+                const data = await this.apiCall('POST', `/api/devices/metrics/toggle?id=${id}&metric=${metric}`);
+                if (data) {
+                    // Update state with new metric state (same logic as toggleMetric)
+                    if (!this.state.devices[id].measurements) {
+                        this.state.devices[id].measurements = {};
                     }
-                }).catch(() => { });
+                    this.state.devices[id].measurements[metric] = { enabled: data.enabled };
+
+                    // Update device state if it changed
+                    if (data.device_changed) {
+                        this.state.devices[id].enabled = data.device_enabled;
+                    }
+
+                    // Update UI to reflect all changes
+                    this.updateDeviceUI(id, {
+                        enabled: data.device_enabled,
+                        measurements: this.state.devices[id].measurements
+                    });
+                }
+            } catch (e) {
+                if (e.name !== 'AbortError') {
+                    console.warn(`Failed to toggle metric ${metric} for optimizer ${id}:`, e);
+                }
+            }
         }));
         // Recompute and refresh optimizer group UI after all per-device updates
         this.updateGroupUI();
@@ -508,70 +543,64 @@ class SolarDashboard {
     async toggleEndpoint(id, enabled, event) {
         if (!this.validateId(id, 'endpoint')) return;
         try {
-            const res = await fetch(`/api/endpoints/toggle?id=${id}`, { method: 'POST' });
-            if (res.ok) {
-                const data = await res.json();
-                this.state.endpoints[id].enabled = data.enabled;
+            const data = await this.apiCall('POST', `/api/endpoints/toggle?id=${id}`);
+            this.state.endpoints[id].enabled = data.enabled;
 
-                const card = event.target.closest('.endpoint-card');
-                const status = card.querySelector('.endpoint-status');
-                status.textContent = enabled ? 'Abilitato' : 'Disabilitato';
-                status.className = `endpoint-status ${enabled ? 'enabled' : 'disabled'}`;
+            const card = event.target.closest('.endpoint-card');
+            const status = card.querySelector('.endpoint-status');
+            status.textContent = enabled ? 'Abilitato' : 'Disabilitato';
+            status.className = `endpoint-status ${enabled ? 'enabled' : 'disabled'}`;
 
-                this.notify(`Endpoint ${id} ${enabled ? 'abilitato' : 'disabilitato'}`, 'success');
-            }
+            this.notify(`Endpoint ${id} ${enabled ? 'abilitato' : 'disabilitato'}`, 'success');
         } catch (error) {
-            this.log('error', 'Error toggling endpoint', error);
-            this.notify('Errore nel toggle endpoint', 'error');
+            if (error.name !== 'AbortError') {
+                await this.handleError(error, 'toggling endpoint', 'Errore nel toggle endpoint');
+            }
         }
     }
 
     async toggleModbusDevice(id, enabled) {
         if (!this.validateId(id, 'modbus device')) return;
         try {
-            const res = await fetch(`/api/modbus/devices/toggle?id=${id}`, { method: 'POST' });
-            if (res.ok) {
-                const data = await res.json();
-                Object.assign(this.state.modbus[id], data);
-                this.updateModbusDeviceUI(id, data);
-                this.notify(`Device Modbus ${id} ${enabled ? 'abilitato' : 'disabilitato'}`, 'success');
-            }
+            const data = await this.apiCall('POST', `/api/modbus/devices/toggle?id=${id}`);
+            Object.assign(this.state.modbus[id], data);
+            this.updateModbusDeviceUI(id, data);
+            this.notify(`Device Modbus ${id} ${enabled ? 'abilitato' : 'disabilitato'}`, 'success');
         } catch (error) {
-            this.log('error', `Error toggling modbus device ${id}`, error);
-            this.notify('Errore nel toggle device Modbus', 'error');
+            if (error.name !== 'AbortError') {
+                await this.handleError(error, `toggling modbus device ${id}`, 'Errore nel toggle device Modbus');
+            }
         }
     }
 
     async toggleModbusMetric(deviceId, metric, enabled) {
         if (!this.validateId(deviceId, 'modbus device') || !this.validateMetric(metric)) return;
         try {
-            const res = await fetch(`/api/modbus/devices/metrics/toggle?id=${deviceId}&metric=${metric}`, { method: 'POST' });
-            if (res.ok) {
-                const data = await res.json();
+            const data = await this.apiCall('POST', `/api/modbus/devices/metrics/toggle?id=${deviceId}&metric=${metric}`);
 
-                // Update state with new metric state
-                if (!this.state.modbus[deviceId].measurements) {
-                    this.state.modbus[deviceId].measurements = {};
-                }
-                this.state.modbus[deviceId].measurements[metric] = { enabled: data.enabled };
-                this.state.modbus[deviceId].enabled = data.device_enabled;
-
-                // Update UI
-                this.updateModbusDeviceUI(deviceId, {
-                    enabled: data.device_enabled,
-                    measurements: { [metric]: { enabled: data.enabled } }
-                });
-
-                // Show notification with cascade info
-                let message = `Metrica Modbus ${metric.replace(/_/g, ' ')} ${data.enabled ? 'abilitata' : 'disabilitata'}`;
-                if (data.device_changed) {
-                    message += ` (device auto-${data.device_enabled ? 'abilitato' : 'disabilitato'})`;
-                }
-                this.notify(message, 'success');
+            // Update state with new metric state
+            if (!this.state.modbus[deviceId].measurements) {
+                this.state.modbus[deviceId].measurements = {};
             }
+            this.state.modbus[deviceId].measurements[metric] = { enabled: data.enabled };
+            this.state.modbus[deviceId].enabled = data.device_enabled;
+
+            // Update UI
+            this.updateModbusDeviceUI(deviceId, {
+                enabled: data.device_enabled,
+                measurements: { [metric]: { enabled: data.enabled } }
+            });
+
+            // Show notification with cascade info
+            let message = `Metrica Modbus ${metric.replace(/_/g, ' ')} ${data.enabled ? 'abilitata' : 'disabilitata'}`;
+            if (data.device_changed) {
+                message += ` (device auto-${data.device_enabled ? 'abilitato' : 'disabilitato'})`;
+            }
+            this.notify(message, 'success');
         } catch (error) {
-            this.log('error', `Error toggling modbus metric ${deviceId}.${metric}`, error);
-            this.notify('Errore nel toggle metrica Modbus', 'error');
+            if (error.name !== 'AbortError') {
+                await this.handleError(error, `toggling modbus metric ${deviceId}.${metric}`, 'Errore nel toggle metrica Modbus');
+            }
         }
     }
 
@@ -732,13 +761,14 @@ class SolarDashboard {
 
     async updateConnectionStatus() {
         try {
-            const res = await fetch('/api/ping');
+            await this.apiCall('GET', '/api/ping');
             const el = document.getElementById('connectionStatus');
-            el.textContent = res.ok ? 'Online' : 'Offline';
-            el.className = `stat-value ${res.ok ? 'online' : 'offline'}`;
+            el.textContent = 'Online';
+            el.className = 'stat-value online';
+            this.state.connectionStatus = 'online';
         } catch (error) {
             // Only log connection errors if we were previously online to avoid spam
-            if (this.state.connectionStatus !== 'offline') {
+            if (this.state.connectionStatus !== 'offline' && error.name !== 'AbortError') {
                 console.error('Connection lost:', error);
             }
             const el = document.getElementById('connectionStatus');
@@ -806,8 +836,7 @@ class SolarDashboard {
 
     async updateLoopStatus() {
         try {
-            const response = await fetch('/api/loop/status');
-            const data = await response.json();
+            const data = await this.apiCall('GET', '/api/loop/status');
 
             // Rileva cambio di stato del loop
             const previousLoopMode = this.state.loopStatus?.loop_mode;
@@ -821,7 +850,9 @@ class SolarDashboard {
                 console.log(`Loop state changed: ${previousLoopMode} -> ${currentLoopMode}`);
             }
         } catch (error) {
-            console.error('Error updating loop status:', error);
+            if (error.name !== 'AbortError') {
+                console.error('Error updating loop status:', error);
+            }
         }
     }
 
