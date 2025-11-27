@@ -137,20 +137,25 @@ class SimpleWebGUI:
             # Fallback a localhost se non riesce
             return "127.0.0.1"
     
-    def _auto_update_source_enabled(self, config: dict, source_key: str, endpoints_or_devices: dict, 
-                                     config_path: Path, source_name: str) -> tuple[bool, bool]:
+    def _auto_update_source_enabled(self, update_context: dict) -> tuple[bool, bool]:
         """Helper per auto-aggiornare source.enabled basandosi sugli endpoint/device.
         
         Args:
-            config: Configurazione completa caricata
-            source_key: Chiave della sorgente (es: 'api_ufficiali', 'web_scraping', 'modbus')
-            endpoints_or_devices: Dizionario degli endpoint o device
-            config_path: Path del file di configurazione
-            source_name: Nome leggibile della sorgente per i log (es: 'API', 'Web scraping', 'Modbus')
+            update_context: Dictionary containing:
+                - config: Configurazione completa caricata
+                - source_key: Chiave della sorgente (es: 'api_ufficiali', 'web_scraping', 'modbus')
+                - endpoints_or_devices: Dizionario degli endpoint o device
+                - config_path: Path del file di configurazione
+                - source_name: Nome leggibile della sorgente per i log (es: 'API', 'Web scraping', 'Modbus')
             
         Returns:
             Tuple (source_updated, new_enabled_state)
         """
+        config = update_context['config']
+        source_key = update_context['source_key']
+        endpoints_or_devices = update_context['endpoints_or_devices']
+        source_name = update_context['source_name']
+        
         # Controlla se almeno un endpoint/device è abilitato
         any_endpoint_enabled = any(
             ep.get('enabled', False) 
@@ -625,9 +630,14 @@ class SimpleWebGUI:
             source_auto_updated = False
             any_endpoint_enabled = False
             if source_type == 'api_ufficiali':
-                source_auto_updated, any_endpoint_enabled = self._auto_update_source_enabled(
-                    config, source_type, endpoints, config_path, 'API'
-                )
+                update_context = {
+                    'config': config,
+                    'source_key': source_type,
+                    'endpoints_or_devices': endpoints,
+                    'config_path': config_path,
+                    'source_name': 'API'
+                }
+                source_auto_updated, any_endpoint_enabled = self._auto_update_source_enabled(update_context)
             
             success, error = self._save_endpoint_config(config_path, config)
             if not success:
