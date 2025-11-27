@@ -189,32 +189,37 @@ class UnifiedToggleHandler:
     
     def _toggle_metric(self, entities: Dict, entity_id: str, metric: str, source_name: str,
                       source_key: str, config: Dict, config_path: Path) -> Tuple[bool, Dict]:
-        """Toggle metric with smart device auto-toggle."""
+        """Toggle metric with smart device auto-toggle using guard clauses."""
+        # Guard clause: Check device exists
         if entity_id not in entities:
             return False, {'error': f'Device not found: {entity_id}'}
         
         device = entities[entity_id]
+        
+        # Guard clause: Check metric exists
         if 'measurements' not in device or metric not in device['measurements']:
             return False, {'error': f'Metric not found: {metric}'}
         
+        # Toggle metric state
         measurements = device['measurements']
         current_state = measurements[metric].get('enabled', False)
         new_state = not current_state
         measurements[metric]['enabled'] = new_state
         
-        # Smart device auto-toggle logic
+        # Smart device auto-toggle logic with guard clauses
         device_current_state = device.get('enabled', False)
         device_new_state = device_current_state
         device_changed = False
         
+        # Guard clause: Auto-enable device if metric enabled and device off
         if new_state and not device_current_state:
-            # Enable device if metric is enabled and device is off
             device['enabled'] = True
             device_new_state = True
             device_changed = True
             self.logger.info(f"Auto-enabled {source_name} device {entity_id} because metric {metric} was enabled")
-        elif not new_state and device_current_state:
-            # Disable device if no metrics are enabled
+        
+        # Guard clause: Auto-disable device if metric disabled and no other metrics enabled
+        if not new_state and device_current_state:
             enabled_metrics = [m for m, cfg in measurements.items() if cfg.get('enabled', False)]
             if len(enabled_metrics) == 0:
                 device['enabled'] = False
@@ -222,13 +227,14 @@ class UnifiedToggleHandler:
                 device_changed = True
                 self.logger.info(f"Auto-disabled {source_name} device {entity_id} because no metrics are enabled")
         
-        # Step 5: Auto-update source.enabled
+        # Auto-update source.enabled
         source_auto_updated, any_entity_enabled = self._auto_update_source(
             config, source_key, entities, config_path, source_name
         )
         
         self.logger.info(f"Toggled {source_name} metric {entity_id}.{metric}: {current_state} -> {new_state}")
         
+        # Build response
         response_data = {
             'success': True,
             'device_id': entity_id,

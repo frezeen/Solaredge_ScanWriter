@@ -51,9 +51,28 @@ class ConfigHandler:
             self.logger.error(f"Errore salvataggio config: {e}")
             return False
     
+    # Lookup table for source configuration mapping (class-level constant)
+    SOURCE_CONFIG_MAP = {
+        'web': {
+            'file': 'config/sources/web_endpoints.yaml',
+            'root_key': 'web_scraping',
+            'data_key': 'endpoints'
+        },
+        'api': {
+            'file': 'config/sources/api_endpoints.yaml',
+            'root_key': 'api_ufficiali',
+            'data_key': 'endpoints'
+        },
+        'modbus': {
+            'file': 'config/sources/modbus_endpoints.yaml',
+            'root_key': 'modbus',
+            'data_key': 'endpoints'
+        }
+    }
+    
     async def load_source_config(self, source_type: str) -> dict:
         """
-        Carica configurazione da file sources/ in modo unificato
+        Carica configurazione da file sources/ in modo unificato usando lookup table
         
         Args:
             source_type: Tipo di sorgente ('web', 'api', 'modbus')
@@ -65,30 +84,12 @@ class ConfigHandler:
         if source_type in self._config_cache:
             return self._config_cache[source_type]
         
-        # Mappa configurazione per tipo
-        config_map = {
-            'web': {
-                'file': 'config/sources/web_endpoints.yaml',
-                'root_key': 'web_scraping',
-                'data_key': 'endpoints'
-            },
-            'api': {
-                'file': 'config/sources/api_endpoints.yaml',
-                'root_key': 'api_ufficiali',
-                'data_key': 'endpoints'
-            },
-            'modbus': {
-                'file': 'config/sources/modbus_endpoints.yaml',
-                'root_key': 'modbus',
-                'data_key': 'endpoints'
-            }
-        }
-        
-        if source_type not in config_map:
+        # Lookup configuration info
+        config_info = self.SOURCE_CONFIG_MAP.get(source_type)
+        if not config_info:
             self.logger.error(f"Tipo sorgente non valido: {source_type}")
             return {}
         
-        config_info = config_map[source_type]
         file_path = Path(config_info['file'])
         
         try:
@@ -111,9 +112,18 @@ class ConfigHandler:
             self.logger.error(f"Errore caricamento {source_type} endpoints: {e}")
             return {}
     
+    # Lookup table for config file paths (class-level constant)
+    CONFIG_FILE_PATHS = {
+        'main': 'config/main.yaml',
+        'web_endpoints': 'config/sources/web_endpoints.yaml',
+        'api_endpoints': 'config/sources/api_endpoints.yaml',
+        'modbus_endpoints': 'config/sources/modbus_endpoints.yaml',
+        'env': '.env'
+    }
+    
     async def save_yaml_file(self, file_type: str, content: str) -> tuple[bool, Optional[str]]:
         """
-        Salva file YAML generico
+        Salva file YAML generico usando lookup table
         
         Args:
             file_type: Tipo file ('main', 'web_endpoints', 'api_endpoints', 'modbus_endpoints', 'env')
@@ -122,15 +132,9 @@ class ConfigHandler:
         Returns:
             Tuple (success, error_message)
         """
-        config_files = {
-            'main': 'config/main.yaml',
-            'web_endpoints': 'config/sources/web_endpoints.yaml',
-            'api_endpoints': 'config/sources/api_endpoints.yaml',
-            'modbus_endpoints': 'config/sources/modbus_endpoints.yaml',
-            'env': '.env'
-        }
-        
-        if file_type not in config_files:
+        # Lookup file path
+        file_path_str = self.CONFIG_FILE_PATHS.get(file_type)
+        if not file_path_str:
             return False, f'File di configurazione non valido: {file_type}'
         
         # Valida YAML (skip per .env)
@@ -140,7 +144,7 @@ class ConfigHandler:
             if not is_valid:
                 return False, f'YAML non valido: {error}'
         
-        file_path = Path(config_files[file_type])
+        file_path = Path(file_path_str)
         
         try:
             # For .env files, write directly; for YAML, use unified saver
@@ -183,7 +187,7 @@ class ConfigHandler:
     
     async def get_yaml_file_content(self, file_type: str) -> tuple[Optional[str], Optional[str]]:
         """
-        Legge contenuto file YAML
+        Legge contenuto file YAML usando lookup table
         
         Args:
             file_type: Tipo file
@@ -191,18 +195,12 @@ class ConfigHandler:
         Returns:
             Tuple (content, error_message)
         """
-        config_files = {
-            'main': 'config/main.yaml',
-            'web_endpoints': 'config/sources/web_endpoints.yaml',
-            'api_endpoints': 'config/sources/api_endpoints.yaml',
-            'modbus_endpoints': 'config/sources/modbus_endpoints.yaml',
-            'env': '.env'
-        }
-        
-        if file_type not in config_files:
+        # Lookup file path
+        file_path_str = self.CONFIG_FILE_PATHS.get(file_type)
+        if not file_path_str:
             return None, f'File non valido: {file_type}'
         
-        file_path = Path(config_files[file_type])
+        file_path = Path(file_path_str)
         
         if not file_path.exists():
             return None, f'File non trovato: {file_path}'
