@@ -109,7 +109,8 @@ def run_gme_month_flow(
     cache: CacheManager,
     config: Dict[str, Any],
     year: int,
-    month: int
+    month: int,
+    scheduler: Optional[SchedulerLoop] = None
 ) -> int:
     """
     Pipeline GME per un mese intero (history mode)
@@ -150,8 +151,10 @@ def run_gme_month_flow(
     if missing_days:
         log.info(color.dim(f"   📉 Cache miss per {len(missing_days)} giorni. Download mese intero..."))
         
-        scheduler_config = SchedulerConfig.from_config(config)
-        scheduler = SchedulerLoop(scheduler_config)
+        if not scheduler:
+            scheduler_config = SchedulerConfig.from_config(config)
+            scheduler = SchedulerLoop(scheduler_config)
+            
         collector = CollectorGME(scheduler=scheduler)
         try:
             # Scarica mese intero
