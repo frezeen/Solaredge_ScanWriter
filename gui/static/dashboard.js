@@ -100,7 +100,6 @@ class SolarDashboard {
     }
 
     setupEventListeners() {
-        // Delegate event handling con cleanup tracking
         const clickHandler = e => {
             const btn = e.target.closest('[data-section], [data-category]');
             if (!btn) return;
@@ -112,7 +111,6 @@ class SolarDashboard {
         document.addEventListener('click', clickHandler, { signal: this.abortController.signal });
         this.eventListeners.push({ element: document, event: 'click', handler: clickHandler });
 
-        // Connection status check con cleanup tracking
         const connectionInterval = setInterval(() => this.updateConnectionStatus(), 30000);
         this.intervals.push(connectionInterval);
     }
@@ -142,7 +140,6 @@ class SolarDashboard {
 
     async loadData() {
         try {
-            // Usa AbortController per cancellare fetch se necessario
             const [devices, endpoints, modbus, config] = await Promise.all([
                 this.apiCall('GET', '/api/sources?type=web'),
                 this.apiCall('GET', '/api/sources?type=api'),
@@ -151,10 +148,8 @@ class SolarDashboard {
             ]);
 
             Object.assign(this.state, { devices, endpoints, modbus, config });
+            this._optimizersCache = null;
 
-            this._optimizersCache = null; // Invalidate cache on data reload
-
-            // Carica il file YAML principale nell'editor
             const editor = document.getElementById('yamlEditor');
             if (editor) {
                 YAMLConfig.loadFile('main');
@@ -187,14 +182,12 @@ class SolarDashboard {
         container.innerHTML = '';
         let delay = 0;
 
-        // Render regular devices
         Object.entries(others).forEach(([id, data]) => {
             const card = this.createDeviceCard(id, data);
             this.animateCard(card, delay += 100);
             container.appendChild(card);
         });
 
-        // Render optimizer group
         if (Object.keys(optimizers).length) {
             const card = this.createOptimizersCard(optimizers);
             this.animateCard(card, delay += 100);
@@ -234,8 +227,6 @@ class SolarDashboard {
         const enabled = opts.filter(o => o.enabled).length;
         const total = opts.length;
         const allEnabled = opts.every(o => o.enabled);
-
-        // Get common metrics
         const metrics = Object.keys(opts[0]?.measurements || {}).map(name => {
             const count = opts.filter(o => o.measurements?.[name]?.enabled).length;
             return { name, enabled: count > 0, count };
@@ -440,7 +431,7 @@ class SolarDashboard {
             this.notify(`Device ${id} ${enabled ? 'abilitato' : 'disabilitato'}`, 'success');
         } catch (error) {
             if (error.name !== 'AbortError') {
-                await this.handleError(error, `toggling device ${id}`, 'Errore nel toggle device');
+                await this.handleError(error, `toggling device ${id}`);
             }
         }
     }
@@ -450,27 +441,22 @@ class SolarDashboard {
         try {
             const data = await this.apiCall('POST', `/api/devices/metrics/toggle?id=${deviceId}&metric=${metric}`);
 
-            // Update state with new metric state
             if (!this.state.devices[deviceId].measurements) {
                 this.state.devices[deviceId].measurements = {};
             }
             this.state.devices[deviceId].measurements[metric] = { enabled: data.enabled };
 
-            // Update device state if it changed
             if (data.device_changed) {
                 this.state.devices[deviceId].enabled = data.device_enabled;
             }
 
-            // Update UI to reflect all changes
             this.updateDeviceUI(deviceId, {
                 enabled: data.device_enabled,
                 measurements: this.state.devices[deviceId].measurements
             });
 
-            // If this device belongs to the optimizer group, refresh group UI counts
             this.updateGroupUI();
 
-            // Show notification with device auto-toggle info
             let message = `Metrica ${metric.replace(/_/g, ' ')} ${enabled ? 'abilitata' : 'disabilitata'}`;
             if (data.device_changed) {
                 message += ` (device auto-${data.device_enabled ? 'abilitato' : 'disabilitato'})`;
@@ -478,14 +464,13 @@ class SolarDashboard {
             this.notify(message, 'success');
         } catch (error) {
             if (error.name !== 'AbortError') {
-                await this.handleError(error, `toggling metric ${deviceId}.${metric}`, 'Errore nel toggle metrica');
+                await this.handleError(error, `toggling metric ${deviceId}.${metric}`);
             }
         }
     }
 
     async toggleGroup(enabled) {
         const optimizers = this.getOptimizers();
-        // Fallback to toggling each optimizer individually (original behavior)
         await Promise.all(optimizers.map(async id => {
             try {
                 const data = await this.apiCall('POST', `/api/devices/toggle?id=${id}`);
@@ -509,18 +494,15 @@ class SolarDashboard {
             try {
                 const data = await this.apiCall('POST', `/api/devices/metrics/toggle?id=${id}&metric=${metric}`);
                 if (data) {
-                    // Update state with new metric state (same logic as toggleMetric)
                     if (!this.state.devices[id].measurements) {
                         this.state.devices[id].measurements = {};
                     }
                     this.state.devices[id].measurements[metric] = { enabled: data.enabled };
 
-                    // Update device state if it changed
                     if (data.device_changed) {
                         this.state.devices[id].enabled = data.device_enabled;
                     }
 
-                    // Update UI to reflect all changes
                     this.updateDeviceUI(id, {
                         enabled: data.device_enabled,
                         measurements: this.state.devices[id].measurements
@@ -532,10 +514,8 @@ class SolarDashboard {
                 }
             }
         }));
-        // Recompute and refresh optimizer group UI after all per-device updates
         this.updateGroupUI();
 
-        // Show notification for group metric toggle
         const optimizerCount = optimizers.length;
         this.notify(`Metrica ${metric.replace(/_/g, ' ')} ${enabled ? 'abilitata' : 'disabilitata'} su ${optimizerCount} optimizer`, 'success');
     }
@@ -554,7 +534,7 @@ class SolarDashboard {
             this.notify(`Endpoint ${id} ${enabled ? 'abilitato' : 'disabilitato'}`, 'success');
         } catch (error) {
             if (error.name !== 'AbortError') {
-                await this.handleError(error, 'toggling endpoint', 'Errore nel toggle endpoint');
+                await this.handleError(error, 'toggling endpoint');
             }
         }
     }
@@ -568,7 +548,7 @@ class SolarDashboard {
             this.notify(`Device Modbus ${id} ${enabled ? 'abilitato' : 'disabilitato'}`, 'success');
         } catch (error) {
             if (error.name !== 'AbortError') {
-                await this.handleError(error, `toggling modbus device ${id}`, 'Errore nel toggle device Modbus');
+                await this.handleError(error, `toggling modbus device ${id}`);
             }
         }
     }
@@ -578,20 +558,17 @@ class SolarDashboard {
         try {
             const data = await this.apiCall('POST', `/api/modbus/devices/metrics/toggle?id=${deviceId}&metric=${metric}`);
 
-            // Update state with new metric state
             if (!this.state.modbus[deviceId].measurements) {
                 this.state.modbus[deviceId].measurements = {};
             }
             this.state.modbus[deviceId].measurements[metric] = { enabled: data.enabled };
             this.state.modbus[deviceId].enabled = data.device_enabled;
 
-            // Update UI
             this.updateModbusDeviceUI(deviceId, {
                 enabled: data.device_enabled,
                 measurements: { [metric]: { enabled: data.enabled } }
             });
 
-            // Show notification with cascade info
             let message = `Metrica Modbus ${metric.replace(/_/g, ' ')} ${data.enabled ? 'abilitata' : 'disabilitata'}`;
             if (data.device_changed) {
                 message += ` (device auto-${data.device_enabled ? 'abilitato' : 'disabilitato'})`;
@@ -599,12 +576,11 @@ class SolarDashboard {
             this.notify(message, 'success');
         } catch (error) {
             if (error.name !== 'AbortError') {
-                await this.handleError(error, `toggling modbus metric ${deviceId}.${metric}`, 'Errore nel toggle metrica Modbus');
+                await this.handleError(error, `toggling modbus metric ${deviceId}.${metric}`);
             }
         }
     }
 
-    // Helpers
     validateId(id, context) {
         if (!id || typeof id !== 'string') {
             this.log('error', `Invalid ID in ${context}: ${id}`);
@@ -635,11 +611,14 @@ class SolarDashboard {
 
     inferDeviceType(id) {
         const types = { inverter: 'INVERTER', meter: 'METER', site: 'SITE', weather: 'WEATHER' };
-        return Object.entries(types).find(([key]) => id.includes(key))?.[1] || 'DEVICE';
+        for (const [key, value] of Object.entries(types)) {
+            if (id.includes(key)) return value;
+        }
+        return 'DEVICE';
     }
 
     animateCard(card, delay) {
-        card.style.animationDelay = `${delay}ms`;
+        Object.assign(card.style, { animationDelay: `${delay}ms` });
         card.classList.add('slide-in');
     }
 
@@ -659,13 +638,10 @@ class SolarDashboard {
             });
         }
         
-        // FIXED: Invalida cache optimizer se il device è un optimizer
         const isOptimizer = id.includes('optimizer') || 
                            data.device_type === 'OPTIMIZER' || 
                            data.device_type === 'Optimizer';
-        if (isOptimizer) {
-            this._optimizersCache = null;
-        }
+        if (isOptimizer) this._optimizersCache = null;
     }
 
     updateGroupUI() {
@@ -678,18 +654,14 @@ class SolarDashboard {
         const total = opts.length;
         const allEnabled = opts.every(o => o.enabled);
 
-        // Aggiorna toggle principale
         const mainToggle = card.querySelector('.device-header input');
         if (mainToggle) mainToggle.checked = allEnabled;
 
-        // Aggiorna contatore
         const stats = card.querySelector('.device-stats .stat');
         if (stats) stats.textContent = `Attivi: ${enabled}/${total}`;
 
-        // Ottieni metriche comuni
         const metrics = opts.length > 0 ? Object.keys(opts[0].measurements || {}) : [];
 
-        // Aggiorna metriche usando indice
         card.querySelectorAll('.metric-item').forEach((item, index) => {
             if (index >= metrics.length) return;
 
@@ -708,55 +680,15 @@ class SolarDashboard {
         const card = document.querySelector(`[data-device-id="${id}"]`);
         if (!card) return;
 
-        // Update device toggle
         const deviceToggle = card.querySelector('.device-header input');
         if (deviceToggle) deviceToggle.checked = data.enabled;
 
-        // Update metric toggles
         if (data.measurements) {
             Object.entries(data.measurements).forEach(([metric, metricData]) => {
                 const metricToggle = card.querySelector(`[data-metric="${metric}"] input`);
                 if (metricToggle) metricToggle.checked = metricData.enabled;
             });
         }
-    }
-
-    parseYAML(text) {
-        const result = { sources: { web_scraping: { endpoints: {} } } };
-        const lines = text.split('\n');
-        let current = { device: null, measurement: null };
-        let flags = { web: false, endpoints: false, measurements: false };
-
-        for (const line of lines) {
-            if (line.match(/^  web_scraping:/)) flags.web = true;
-            if (flags.web && line.match(/^    endpoints:/)) flags.endpoints = true;
-
-            if (flags.endpoints && line.match(/^      ([\w_-]+):/)) {
-                current.device = line.match(/^      ([\w_-]+):/)[1];
-                result.sources.web_scraping.endpoints[current.device] = {};
-                flags.measurements = false;
-            }
-
-            if (current.device) {
-                if (line.includes('measurements:')) {
-                    flags.measurements = true;
-                    result.sources.web_scraping.endpoints[current.device].measurements = {};
-                } else if (line.includes('device_type:')) {
-                    result.sources.web_scraping.endpoints[current.device].device_type = line.split(':')[1].trim();
-                } else if (line.includes('enabled:')) {
-                    const enabled = line.includes('true');
-                    const target = flags.measurements && current.measurement
-                        ? result.sources.web_scraping.endpoints[current.device].measurements[current.measurement]
-                        : result.sources.web_scraping.endpoints[current.device];
-                    target.enabled = enabled;
-                } else if (flags.measurements && line.match(/^          (\w+):/)) {
-                    current.measurement = line.match(/^          (\w+):/)[1];
-                    result.sources.web_scraping.endpoints[current.device].measurements[current.measurement] = {};
-                }
-            }
-        }
-
-        return result;
     }
 
     async updateConnectionStatus() {
@@ -801,15 +733,13 @@ class SolarDashboard {
         }, type === 'error' ? 8000 : 3000);
     }
 
-    // ===== LOOP MONITORING ===== (FIXED: memory leak + visibility tracking)
     startLoopMonitoring() {
-        const baseInterval = 5000; // 5 seconds base
+        const baseInterval = 5000;
         let pollMultiplier = 1;
         let timeoutId = null;
 
-        // Adjust polling based on page visibility (con cleanup tracking)
         const visibilityHandler = () => {
-            pollMultiplier = document.hidden ? 10 : 1; // 50s when hidden, 5s when active
+            pollMultiplier = document.hidden ? 10 : 1;
         };
         document.addEventListener('visibilitychange', visibilityHandler, { signal: this.abortController.signal });
         this.eventListeners.push({ element: document, event: 'visibilitychange', handler: visibilityHandler });
@@ -817,37 +747,30 @@ class SolarDashboard {
         const poll = async () => {
             try {
                 await this.updateLoopStatus();
-                pollMultiplier = 1; // Reset on success
+                pollMultiplier = 1;
             } catch (error) {
-                if (error.name === 'AbortError') return; // Stop polling se aborted
-                // Exponential backoff: 5s -> 10s -> 20s -> 40s -> 50s (max)
+                if (error.name === 'AbortError') return;
                 pollMultiplier = Math.min(pollMultiplier * 2, 10);
                 console.error('Error in loop monitoring, backing off:', error);
             }
 
-            // Track timeout per cleanup
             timeoutId = setTimeout(poll, baseInterval * pollMultiplier);
             this.intervals.push(timeoutId);
         };
 
-        // Start polling immediately
         poll();
     }
 
     async updateLoopStatus() {
         try {
             const data = await this.apiCall('GET', '/api/loop/status');
-
-            // Rileva cambio di stato del loop
             const previousLoopMode = this.state.loopStatus?.loop_mode;
-            const currentLoopMode = data.loop_mode;
 
             this.state.loopStatus = data;
             this.renderLoopStatus();
 
-            // Log del cambio di stato senza aggiornare i log
-            if (previousLoopMode !== currentLoopMode) {
-                console.log(`Loop state changed: ${previousLoopMode} -> ${currentLoopMode}`);
+            if (previousLoopMode !== data.loop_mode) {
+                console.log(`Loop state changed: ${previousLoopMode} -> ${data.loop_mode}`);
             }
         } catch (error) {
             if (error.name !== 'AbortError') {
@@ -860,9 +783,8 @@ class SolarDashboard {
     renderLoopStatus() {
         if (!this.state.loopStatus) return;
 
-        const { loop_mode, stats, message } = this.state.loopStatus;
+        const { loop_mode, stats } = this.state.loopStatus;
 
-        // Aggiorna stato
         const statusEl = document.getElementById('loopStatus');
         if (statusEl) {
             statusEl.textContent = loop_mode ? 'Running' : 'Standalone';
@@ -870,7 +792,6 @@ class SolarDashboard {
         }
 
         if (loop_mode && stats) {
-            // Aggiorna statistiche con nuovo formato eseguite/successi/fallimenti
             const formatStats = (stat) => {
                 if (!stat) return '0/0/0';
                 return `${stat.executed || 0}/${stat.success || 0}/${stat.failed || 0}`;
@@ -890,7 +811,6 @@ class SolarDashboard {
                 if (el) el.textContent = value;
             });
 
-            // Aggiorna timing information
             if (stats.api_last_run && stats.api_next_run) {
                 const apiTimingEl = document.getElementById('apiTiming');
                 if (apiTimingEl) {
@@ -913,11 +833,8 @@ class SolarDashboard {
             }
         }
 
-        // Aggiorna stato dei tasti
         updateLoopButtons(loop_mode);
     }
-
-
 }
 
 // ===== YAML CONFIG =====
@@ -926,17 +843,14 @@ const YAMLConfig = {
 
     async validate() {
         const editor = document.getElementById('yamlEditor');
-        const status = document.getElementById('configStatus');
         try {
             if (this.currentFile === 'env') {
-                // Per file .env, verifica solo che non sia vuoto
                 if (editor.value.trim()) {
                     this.setStatus('✅ File .env valido', 'success');
                 } else {
                     this.setStatus('⚠️ File .env vuoto', 'warning');
                 }
             } else {
-                // Per file YAML, valida la sintassi
                 jsyaml.load(editor.value);
                 this.setStatus('✅ YAML valido', 'success');
             }
@@ -962,10 +876,7 @@ const YAMLConfig = {
             const editor = document.getElementById('yamlEditor');
             const content = editor.value;
 
-            // Valida il contenuto prima di salvare (solo per file YAML)
-            if (this.currentFile !== 'env') {
-                jsyaml.load(content);
-            }
+            if (this.currentFile !== 'env') jsyaml.load(content);
 
             const response = await fetch('/api/config/yaml', {
                 method: 'POST',
@@ -1080,12 +991,10 @@ let logUpdateInterval = null;
 function switchLogTab(flow) {
     currentLogFlow = flow;
 
-    // Aggiorna UI dei tab
     document.querySelectorAll('.log-tab').forEach(tab => {
         tab.classList.toggle('active', tab.dataset.flow === flow);
     });
 
-    // Aggiorna filtro display
     const filterNames = {
         'all': 'Tutti',
         'api': 'API',
@@ -1096,10 +1005,8 @@ function switchLogTab(flow) {
     };
     document.getElementById('logsFilter').textContent = `Filtro: ${filterNames[flow]}`;
 
-    // Carica log filtrati
     loadFilteredLogs();
 
-    // Avvia polling se non già attivo (con cleanup tracking)
     if (!logUpdateInterval) {
         logUpdateInterval = setInterval(loadFilteredLogs, 3000);
         if (dashboard) {
@@ -1123,11 +1030,9 @@ function renderFilteredLogs(logs, total, runCounts) {
     const container = document.getElementById('logsContent');
     if (!container || !logs) return;
 
-    // Mantieni scroll position se auto-scroll è disabilitato
     const shouldScroll = autoScrollEnabled ||
         (container.scrollTop + container.clientHeight >= container.scrollHeight - 10);
 
-    // FIXED XSS: Usa DocumentFragment + textContent invece di innerHTML
     const fragment = document.createDocumentFragment();
     
     if (logs.length === 0) {
@@ -1162,13 +1067,11 @@ function renderFilteredLogs(logs, total, runCounts) {
             level.className = `log-level ${log.level.toLowerCase()}`;
             level.textContent = log.level;
             
-            // Flow badge
             const flow = document.createElement('span');
             flow.className = 'log-flow';
             flow.dataset.flow = flowType;
             flow.textContent = `${flowIcons[flowType]} ${flowType.toUpperCase()}`;
             
-            // Message (SAFE: textContent auto-escapes)
             const message = document.createElement('span');
             message.className = 'log-message';
             message.textContent = log.message;
@@ -1181,10 +1084,8 @@ function renderFilteredLogs(logs, total, runCounts) {
         });
     }
     
-    // Replace all children at once (più performante di innerHTML)
     container.replaceChildren(fragment);
 
-    // Aggiorna contatore con info sulle run
     let countText = `${total} log visualizzati`;
     if (runCounts) {
         const totalRuns = Object.values(runCounts).reduce((sum, count) => sum + count, 0);
@@ -1194,10 +1095,7 @@ function renderFilteredLogs(logs, total, runCounts) {
     }
     document.getElementById('logsCount').textContent = countText;
 
-    // Auto-scroll se abilitato
-    if (shouldScroll) {
-        container.scrollTop = container.scrollHeight;
-    }
+    if (shouldScroll) container.scrollTop = container.scrollHeight;
 }
 
 async function clearLogs() {
@@ -1231,15 +1129,12 @@ function toggleAutoScroll() {
     btn.classList.toggle('active', autoScrollEnabled);
 }
 
-// Rendi le funzioni globali per onclick
 window.switchLogTab = switchLogTab;
 window.clearLogs = clearLogs;
 window.toggleAutoScroll = toggleAutoScroll;
 
-// Initialize dashboard and logs
 let dashboard;
 document.addEventListener('DOMContentLoaded', () => {
     dashboard = new SolarDashboard();
-    // Carica log iniziali
     switchLogTab('all');
 });
