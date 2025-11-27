@@ -11,6 +11,7 @@ class SolarDashboard {
             loopStatus: null,
             autoScroll: true
         };
+        this._optimizersCache = null; // Cache for optimizers list
         this.init();
     }
 
@@ -35,7 +36,7 @@ class SolarDashboard {
                     timestamp: new Date().toISOString()
                 })
             });
-        } catch {}
+        } catch { }
     }
 
     setupEventListeners() {
@@ -43,7 +44,7 @@ class SolarDashboard {
         document.addEventListener('click', e => {
             const btn = e.target.closest('[data-section], [data-category]');
             if (!btn) return;
-            
+
             if (btn.dataset.section) this.switchView('section', btn.dataset.section);
             if (btn.dataset.category) this.switchView('category', btn.dataset.category);
         });
@@ -54,19 +55,19 @@ class SolarDashboard {
     switchView(type, value) {
         const selector = type === 'section' ? '.nav-btn' : '.category-btn';
         const contentSelector = type === 'section' ? '.content-section' : null;
-        
+
         // Update buttons
         document.querySelectorAll(selector).forEach(btn => {
             btn.classList.toggle('active', btn.dataset[type] === value);
         });
-        
+
         // Update content sections
         if (contentSelector) {
             document.querySelectorAll(contentSelector).forEach(sec => {
                 sec.classList.toggle('active', sec.id === `${value}-section`);
             });
         }
-        
+
         this.state[type] = value;
         if (type === 'category') {
             this.renderEndpoints();
@@ -82,9 +83,11 @@ class SolarDashboard {
                 fetch('/api/sources?type=modbus').then(r => r.json()),
                 fetch('/api/config').then(r => r.json())
             ]);
-            
+
             Object.assign(this.state, { devices, endpoints, modbus, config });
-            
+
+            this._optimizersCache = null; // Invalidate cache on data reload
+
             // Carica il file YAML principale nell'editor
             const editor = document.getElementById('yamlEditor');
             if (editor) {
@@ -105,23 +108,23 @@ class SolarDashboard {
     renderDevices() {
         const container = document.getElementById('devicesGrid');
         if (!container) return;
-        
+
         const { optimizers, others } = Object.entries(this.state.devices).reduce((acc, [id, data]) => {
             const key = id.includes('optimizer') || data.device_type === 'OPTIMIZER' || data.device_type === 'Optimizer' ? 'optimizers' : 'others';
             acc[key][id] = data;
             return acc;
         }, { optimizers: {}, others: {} });
-        
+
         container.innerHTML = '';
         let delay = 0;
-        
+
         // Render regular devices
         Object.entries(others).forEach(([id, data]) => {
             const card = this.createDeviceCard(id, data);
             this.animateCard(card, delay += 100);
             container.appendChild(card);
         });
-        
+
         // Render optimizer group
         if (Object.keys(optimizers).length) {
             const card = this.createOptimizersCard(optimizers);
@@ -134,10 +137,10 @@ class SolarDashboard {
         const card = document.createElement('div');
         card.className = 'device-card';
         card.dataset.deviceId = id;
-        
+
         const type = data.device_type || this.inferDeviceType(id);
         const metrics = Object.entries(data.measurements || {});
-        
+
         card.innerHTML = `
             <div class="device-header">
                 <div class="device-info">
@@ -149,7 +152,7 @@ class SolarDashboard {
             </div>
             ${metrics.length ? this.createMetricsSection(id, metrics) : ''}
         `;
-        
+
         return card;
     }
 
@@ -157,18 +160,18 @@ class SolarDashboard {
         const card = document.createElement('div');
         card.className = 'device-card optimizers-card';
         card.dataset.deviceId = 'optimizers-group';
-        
+
         const opts = Object.values(optimizers);
         const enabled = opts.filter(o => o.enabled).length;
         const total = opts.length;
         const allEnabled = opts.every(o => o.enabled);
-        
+
         // Get common metrics
         const metrics = Object.keys(opts[0]?.measurements || {}).map(name => {
             const count = opts.filter(o => o.measurements?.[name]?.enabled).length;
             return { name, enabled: count > 0, count };
         });
-        
+
         card.innerHTML = `
             <div class="device-header">
                 <div class="device-info">
@@ -193,7 +196,7 @@ class SolarDashboard {
                 </div>
             </div>
         `;
-        
+
         return card;
     }
 
@@ -227,12 +230,12 @@ class SolarDashboard {
     renderEndpoints() {
         const container = document.getElementById('endpointsGrid');
         if (!container) return;
-        
+
         const filtered = Object.entries(this.state.endpoints).filter(([_, data]) => {
             if (this.state.category === 'all') return true;
             return data.category === this.state.category;
         });
-        
+
         container.innerHTML = '';
         filtered.forEach(([id, data], i) => {
             const card = this.createEndpointCard(id, data);
@@ -244,16 +247,16 @@ class SolarDashboard {
     createEndpointCard(id, data) {
         const card = document.createElement('div');
         card.className = 'endpoint-card';
-        
+
         const category = data.category || 'Info';
-        const categoryIcons = { 
-            'Info': 'ℹ️', 
-            'Inverter': '⚡', 
-            'Meter': '📊', 
-            'Flusso': '🔄' 
+        const categoryIcons = {
+            'Info': 'ℹ️',
+            'Inverter': '⚡',
+            'Meter': '📊',
+            'Flusso': '🔄'
         };
         const icon = categoryIcons[category] || '❓';
-        
+
         card.innerHTML = `
             <div class="endpoint-header">
                 <div class="endpoint-name">${id}</div>
@@ -271,19 +274,19 @@ class SolarDashboard {
                 ${data.enabled ? 'Abilitato' : 'Disabilitato'}
             </div>
         `;
-        
+
         return card;
     }
 
     renderModbus() {
         const container = document.getElementById('modbusGrid');
         if (!container) return;
-        
+
         const filtered = Object.entries(this.state.modbus).filter(([_, data]) => {
             if (this.state.category === 'all') return true;
             return data.category === this.state.category;
         });
-        
+
         container.innerHTML = '';
         filtered.forEach(([id, data], i) => {
             const card = this.createModbusCard(id, data);
@@ -296,16 +299,16 @@ class SolarDashboard {
         const card = document.createElement('div');
         card.className = 'device-card modbus-card';
         card.dataset.deviceId = id;
-        
+
         const category = data.category || 'Modbus';
         const deviceType = data.device_type || 'Unknown';
         const metrics = Object.entries(data.measurements || {});
-        const categoryIcon = { 
-            'Inverter': '🔋', 
-            'Meter': '⚡', 
-            'Battery': '🔋' 
+        const categoryIcon = {
+            'Inverter': '🔋',
+            'Meter': '⚡',
+            'Battery': '🔋'
         }[category] || '⚡';
-        
+
         card.innerHTML = `
             <div class="device-header">
                 <div class="device-info">
@@ -317,7 +320,7 @@ class SolarDashboard {
             </div>
             ${metrics.length ? this.createModbusMetricsSection(id, metrics) : ''}
         `;
-        
+
         return card;
     }
 
@@ -360,6 +363,7 @@ class SolarDashboard {
     }
 
     async toggleDevice(id, enabled) {
+        if (!this.validateId(id, 'device')) return;
         try {
             const res = await fetch(`/api/devices/toggle?id=${id}`, { method: 'POST' });
             if (res.ok) {
@@ -375,31 +379,32 @@ class SolarDashboard {
     }
 
     async toggleMetric(deviceId, metric, enabled) {
+        if (!this.validateId(deviceId, 'device') || !this.validateMetric(metric)) return;
         try {
             const res = await fetch(`/api/devices/metrics/toggle?id=${deviceId}&metric=${metric}`, { method: 'POST' });
             if (res.ok) {
                 const data = await res.json();
-                
+
                 // Update state with new metric state
                 if (!this.state.devices[deviceId].measurements) {
                     this.state.devices[deviceId].measurements = {};
                 }
                 this.state.devices[deviceId].measurements[metric] = { enabled: data.enabled };
-                
+
                 // Update device state if it changed
                 if (data.device_changed) {
                     this.state.devices[deviceId].enabled = data.device_enabled;
                 }
-                
+
                 // Update UI to reflect all changes
                 this.updateDeviceUI(deviceId, {
                     enabled: data.device_enabled,
                     measurements: this.state.devices[deviceId].measurements
                 });
-                
+
                 // If this device belongs to the optimizer group, refresh group UI counts
                 this.updateGroupUI();
-                
+
                 // Show notification with device auto-toggle info
                 let message = `Metrica ${metric.replace(/_/g, ' ')} ${enabled ? 'abilitata' : 'disabilitata'}`;
                 if (data.device_changed) {
@@ -431,6 +436,7 @@ class SolarDashboard {
     }
 
     async toggleGroupMetric(metric, enabled) {
+        if (!this.validateMetric(metric)) return;
         const optimizers = this.getOptimizers();
         const allDisabled = optimizers.every(id => !this.state.devices[id].enabled);
         await Promise.all(optimizers.map(id => {
@@ -444,40 +450,41 @@ class SolarDashboard {
                             this.state.devices[id].measurements = {};
                         }
                         this.state.devices[id].measurements[metric] = { enabled: data.enabled };
-                        
+
                         // Update device state if it changed
                         if (data.device_changed) {
                             this.state.devices[id].enabled = data.device_enabled;
                         }
-                        
+
                         // Update UI to reflect all changes
                         this.updateDeviceUI(id, {
                             enabled: data.device_enabled,
                             measurements: this.state.devices[id].measurements
                         });
                     }
-                }).catch(()=>{});
+                }).catch(() => { });
         }));
         // Recompute and refresh optimizer group UI after all per-device updates
         this.updateGroupUI();
-        
+
         // Show notification for group metric toggle
         const optimizerCount = optimizers.length;
         this.notify(`Metrica ${metric.replace(/_/g, ' ')} ${enabled ? 'abilitata' : 'disabilitata'} su ${optimizerCount} optimizer`, 'success');
     }
 
     async toggleEndpoint(id, enabled, event) {
+        if (!this.validateId(id, 'endpoint')) return;
         try {
             const res = await fetch(`/api/endpoints/toggle?id=${id}`, { method: 'POST' });
             if (res.ok) {
                 const data = await res.json();
                 this.state.endpoints[id].enabled = data.enabled;
-                
+
                 const card = event.target.closest('.endpoint-card');
                 const status = card.querySelector('.endpoint-status');
                 status.textContent = enabled ? 'Abilitato' : 'Disabilitato';
                 status.className = `endpoint-status ${enabled ? 'enabled' : 'disabled'}`;
-                
+
                 this.notify(`Endpoint ${id} ${enabled ? 'abilitato' : 'disabilitato'}`, 'success');
             }
         } catch (error) {
@@ -487,6 +494,7 @@ class SolarDashboard {
     }
 
     async toggleModbusDevice(id, enabled) {
+        if (!this.validateId(id, 'modbus device')) return;
         try {
             const res = await fetch(`/api/modbus/devices/toggle?id=${id}`, { method: 'POST' });
             if (res.ok) {
@@ -502,24 +510,25 @@ class SolarDashboard {
     }
 
     async toggleModbusMetric(deviceId, metric, enabled) {
+        if (!this.validateId(deviceId, 'modbus device') || !this.validateMetric(metric)) return;
         try {
             const res = await fetch(`/api/modbus/devices/metrics/toggle?id=${deviceId}&metric=${metric}`, { method: 'POST' });
             if (res.ok) {
                 const data = await res.json();
-                
+
                 // Update state with new metric state
                 if (!this.state.modbus[deviceId].measurements) {
                     this.state.modbus[deviceId].measurements = {};
                 }
                 this.state.modbus[deviceId].measurements[metric] = { enabled: data.enabled };
                 this.state.modbus[deviceId].enabled = data.device_enabled;
-                
+
                 // Update UI
                 this.updateModbusDeviceUI(deviceId, {
                     enabled: data.device_enabled,
                     measurements: { [metric]: { enabled: data.enabled } }
                 });
-                
+
                 // Show notification with cascade info
                 let message = `Metrica Modbus ${metric.replace(/_/g, ' ')} ${data.enabled ? 'abilitata' : 'disabilitata'}`;
                 if (data.device_changed) {
@@ -534,10 +543,32 @@ class SolarDashboard {
     }
 
     // Helpers
+    validateId(id, context) {
+        if (!id || typeof id !== 'string') {
+            this.log('error', `Invalid ID in ${context}: ${id}`);
+            this.notify(`ID non valido in ${context}`, 'error');
+            return false;
+        }
+        return true;
+    }
+
+    validateMetric(metric) {
+        if (!metric || typeof metric !== 'string') {
+            this.log('error', `Invalid metric: ${metric}`);
+            return false;
+        }
+        return true;
+    }
+
     getOptimizers() {
-        return Object.keys(this.state.devices).filter(id => 
-            id.includes('optimizer') || this.state.devices[id].device_type === 'OPTIMIZER' || this.state.devices[id].device_type === 'Optimizer'
-        );
+        if (this._optimizersCache === null) {
+            this._optimizersCache = Object.keys(this.state.devices).filter(id =>
+                id.includes('optimizer') ||
+                this.state.devices[id].device_type === 'OPTIMIZER' ||
+                this.state.devices[id].device_type === 'Optimizer'
+            );
+        }
+        return this._optimizersCache;
     }
 
     inferDeviceType(id) {
@@ -553,11 +584,11 @@ class SolarDashboard {
     updateDeviceUI(id, data) {
         const card = document.querySelector(`[data-device-id="${id}"]`);
         if (!card) return;
-        
+
         // Update device toggle
         const deviceToggle = card.querySelector('.device-header input');
         if (deviceToggle) deviceToggle.checked = data.enabled;
-        
+
         // Update metric toggles
         if (data.measurements) {
             Object.entries(data.measurements).forEach(([metric, metricData]) => {
@@ -570,34 +601,34 @@ class SolarDashboard {
     updateGroupUI() {
         const card = document.querySelector('[data-device-id="optimizers-group"]');
         if (!card) return;
-        
+
         const optimizers = this.getOptimizers();
         const opts = optimizers.map(id => this.state.devices[id]).filter(Boolean);
         const enabled = opts.filter(o => o.enabled).length;
         const total = opts.length;
         const allEnabled = opts.every(o => o.enabled);
-        
+
         // Aggiorna toggle principale
         const mainToggle = card.querySelector('.device-header input');
         if (mainToggle) mainToggle.checked = allEnabled;
-        
+
         // Aggiorna contatore
         const stats = card.querySelector('.device-stats .stat');
         if (stats) stats.textContent = `Attivi: ${enabled}/${total}`;
-        
+
         // Ottieni metriche comuni
         const metrics = opts.length > 0 ? Object.keys(opts[0].measurements || {}) : [];
-        
+
         // Aggiorna metriche usando indice
         card.querySelectorAll('.metric-item').forEach((item, index) => {
             if (index >= metrics.length) return;
-            
+
             const metric = metrics[index];
             const count = opts.filter(o => o.measurements?.[metric]?.enabled).length;
-            
+
             const input = item.querySelector('input');
             if (input) input.checked = count > 0;
-            
+
             const counter = item.querySelector('.metric-count');
             if (counter) counter.textContent = `${count}/${total} optimizer`;
         });
@@ -606,11 +637,11 @@ class SolarDashboard {
     updateModbusDeviceUI(id, data) {
         const card = document.querySelector(`[data-device-id="${id}"]`);
         if (!card) return;
-        
+
         // Update device toggle
         const deviceToggle = card.querySelector('.device-header input');
         if (deviceToggle) deviceToggle.checked = data.enabled;
-        
+
         // Update metric toggles
         if (data.measurements) {
             Object.entries(data.measurements).forEach(([metric, metricData]) => {
@@ -625,17 +656,17 @@ class SolarDashboard {
         const lines = text.split('\n');
         let current = { device: null, measurement: null };
         let flags = { web: false, endpoints: false, measurements: false };
-        
+
         for (const line of lines) {
             if (line.match(/^  web_scraping:/)) flags.web = true;
             if (flags.web && line.match(/^    endpoints:/)) flags.endpoints = true;
-            
+
             if (flags.endpoints && line.match(/^      ([\w_-]+):/)) {
                 current.device = line.match(/^      ([\w_-]+):/)[1];
                 result.sources.web_scraping.endpoints[current.device] = {};
                 flags.measurements = false;
             }
-            
+
             if (current.device) {
                 if (line.includes('measurements:')) {
                     flags.measurements = true;
@@ -644,7 +675,7 @@ class SolarDashboard {
                     result.sources.web_scraping.endpoints[current.device].device_type = line.split(':')[1].trim();
                 } else if (line.includes('enabled:')) {
                     const enabled = line.includes('true');
-                    const target = flags.measurements && current.measurement 
+                    const target = flags.measurements && current.measurement
                         ? result.sources.web_scraping.endpoints[current.device].measurements[current.measurement]
                         : result.sources.web_scraping.endpoints[current.device];
                     target.enabled = enabled;
@@ -654,7 +685,7 @@ class SolarDashboard {
                 }
             }
         }
-        
+
         return result;
     }
 
@@ -664,17 +695,22 @@ class SolarDashboard {
             const el = document.getElementById('connectionStatus');
             el.textContent = res.ok ? 'Online' : 'Offline';
             el.className = `stat-value ${res.ok ? 'online' : 'offline'}`;
-        } catch {
+        } catch (error) {
+            // Only log connection errors if we were previously online to avoid spam
+            if (this.state.connectionStatus !== 'offline') {
+                console.error('Connection lost:', error);
+            }
             const el = document.getElementById('connectionStatus');
             el.textContent = 'Offline';
             el.className = 'stat-value offline';
+            this.state.connectionStatus = 'offline';
         }
     }
 
     notify(message, type = 'info') {
         const el = document.createElement('div');
         const colors = { success: 'var(--accent-green)', error: 'var(--accent-red)', info: 'var(--accent-blue)' };
-        
+
         Object.assign(el.style, {
             position: 'fixed', top: '20px', right: '20px',
             background: colors[type], color: 'white',
@@ -683,10 +719,10 @@ class SolarDashboard {
             fontWeight: '500', transform: 'translateX(100%)',
             transition: 'transform 0.3s ease', maxWidth: '400px'
         });
-        
+
         el.textContent = message;
         document.body.appendChild(el);
-        
+
         setTimeout(() => el.style.transform = 'translateX(0)', 100);
         setTimeout(() => {
             el.style.transform = 'translateX(100%)';
@@ -696,25 +732,43 @@ class SolarDashboard {
 
     // ===== LOOP MONITORING =====
     startLoopMonitoring() {
-        // Aggiorna stato loop ogni 5 secondi
-        setInterval(() => this.updateLoopStatus(), 5000);
-        // Prima chiamata immediata
-        this.updateLoopStatus();
-        // Non aggiorniamo più i log automaticamente
+        const baseInterval = 5000; // 5 seconds base
+        let pollMultiplier = 1;
+
+        // Adjust polling based on page visibility
+        document.addEventListener('visibilitychange', () => {
+            pollMultiplier = document.hidden ? 10 : 1; // 50s when hidden, 5s when active
+        });
+
+        const poll = async () => {
+            try {
+                await this.updateLoopStatus();
+                pollMultiplier = 1; // Reset on success
+            } catch (error) {
+                // Exponential backoff: 5s -> 10s -> 20s -> 40s -> 50s (max)
+                pollMultiplier = Math.min(pollMultiplier * 2, 10);
+                console.error('Error in loop monitoring, backing off:', error);
+            }
+
+            setTimeout(poll, baseInterval * pollMultiplier);
+        };
+
+        // Start polling immediately
+        poll();
     }
 
     async updateLoopStatus() {
         try {
             const response = await fetch('/api/loop/status');
             const data = await response.json();
-            
+
             // Rileva cambio di stato del loop
             const previousLoopMode = this.state.loopStatus?.loop_mode;
             const currentLoopMode = data.loop_mode;
-            
+
             this.state.loopStatus = data;
             this.renderLoopStatus();
-            
+
             // Log del cambio di stato senza aggiornare i log
             if (previousLoopMode !== currentLoopMode) {
                 console.log(`Loop state changed: ${previousLoopMode} -> ${currentLoopMode}`);
@@ -724,15 +778,6 @@ class SolarDashboard {
         }
     }
 
-    async updateLoopLogs() {
-        try {
-            const response = await fetch('/api/loop/logs?limit=50');
-            const data = await response.json();
-            this.renderLoopLogs(data.logs);
-        } catch (error) {
-            console.error('Error updating loop logs:', error);
-        }
-    }
 
     renderLoopStatus() {
         if (!this.state.loopStatus) return;
@@ -752,7 +797,7 @@ class SolarDashboard {
                 if (!stat) return '0/0/0';
                 return `${stat.executed || 0}/${stat.success || 0}/${stat.failed || 0}`;
             };
-            
+
             const elements = {
                 'loopUptime': stats.uptime_formatted || '--',
                 'apiRuns': formatStats(stats.api_stats),
@@ -781,57 +826,18 @@ class SolarDashboard {
                 }
             }
         }
-        
+
         // Aggiorna stato dei tasti
         updateLoopButtons(loop_mode);
     }
 
-    renderLoopLogs(logs) {
-        const container = document.getElementById('logsContent');
-        if (!container || !logs) return;
 
-        // Mantieni scroll position se auto-scroll è disabilitato
-        const shouldScroll = this.state.autoScroll || 
-            (container.scrollTop + container.clientHeight >= container.scrollHeight - 10);
-
-        // Genera HTML per i log
-        const logsHtml = logs.map(log => `
-            <div class="log-entry">
-                <span class="log-timestamp">${log.timestamp}</span>
-                <span class="log-level ${this.getLogLevelClass(log.level)}">${log.level.toUpperCase()}</span>
-                <span class="log-message">${this.escapeHtml(log.message)}</span>
-            </div>
-        `).join('');
-
-        container.innerHTML = logsHtml;
-
-        // Auto-scroll se abilitato
-        if (shouldScroll) {
-            container.scrollTop = container.scrollHeight;
-        }
-    }
-
-    getLogLevelClass(level) {
-        const levelMap = {
-            'info': 'info',
-            'error': 'error',
-            'warning': 'warning',
-            'success': 'success'
-        };
-        return levelMap[level.toLowerCase()] || 'info';
-    }
-
-    escapeHtml(text) {
-        const div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
-    }
 }
 
 // ===== YAML CONFIG =====
 const YAMLConfig = {
     currentFile: 'main',
-    
+
     async validate() {
         const editor = document.getElementById('yamlEditor');
         const status = document.getElementById('configStatus');
@@ -852,28 +858,29 @@ const YAMLConfig = {
             this.setStatus(`❌ Errore YAML: ${error.message}`, 'error');
         }
     },
-    
+
     async refresh() {
         try {
             await this.loadFile(this.currentFile);
             this.setStatus('🔄 Configurazione ricaricata', 'info');
             dashboard.notify('Configurazione ricaricata', 'success');
-        } catch {
+        } catch (error) {
+            console.error('Error refreshing config:', error);
             this.setStatus('❌ Errore nel caricamento', 'error');
             dashboard.notify('Errore nel ricaricamento', 'error');
         }
     },
-    
+
     async save() {
         try {
             const editor = document.getElementById('yamlEditor');
             const content = editor.value;
-            
+
             // Valida il contenuto prima di salvare (solo per file YAML)
             if (this.currentFile !== 'env') {
                 jsyaml.load(content);
             }
-            
+
             const response = await fetch('/api/config/yaml', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -882,9 +889,9 @@ const YAMLConfig = {
                     content: content
                 })
             });
-            
+
             const result = await response.json();
-            
+
             if (response.ok) {
                 this.setStatus(`✅ ${result.message}`, 'success');
                 dashboard.notify(`File ${this.currentFile} salvato`, 'success');
@@ -897,12 +904,12 @@ const YAMLConfig = {
             dashboard.notify('Errore nel salvataggio', 'error');
         }
     },
-    
+
     async loadFile(fileType) {
         try {
             const response = await fetch(`/api/config/yaml?file=${fileType}`);
             const result = await response.json();
-            
+
             if (response.ok) {
                 const editor = document.getElementById('yamlEditor');
                 editor.value = result.content;
@@ -915,7 +922,7 @@ const YAMLConfig = {
             this.setStatus(`❌ Errore caricamento: ${error.message}`, 'error');
         }
     },
-    
+
     setStatus(text, type) {
         const status = document.getElementById('configStatus');
         status.textContent = text;
@@ -937,7 +944,7 @@ const startLoop = async () => {
     try {
         const response = await fetch('/api/loop/start', { method: 'POST' });
         const result = await response.json();
-        
+
         if (response.ok) {
             dashboard.notify('Loop avviato con successo', 'success');
             updateLoopButtons(true);
@@ -954,11 +961,11 @@ const stopLoop = async () => {
     if (!confirm('Sei sicuro di voler fermare il loop?')) {
         return;
     }
-    
+
     try {
         const response = await fetch('/api/loop/stop', { method: 'POST' });
         const result = await response.json();
-        
+
         if (response.ok) {
             dashboard.notify('Loop fermato con successo', 'success');
             updateLoopButtons(false);
@@ -974,7 +981,7 @@ const stopLoop = async () => {
 const updateLoopButtons = (isRunning) => {
     const startBtn = document.getElementById('startBtn');
     const stopBtn = document.getElementById('stopBtn');
-    
+
     if (startBtn) startBtn.disabled = isRunning;
     if (stopBtn) stopBtn.disabled = !isRunning;
 };
@@ -986,12 +993,12 @@ let logUpdateInterval = null;
 
 function switchLogTab(flow) {
     currentLogFlow = flow;
-    
+
     // Aggiorna UI dei tab
     document.querySelectorAll('.log-tab').forEach(tab => {
         tab.classList.toggle('active', tab.dataset.flow === flow);
     });
-    
+
     // Aggiorna filtro display
     const filterNames = {
         'all': 'Tutti',
@@ -1001,10 +1008,10 @@ function switchLogTab(flow) {
         'general': 'Sistema'
     };
     document.getElementById('logsFilter').textContent = `Filtro: ${filterNames[flow]}`;
-    
+
     // Carica log filtrati
     loadFilteredLogs();
-    
+
     // Avvia polling se non già attivo
     if (!logUpdateInterval) {
         logUpdateInterval = setInterval(loadFilteredLogs, 3000);
@@ -1015,7 +1022,7 @@ async function loadFilteredLogs() {
     try {
         const response = await fetch(`/api/loop/logs?flow=${currentLogFlow}&limit=500`);
         const data = await response.json();
-        
+
         renderFilteredLogs(data.logs, data.total, data.run_counts);
     } catch (error) {
         console.error('Error loading filtered logs:', error);
@@ -1025,11 +1032,11 @@ async function loadFilteredLogs() {
 function renderFilteredLogs(logs, total, runCounts) {
     const container = document.getElementById('logsContent');
     if (!container || !logs) return;
-    
+
     // Mantieni scroll position se auto-scroll è disabilitato
-    const shouldScroll = autoScrollEnabled || 
+    const shouldScroll = autoScrollEnabled ||
         (container.scrollTop + container.clientHeight >= container.scrollHeight - 10);
-    
+
     // Genera HTML per i log con flow badge
     const logsHtml = logs.map(log => {
         const flowType = log.flow_type || 'general';
@@ -1039,7 +1046,7 @@ function renderFilteredLogs(logs, total, runCounts) {
             'realtime': '⚡',
             'general': 'ℹ️'
         };
-        
+
         return `
             <div class="log-entry ${log.level.toLowerCase()}">
                 <span class="log-timestamp">${log.timestamp}</span>
@@ -1049,9 +1056,9 @@ function renderFilteredLogs(logs, total, runCounts) {
             </div>
         `;
     }).join('');
-    
+
     container.innerHTML = logsHtml || '<div class="log-entry info"><span class="log-message">Nessun log disponibile per questo filtro</span></div>';
-    
+
     // Aggiorna contatore con info sulle run
     let countText = `${total} log visualizzati`;
     if (runCounts) {
@@ -1061,7 +1068,7 @@ function renderFilteredLogs(logs, total, runCounts) {
         }
     }
     document.getElementById('logsCount').textContent = countText;
-    
+
     // Auto-scroll se abilitato
     if (shouldScroll) {
         container.scrollTop = container.scrollHeight;
@@ -1072,11 +1079,11 @@ async function clearLogs() {
     if (!confirm('Sei sicuro di voler pulire tutti i log?')) {
         return;
     }
-    
+
     try {
         const response = await fetch('/api/loop/logs/clear', { method: 'POST' });
         const result = await response.json();
-        
+
         if (response.ok) {
             const container = document.getElementById('logsContent');
             if (container) {
