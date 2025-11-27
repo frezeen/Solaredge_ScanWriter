@@ -4,11 +4,11 @@ Config Handler - Gestione centralizzata configurazioni
 Single Responsibility: caricamento/salvataggio/validazione config
 """
 
-import yaml
 import aiofiles
 from pathlib import Path
 from typing import Dict, Optional
 from app_logging.universal_logger import get_logger
+from utils.yaml_loader import get_yaml_loader
 
 
 class ConfigHandler:
@@ -19,38 +19,33 @@ class ConfigHandler:
         self._config_cache: Dict[str, dict] = {}
         
     async def load_main_config(self, config_file: Path) -> dict:
-        """Carica configurazione principale da main.yaml"""
+        """Carica configurazione principale da main.yaml (using unified YAML loader)"""
         try:
-            if not config_file.exists():
-                self.logger.warning(f"Config file non trovato: {config_file}")
-                return {}
-            
-            async with aiofiles.open(config_file, 'r', encoding='utf-8') as f:
-                content = await f.read()
-            
-            # Sostituisci variabili d'ambiente
-            from config.config_manager import get_config_manager
-            config_manager = get_config_manager()
-            content = config_manager._substitute_env_vars(content)
-            
-            config = yaml.safe_load(content) or {}
+            # Use unified YAML loader with caching
+            yaml_loader = get_yaml_loader()
+            config = yaml_loader.load_yaml(config_file, substitute_env=True, use_cache=True)
             self._config_cache['main'] = config
             return config
             
+        except FileNotFoundError:
+            self.logger.warning(f"Config file non trovato: {config_file}")
+            return {}
         except Exception as e:
             self.logger.error(f"Errore caricamento config principale: {e}")
             return {}
     
     async def save_main_config(self, config_file: Path, config: dict) -> bool:
-        """Salva configurazione principale"""
+        """Salva configurazione principale (using unified YAML saver)"""
         try:
-            content = yaml.dump(config, default_flow_style=False, allow_unicode=True, indent=2)
-            async with aiofiles.open(config_file, 'w', encoding='utf-8') as f:
-                await f.write(content)
+            # Use unified YAML saver with cache invalidation
+            yaml_loader = get_yaml_loader()
+            success = yaml_loader.save_yaml(config_file, config, invalidate_cache=True)
             
-            self._config_cache['main'] = config
-            self.logger.info(f"Config salvato: {config_file}")
-            return True
+            if success:
+                self._config_cache['main'] = config
+                self.logger.info(f"Config salvato: {config_file}")
+            
+            return success
             
         except Exception as e:
             self.logger.error(f"Errore salvataggio config: {e}")
@@ -97,20 +92,9 @@ class ConfigHandler:
         file_path = Path(config_info['file'])
         
         try:
-            if not file_path.exists():
-                return {}
-            
-            # Async I/O
-            async with aiofiles.open(file_path, 'r', encoding='utf-8') as f:
-                content = await f.read()
-            
-            # Sostituisci variabili d'ambiente
-            from config.config_manager import get_config_manager
-            config_manager = get_config_manager()
-            content = config_manager._substitute_env_vars(content)
-            
-            # Parse YAML
-            data = yaml.safe_load(content) or {}
+            # Use unified YAML loader with caching
+            yaml_loader = get_yaml_loader()
+            data = yaml_loader.load_yaml(file_path, substitute_env=True, use_cache=True)
             
             # Estrai dati specifici
             root_data = data.get(config_info['root_key'], {})
@@ -121,6 +105,8 @@ class ConfigHandler:
             
             return endpoints
             
+        except FileNotFoundError:
+            return {}
         except Exception as e:
             self.logger.error(f"Errore caricamento {source_type} endpoints: {e}")
             return {}
@@ -149,20 +135,39 @@ class ConfigHandler:
         
         # Valida YAML (skip per .env)
         if file_type != 'env':
-            try:
-                yaml.safe_load(content)
-            except yaml.YAMLError as e:
-                return False, f'YAML non valido: {str(e)}'
+            yaml_loader = get_yaml_loader()
+            is_valid, error = yaml_loader.validate_yaml(content)
+            if not is_valid:
+                return False, f'YAML non valido: {error}'
         
         file_path = Path(config_files[file_type])
         
         try:
-            # Crea directory se non esiste
-            file_path.parent.mkdir(parents=True, exist_ok=True)
-            
-            # Salva file
-            async with aiofiles.open(file_path, 'w', encoding='utf-8') as f:
-                await f.write(content)
+            # For .env files, write directly; for YAML, use unified saver
+            if file_type == 'env':
+                # Crea directory se non esiste
+                file_path.parent.mkdir(parents=True, exist_ok=True)
+                
+                # Salva file .env
+                async with aiofiles.open(file_path, 'w', encoding='utf-8') as f:
+                    await f.write(content)
+            else:
+                # Use unified YAML saver for YAML files
+                # Parse content string to dict first using unified loader
+                yaml_loader = get_yaml_loader()
+                
+                # Validate and parse YAML content
+                is_valid, error = yaml_loader.validate_yaml(content)
+                if not is_valid:
+                    return False, f'YAML parsing error: {error}'
+                
+                # Parse to dict (we know it's valid now)
+                import yaml
+                data = yaml.safe_load(content)
+                
+                # Save using unified saver
+                if not yaml_loader.save_yaml(file_path, data, invalidate_cache=True):
+                    return False, 'Errore salvataggio YAML'
             
             # Invalida cache
             if file_type in self._config_cache:

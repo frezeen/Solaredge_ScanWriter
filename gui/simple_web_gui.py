@@ -6,12 +6,12 @@ Dashboard moderno per gestione device e API endpoints
 
 import asyncio
 import json
-import yaml
 import socket
 from pathlib import Path
 from aiohttp import web
 from datetime import datetime
 from app_logging.universal_logger import get_logger
+from utils.yaml_loader import load_yaml, save_yaml
 
 class SimpleWebGUI:
     def __init__(self, config_file="config/main.yaml", port=8092, cache=None, auto_start_loop=False):
@@ -38,10 +38,12 @@ class SimpleWebGUI:
         from gui.core.config_handler import ConfigHandler
         from gui.core.state_manager import StateManager
         from gui.core.unified_toggle_handler import UnifiedToggleHandler
+        from gui.core.error_handler import UnifiedErrorHandler
         
         self.config_handler = ConfigHandler()
         self.state_manager = StateManager(max_log_buffer=1000, max_runs_per_flow=3)
         self.unified_toggle_handler = UnifiedToggleHandler(auto_update_source_callback=self._auto_update_source_enabled)
+        self.error_handler = UnifiedErrorHandler(self.logger)
         
         # Setup log capture per la GUI
         self._setup_log_capture()
@@ -197,8 +199,7 @@ class SimpleWebGUI:
             else:
                 return web.Response(text="Template non trovato", status=404)
         except Exception as e:
-            self.logger.error(f"[GUI] Errore serving index: {e}")
-            return web.Response(text=f"Errore: {e}", status=500)
+            return self.error_handler.handle_api_error(e, "serving index", "Error loading page")
 
     async def handle_static(self, request):
         """Serve i file statici"""
@@ -219,10 +220,9 @@ class SimpleWebGUI:
                     
                 return web.Response(text=content, content_type=content_type)
             else:
-                return web.Response(text="File non trovato", status=404)
+                return self.error_handler.handle_not_found_error("file", filename, "serving static")
         except Exception as e:
-            self.logger.error(f"[GUI] Errore serving static {filename}: {e}")
-            return web.Response(text=f"Errore: {e}", status=500)
+            return self.error_handler.handle_api_error(e, "serving static file", "Error loading static file")
 
     async def handle_ping(self, request):
         """Endpoint di ping per verificare connessione"""
@@ -265,8 +265,7 @@ class SimpleWebGUI:
             })
             
         except Exception as e:
-            self.logger.error(f"[GUI] Errore get YAML file: {e}")
-            return web.json_response({'error': f'Errore interno: {str(e)}'}, status=500)
+            return self.error_handler.handle_api_error(e, "getting YAML file", "Error loading configuration file")
 
     async def handle_save_yaml_file(self, request):
         """Salva il contenuto di un file di configurazione specifico - REFACTORED"""
@@ -290,16 +289,16 @@ class SimpleWebGUI:
                 'env': '.env'
             }
             
-            return web.json_response({
-                'success': True,
-                'file': file_type,
-                'path': config_files.get(file_type, ''),
-                'message': f'File {file_type} salvato con successo'
-            })
+            return self.error_handler.create_success_response(
+                f'File {file_type} salvato con successo',
+                {
+                    'file': file_type,
+                    'path': config_files.get(file_type, '')
+                }
+            )
             
         except Exception as e:
-            self.logger.error(f"[GUI] Errore save YAML file: {e}")
-            return web.json_response({'error': f'Errore interno: {str(e)}'}, status=500)
+            return self.error_handler.handle_api_error(e, "saving YAML file", "Error saving configuration file")
 
     async def handle_get_sources(self, request):
         """Restituisce sorgenti unificate (web devices, api endpoints o modbus endpoints) - OTTIMIZZATO"""
@@ -308,7 +307,7 @@ class SimpleWebGUI:
             
             # Validazione input
             if source_type not in ('web', 'api', 'modbus'):
-                return web.json_response({"error": "Tipo sorgente non valido"}, status=400)
+                return self.error_handler.handle_validation_error("type must be 'web', 'api', or 'modbus'", "getting sources")
             
             await self.load_config()
             
@@ -318,8 +317,7 @@ class SimpleWebGUI:
             return web.json_response(sources)
             
         except Exception as e:
-            self.logger.error(f"[GUI] Errore get sources: {e}")
-            return web.json_response({"error": str(e)}, status=500)
+            return self.error_handler.handle_api_error(e, "getting sources", "Error loading sources")
 
     async def handle_loop_status(self, request):
         """Restituisce lo stato del loop mode - REFACTORED"""
@@ -328,8 +326,7 @@ class SimpleWebGUI:
             return web.json_response(self.state_manager.get_loop_status())
             
         except Exception as e:
-            self.logger.error(f"[GUI] Errore loop status: {e}")
-            return web.json_response({"error": str(e)}, status=500)
+            return self.error_handler.handle_api_error(e, "getting loop status", "Error retrieving loop status")
 
     async def handle_loop_logs(self, request):
         """Restituisce i log del loop mode con filtro opzionale per flow - REFACTORED"""
@@ -351,8 +348,7 @@ class SimpleWebGUI:
             })
             
         except Exception as e:
-            self.logger.error(f"[GUI] Errore loop logs: {e}")
-            return web.json_response({"error": str(e)}, status=500)
+            return self.error_handler.handle_api_error(e, "getting loop logs", "Error retrieving logs")
 
 
 
@@ -412,13 +408,9 @@ class SimpleWebGUI:
             
             self.logger.info("[GUI] 🚀 Loop avviato con configurazione aggiornata")
             
-            return web.json_response({
-                "status": "success",
-                "message": "Loop avviato con configurazione ricaricata"
-            })
+            return self.error_handler.create_success_response("Loop avviato con configurazione ricaricata")
         except Exception as e:
-            self.logger.error(f"[GUI] Errore loop start: {e}")
-            return web.json_response({"error": str(e)}, status=500)
+            return self.error_handler.handle_api_error(e, "starting loop", "Error starting loop")
 
     async def handle_loop_stop(self, request):
         """Ferma il loop mode (senza chiudere la GUI)"""
@@ -435,13 +427,9 @@ class SimpleWebGUI:
             
             self.logger.info("[GUI] ✅ Loop fermato con successo")
             
-            return web.json_response({
-                "status": "success", 
-                "message": "Loop fermato con successo"
-            })
+            return self.error_handler.create_success_response("Loop fermato con successo")
         except Exception as e:
-            self.logger.error(f"[GUI] Errore loop stop: {e}")
-            return web.json_response({"error": str(e)}, status=500)
+            return self.error_handler.handle_api_error(e, "stopping loop", "Error stopping loop")
     
     async def handle_clear_logs(self, request):
         """Pulisce i log e le run salvate - REFACTORED"""
@@ -453,13 +441,9 @@ class SimpleWebGUI:
             
             self.logger.info("[GUI] ✅ Log puliti con successo")
             
-            return web.json_response({
-                "status": "success",
-                "message": "Log puliti con successo"
-            })
+            return self.error_handler.create_success_response("Log puliti con successo")
         except Exception as e:
-            self.logger.error(f"[GUI] Errore clear logs: {e}")
-            return web.json_response({"error": str(e)}, status=500)
+            return self.error_handler.handle_api_error(e, "clearing logs", "Error clearing logs")
 
     async def handle_log(self, request):
         """Endpoint per logging dal frontend"""
@@ -481,8 +465,7 @@ class SimpleWebGUI:
                 
             return web.json_response({"status": "logged"})
         except Exception as e:
-            self.logger.error(f"[GUI] Errore nell'endpoint log: {e}")
-            return web.json_response({"error": str(e)}, status=500)
+            return self.error_handler.handle_api_error(e, "logging from frontend", "Error processing log")
 
     def create_app(self):
         """Crea l'applicazione web"""
@@ -604,16 +587,14 @@ class SimpleWebGUI:
             if not config_file:
                 return web.json_response({'error': f'Unknown source type: {source_type}'}, status=400)
             
-            # Load current configuration
-            import yaml
-            from pathlib import Path
-            
+            # Load current configuration (using unified YAML loader)
             config_path = Path(config_file)
-            if not config_path.exists():
+            try:
+                config = load_yaml(config_path, substitute_env=True, use_cache=True)
+            except FileNotFoundError:
                 return web.json_response({'error': f'Config file not found: {config_file}'}, status=404)
-            
-            with open(config_path, 'r', encoding='utf-8') as f:
-                config = yaml.safe_load(f)
+            except Exception as e:
+                return web.json_response({'error': f'Error loading config: {str(e)}'}, status=500)
             
             # Navigate to the endpoint and toggle its enabled state
             if source_type in config and 'endpoints' in config[source_type]:
@@ -632,9 +613,9 @@ class SimpleWebGUI:
                             config, source_type, endpoints, config_path, 'API'
                         )
                     
-                    # Save the updated configuration
-                    with open(config_path, 'w', encoding='utf-8') as f:
-                        yaml.dump(config, f, default_flow_style=False, allow_unicode=True, indent=2)
+                    # Save the updated configuration (using unified YAML saver)
+                    if not save_yaml(config_path, config, invalidate_cache=True):
+                        return web.json_response({'error': 'Failed to save configuration'}, status=500)
                     
                     self.logger.info(f"Toggled endpoint {endpoint_id}: {current_state} -> {new_state}")
                     
@@ -666,7 +647,7 @@ class SimpleWebGUI:
         try:
             device_id = request.query.get('id')
             if not device_id:
-                return web.json_response({'error': 'Missing device ID'}, status=400)
+                return self.error_handler.handle_validation_error('device ID', 'toggling device')
             
             success, response_data = await self.unified_toggle_handler.handle_toggle_device(device_id)
             
@@ -677,15 +658,14 @@ class SimpleWebGUI:
             return web.json_response(response_data)
                 
         except Exception as e:
-            self.logger.error(f"Error toggling web device: {e}")
-            return web.json_response({'error': f'Internal server error: {str(e)}'}, status=500)
+            return self.error_handler.handle_api_error(e, "toggling web device", "Error toggling device")
 
     async def handle_toggle_modbus_device(self, request):
         """Toggle modbus device enabled/disabled state - Uses UnifiedToggleHandler"""
         try:
             device_id = request.query.get('id')
             if not device_id:
-                return web.json_response({'error': 'Missing device ID'}, status=400)
+                return self.error_handler.handle_validation_error('device ID', 'toggling modbus device')
             
             success, response_data = await self.unified_toggle_handler.handle_toggle_modbus_device(device_id)
             
@@ -696,8 +676,7 @@ class SimpleWebGUI:
             return web.json_response(response_data)
                 
         except Exception as e:
-            self.logger.error(f"Error toggling modbus device: {e}")
-            return web.json_response({'error': f'Internal server error: {str(e)}'}, status=500)
+            return self.error_handler.handle_api_error(e, "toggling modbus device", "Error toggling modbus device")
     
     async def handle_toggle_device_metric(self, request):
         """Toggle web device metric enabled/disabled state - Uses UnifiedToggleHandler"""
@@ -705,7 +684,7 @@ class SimpleWebGUI:
             device_id = request.query.get('id')
             metric = request.query.get('metric')
             if not device_id or not metric:
-                return web.json_response({'error': 'Missing device ID or metric'}, status=400)
+                return self.error_handler.handle_validation_error('device ID and metric', 'toggling device metric')
             
             success, response_data = await self.unified_toggle_handler.handle_toggle_device_metric(device_id, metric)
             
@@ -716,8 +695,7 @@ class SimpleWebGUI:
             return web.json_response(response_data)
                 
         except Exception as e:
-            self.logger.error(f"Error toggling web device metric: {e}")
-            return web.json_response({'error': f'Internal server error: {str(e)}'}, status=500)
+            return self.error_handler.handle_api_error(e, "toggling web device metric", "Error toggling device metric")
 
     async def handle_toggle_modbus_metric(self, request):
         """Toggle modbus device metric enabled/disabled state - Uses UnifiedToggleHandler"""
@@ -725,7 +703,7 @@ class SimpleWebGUI:
             device_id = request.query.get('id')
             metric = request.query.get('metric')
             if not device_id or not metric:
-                return web.json_response({'error': 'Missing device ID or metric'}, status=400)
+                return self.error_handler.handle_validation_error('device ID and metric', 'toggling modbus metric')
             
             success, response_data = await self.unified_toggle_handler.handle_toggle_modbus_metric(device_id, metric)
             
@@ -736,8 +714,7 @@ class SimpleWebGUI:
             return web.json_response(response_data)
                 
         except Exception as e:
-            self.logger.error(f"Error toggling modbus device metric: {e}")
-            return web.json_response({'error': f'Internal server error: {str(e)}'}, status=500)
+            return self.error_handler.handle_api_error(e, "toggling modbus device metric", "Error toggling modbus metric")
 
     def _setup_log_capture(self):
         """Setup log capture per la GUI con identificazione flow"""
@@ -973,15 +950,13 @@ class SimpleWebGUI:
         
         # Controlla quali flow sono abilitati nella configurazione
         # Carica i file sources separatamente perché non sono nel config principale
-        import yaml
         from pathlib import Path
         
         # Carica stato enabled dai file, ma verifica anche se ci sono endpoint attivi
         def load_source_enabled_with_check(file_path, key):
             try:
                 if Path(file_path).exists():
-                    with open(file_path, 'r', encoding='utf-8') as f:
-                        data = yaml.safe_load(f)
+                    data = load_yaml(file_path, substitute_env=True, use_cache=True)
                     
                     source_enabled = data.get(key, {}).get('enabled', False)
                     

@@ -5,12 +5,11 @@ Sostituisce accessi diretti a os.environ con configurazione tipizzata.
 """
 from __future__ import annotations
 import os
-import re
-import yaml
 from pathlib import Path
 from typing import Any, Dict, Optional
 from dataclasses import dataclass
 from dotenv import load_dotenv
+from utils.yaml_loader import get_yaml_loader
 
 
 @dataclass(frozen=True)
@@ -101,27 +100,21 @@ class ConfigManager:
         
         self.config_path = Path(config_path)
         self._config_data: Dict[str, Any] = {}
+        self._yaml_loader = get_yaml_loader()
         self._load_config()
     
-    def _substitute_env_vars(self, text: str) -> str:
-        """Sostituisce variabili d'ambiente nel formato ${VAR_NAME}."""
-        def replace_var(match):
-            var_name = match.group(1)
-            return os.environ.get(var_name, match.group(0))
-        
-        return re.sub(r'\$\{([^}]+)\}', replace_var, text)
-    
-
-    
     def _load_config(self) -> None:
-        """Carica configurazione YAML con sostituzione variabili d'ambiente."""
+        """Carica configurazione YAML con sostituzione variabili d'ambiente usando unified loader."""
         try:
             if not self.config_path.exists():
                 raise FileNotFoundError(f"File configurazione non trovato: {self.config_path}")
             
-            yaml_content = self.config_path.read_text(encoding='utf-8')
-            yaml_content = self._substitute_env_vars(yaml_content)
-            self._config_data = yaml.safe_load(yaml_content) or {}
+            # Use unified YAML loader with caching and env substitution
+            self._config_data = self._yaml_loader.load_yaml(
+                self.config_path, 
+                substitute_env=True, 
+                use_cache=True
+            )
             
             # Carica sources da file separati
             self._load_sources()
@@ -130,7 +123,7 @@ class ConfigManager:
             raise RuntimeError(f"Errore caricamento configurazione {self.config_path}: {e}") from e
     
     def _load_sources(self) -> None:
-        """Carica configurazioni sources da file separati."""
+        """Carica configurazioni sources da file separati usando unified loader."""
         sources_dir = self.config_path.parent / 'sources'
         
         if not sources_dir.exists():
@@ -142,27 +135,21 @@ class ConfigManager:
         # Carica API endpoints
         api_file = sources_dir / 'api_endpoints.yaml'
         if api_file.exists():
-            api_content = api_file.read_text(encoding='utf-8')
-            api_content = self._substitute_env_vars(api_content)
-            api_data = yaml.safe_load(api_content) or {}
+            api_data = self._yaml_loader.load_yaml(api_file, substitute_env=True, use_cache=True)
             if 'api_ufficiali' in api_data:
                 sources['api_ufficiali'] = api_data['api_ufficiali']
         
         # Carica Modbus endpoints
         modbus_file = sources_dir / 'modbus_endpoints.yaml'
         if modbus_file.exists():
-            modbus_content = modbus_file.read_text(encoding='utf-8')
-            modbus_content = self._substitute_env_vars(modbus_content)
-            modbus_data = yaml.safe_load(modbus_content) or {}
+            modbus_data = self._yaml_loader.load_yaml(modbus_file, substitute_env=True, use_cache=True)
             if 'modbus' in modbus_data:
                 sources['modbus'] = modbus_data['modbus']
         
         # Carica Web endpoints
         web_file = sources_dir / 'web_endpoints.yaml'
         if web_file.exists():
-            web_content = web_file.read_text(encoding='utf-8')
-            web_content = self._substitute_env_vars(web_content)
-            web_data = yaml.safe_load(web_content) or {}
+            web_data = self._yaml_loader.load_yaml(web_file, substitute_env=True, use_cache=True)
             if 'web_scraping' in web_data:
                 sources['web_scraping'] = web_data['web_scraping']
         else:
@@ -266,7 +253,7 @@ class ConfigManager:
         )
     
     def get_modbus_endpoints(self) -> Dict[str, Any]:
-        """Ottieni configurazione endpoints Modbus da file YAML.
+        """Ottieni configurazione endpoints Modbus da file YAML usando unified loader.
         
         Returns:
             Dizionario con configurazione modbus endpoints
@@ -281,19 +268,19 @@ class ConfigManager:
             raise FileNotFoundError(f"File configurazione modbus non trovato: {modbus_config_path}")
         
         try:
-            with open(modbus_config_path, 'r', encoding='utf-8') as f:
-                raw_content = f.read()
-            
-            # Sostituisci variabili d'ambiente
-            expanded_content = self._substitute_env_vars(raw_content)
-            modbus_config = yaml.safe_load(expanded_content)
+            # Use unified YAML loader with caching and env substitution
+            modbus_config = self._yaml_loader.load_yaml(
+                modbus_config_path, 
+                substitute_env=True, 
+                use_cache=True
+            )
             
             if not modbus_config or 'modbus' not in modbus_config:
                 raise ValueError("Configurazione modbus non valida: sezione 'modbus' mancante")
             
             return modbus_config['modbus']
             
-        except yaml.YAMLError as e:
+        except Exception as e:
             raise ValueError(f"Errore parsing YAML modbus_endpoints.yaml: {e}") from e
     
     def get_raw_config(self) -> Dict[str, Any]:
