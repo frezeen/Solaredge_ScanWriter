@@ -1,4 +1,4 @@
-// ===== SOLAREDGE DASHBOARD - OPTIMIZED =====
+// ===== SOLAREDGE DASHBOARD - OPTIMIZED v2 =====
 class SolarDashboard {
     constructor() {
         this.state = {
@@ -12,6 +12,12 @@ class SolarDashboard {
             autoScroll: true
         };
         this._optimizersCache = null; // Cache for optimizers list
+        
+        // Cleanup tracking per memory leak prevention
+        this.intervals = [];
+        this.eventListeners = [];
+        this.abortController = new AbortController();
+        
         this.init();
     }
 
@@ -21,6 +27,24 @@ class SolarDashboard {
         this.render();
         this.updateConnectionStatus();
         this.startLoopMonitoring();
+    }
+    
+    // Cleanup method per prevenire memory leak
+    destroy() {
+        // Clear all intervals
+        this.intervals.forEach(id => clearInterval(id));
+        this.intervals = [];
+        
+        // Abort all pending fetches
+        this.abortController.abort();
+        
+        // Remove event listeners
+        this.eventListeners.forEach(({ element, event, handler }) => {
+            element.removeEventListener(event, handler);
+        });
+        this.eventListeners = [];
+        
+        console.log('Dashboard destroyed, resources cleaned up');
     }
 
     // Unified logging
@@ -40,16 +64,21 @@ class SolarDashboard {
     }
 
     setupEventListeners() {
-        // Delegate event handling
-        document.addEventListener('click', e => {
+        // Delegate event handling con cleanup tracking
+        const clickHandler = e => {
             const btn = e.target.closest('[data-section], [data-category]');
             if (!btn) return;
 
             if (btn.dataset.section) this.switchView('section', btn.dataset.section);
             if (btn.dataset.category) this.switchView('category', btn.dataset.category);
-        });
+        };
+        
+        document.addEventListener('click', clickHandler, { signal: this.abortController.signal });
+        this.eventListeners.push({ element: document, event: 'click', handler: clickHandler });
 
-        setInterval(() => this.updateConnectionStatus(), 30000);
+        // Connection status check con cleanup tracking
+        const connectionInterval = setInterval(() => this.updateConnectionStatus(), 30000);
+        this.intervals.push(connectionInterval);
     }
 
     switchView(type, value) {
@@ -77,11 +106,12 @@ class SolarDashboard {
 
     async loadData() {
         try {
+            // Usa AbortController per cancellare fetch se necessario
             const [devices, endpoints, modbus, config] = await Promise.all([
-                fetch('/api/sources?type=web').then(r => r.json()),
-                fetch('/api/sources?type=api').then(r => r.json()),
-                fetch('/api/sources?type=modbus').then(r => r.json()),
-                fetch('/api/config').then(r => r.json())
+                fetch('/api/sources?type=web', { signal: this.abortController.signal }).then(r => r.json()),
+                fetch('/api/sources?type=api', { signal: this.abortController.signal }).then(r => r.json()),
+                fetch('/api/sources?type=modbus', { signal: this.abortController.signal }).then(r => r.json()),
+                fetch('/api/config', { signal: this.abortController.signal }).then(r => r.json())
             ]);
 
             Object.assign(this.state, { devices, endpoints, modbus, config });
@@ -94,6 +124,10 @@ class SolarDashboard {
                 YAMLConfig.loadFile('main');
             }
         } catch (error) {
+            if (error.name === 'AbortError') {
+                console.log('Data loading aborted');
+                return;
+            }
             this.log('error', 'Error loading data', error);
             this.notify('Errore nel caricamento dati', 'error');
         }
@@ -148,7 +182,7 @@ class SolarDashboard {
                     <div class="device-type">${type}</div>
                     ${data.device_id ? `<div class="device-id">ID: ${data.device_id}</div>` : ''}
                 </div>
-                ${this.createToggle(data.enabled, `dashboard.toggle('device','${id}',this.checked)`)}
+                ${this.createToggle(data.enabled, `dashboard.toggle('device','${id}',this.checked)`, '', `Abilita device ${data.device_name || id}`)}
             </div>
             ${metrics.length ? this.createMetricsSection(id, metrics) : ''}
         `;
@@ -179,7 +213,7 @@ class SolarDashboard {
                     <div class="device-type">OPTIMIZER GROUP</div>
                     <div class="device-stats"><span class="stat">Attivi: ${enabled}/${total}</span></div>
                 </div>
-                ${this.createToggle(allEnabled, 'dashboard.toggleGroup(this.checked)')}
+                ${this.createToggle(allEnabled, 'dashboard.toggleGroup(this.checked)', '', 'Abilita tutti gli optimizer')}
             </div>
             <div class="device-metrics">
                 <h4>📊 Metriche Comuni (${metrics.length})</h4>
@@ -210,7 +244,7 @@ class SolarDashboard {
                             <div class="metric-info">
                                 <span class="metric-name">${name.replace(/_/g, ' ')}</span>
                             </div>
-                            ${this.createToggle(data.enabled, `dashboard.toggle('metric','${deviceId}','${name}',this.checked)`, 'metric-toggle')}
+                            ${this.createToggle(data.enabled, `dashboard.toggle('metric','${deviceId}','${name}',this.checked)`, 'metric-toggle', `Abilita metrica ${name}`)}
                         </div>
                     `).join('')}
                 </div>
@@ -218,11 +252,11 @@ class SolarDashboard {
         `;
     }
 
-    createToggle(checked, onChange, extraClass = '') {
+    createToggle(checked, onChange, extraClass = '', ariaLabel = 'Toggle') {
         return `
-            <label class="toggle-switch ${extraClass}">
-                <input type="checkbox" ${checked ? 'checked' : ''} onchange="${onChange}">
-                <span class="toggle-slider"></span>
+            <label class="toggle-switch ${extraClass}" role="switch" aria-checked="${checked}" aria-label="${ariaLabel}">
+                <input type="checkbox" ${checked ? 'checked' : ''} onchange="${onChange}" aria-hidden="true">
+                <span class="toggle-slider" aria-hidden="true"></span>
             </label>
         `;
     }
@@ -596,6 +630,14 @@ class SolarDashboard {
                 if (metricToggle) metricToggle.checked = metricData.enabled;
             });
         }
+        
+        // FIXED: Invalida cache optimizer se il device è un optimizer
+        const isOptimizer = id.includes('optimizer') || 
+                           data.device_type === 'OPTIMIZER' || 
+                           data.device_type === 'Optimizer';
+        if (isOptimizer) {
+            this._optimizersCache = null;
+        }
     }
 
     updateGroupUI() {
@@ -730,27 +772,33 @@ class SolarDashboard {
         }, type === 'error' ? 8000 : 3000);
     }
 
-    // ===== LOOP MONITORING =====
+    // ===== LOOP MONITORING ===== (FIXED: memory leak + visibility tracking)
     startLoopMonitoring() {
         const baseInterval = 5000; // 5 seconds base
         let pollMultiplier = 1;
+        let timeoutId = null;
 
-        // Adjust polling based on page visibility
-        document.addEventListener('visibilitychange', () => {
+        // Adjust polling based on page visibility (con cleanup tracking)
+        const visibilityHandler = () => {
             pollMultiplier = document.hidden ? 10 : 1; // 50s when hidden, 5s when active
-        });
+        };
+        document.addEventListener('visibilitychange', visibilityHandler, { signal: this.abortController.signal });
+        this.eventListeners.push({ element: document, event: 'visibilitychange', handler: visibilityHandler });
 
         const poll = async () => {
             try {
                 await this.updateLoopStatus();
                 pollMultiplier = 1; // Reset on success
             } catch (error) {
+                if (error.name === 'AbortError') return; // Stop polling se aborted
                 // Exponential backoff: 5s -> 10s -> 20s -> 40s -> 50s (max)
                 pollMultiplier = Math.min(pollMultiplier * 2, 10);
                 console.error('Error in loop monitoring, backing off:', error);
             }
 
-            setTimeout(poll, baseInterval * pollMultiplier);
+            // Track timeout per cleanup
+            timeoutId = setTimeout(poll, baseInterval * pollMultiplier);
+            this.intervals.push(timeoutId);
         };
 
         // Start polling immediately
@@ -986,7 +1034,7 @@ const updateLoopButtons = (isRunning) => {
     if (stopBtn) stopBtn.disabled = !isRunning;
 };
 
-// ===== LOG TAB FILTERING =====
+// ===== LOG TAB FILTERING ===== (FIXED: cleanup tracking)
 let currentLogFlow = 'all';
 let autoScrollEnabled = true;
 let logUpdateInterval = null;
@@ -1012,9 +1060,12 @@ function switchLogTab(flow) {
     // Carica log filtrati
     loadFilteredLogs();
 
-    // Avvia polling se non già attivo
+    // Avvia polling se non già attivo (con cleanup tracking)
     if (!logUpdateInterval) {
         logUpdateInterval = setInterval(loadFilteredLogs, 3000);
+        if (dashboard) {
+            dashboard.intervals.push(logUpdateInterval);
+        }
     }
 }
 
@@ -1037,27 +1088,61 @@ function renderFilteredLogs(logs, total, runCounts) {
     const shouldScroll = autoScrollEnabled ||
         (container.scrollTop + container.clientHeight >= container.scrollHeight - 10);
 
-    // Genera HTML per i log con flow badge
-    const logsHtml = logs.map(log => {
-        const flowType = log.flow_type || 'general';
+    // FIXED XSS: Usa DocumentFragment + textContent invece di innerHTML
+    const fragment = document.createDocumentFragment();
+    
+    if (logs.length === 0) {
+        const emptyEntry = document.createElement('div');
+        emptyEntry.className = 'log-entry info';
+        const message = document.createElement('span');
+        message.className = 'log-message';
+        message.textContent = 'Nessun log disponibile per questo filtro';
+        emptyEntry.appendChild(message);
+        fragment.appendChild(emptyEntry);
+    } else {
         const flowIcons = {
             'api': '🌐',
             'web': '🔌',
             'realtime': '⚡',
             'general': 'ℹ️'
         };
-
-        return `
-            <div class="log-entry ${log.level.toLowerCase()}">
-                <span class="log-timestamp">${log.timestamp}</span>
-                <span class="log-level ${log.level.toLowerCase()}">${log.level}</span>
-                <span class="log-flow" data-flow="${flowType}">${flowIcons[flowType]} ${flowType.toUpperCase()}</span>
-                <span class="log-message">${escapeHtml(log.message)}</span>
-            </div>
-        `;
-    }).join('');
-
-    container.innerHTML = logsHtml || '<div class="log-entry info"><span class="log-message">Nessun log disponibile per questo filtro</span></div>';
+        
+        logs.forEach(log => {
+            const flowType = log.flow_type || 'general';
+            const entry = document.createElement('div');
+            entry.className = `log-entry ${log.level.toLowerCase()}`;
+            
+            // Timestamp
+            const timestamp = document.createElement('span');
+            timestamp.className = 'log-timestamp';
+            timestamp.textContent = log.timestamp;
+            
+            // Level
+            const level = document.createElement('span');
+            level.className = `log-level ${log.level.toLowerCase()}`;
+            level.textContent = log.level;
+            
+            // Flow badge
+            const flow = document.createElement('span');
+            flow.className = 'log-flow';
+            flow.dataset.flow = flowType;
+            flow.textContent = `${flowIcons[flowType]} ${flowType.toUpperCase()}`;
+            
+            // Message (SAFE: textContent auto-escapes)
+            const message = document.createElement('span');
+            message.className = 'log-message';
+            message.textContent = log.message;
+            
+            entry.appendChild(timestamp);
+            entry.appendChild(level);
+            entry.appendChild(flow);
+            entry.appendChild(message);
+            fragment.appendChild(entry);
+        });
+    }
+    
+    // Replace all children at once (più performante di innerHTML)
+    container.replaceChildren(fragment);
 
     // Aggiorna contatore con info sulle run
     let countText = `${total} log visualizzati`;
@@ -1104,12 +1189,6 @@ function toggleAutoScroll() {
     const btn = document.getElementById('autoScrollBtn');
     btn.textContent = `📌 Auto-scroll: ${autoScrollEnabled ? 'ON' : 'OFF'}`;
     btn.classList.toggle('active', autoScrollEnabled);
-}
-
-function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
 }
 
 // Rendi le funzioni globali per onclick
