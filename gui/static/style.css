@@ -1,4 +1,3 @@
-/* ===== DASHBOARD MODERNO - DARK THEME (OPTIMIZED) ===== */
 :root {
     --bg-primary: #0f0f23;
     --bg-secondary: #1a1a3a;
@@ -33,7 +32,6 @@ body {
     overflow-x: hidden;
 }
 
-/* ===== DASHBOARD LAYOUT ===== */
 .dashboard {
     min-height: 100vh;
     display: grid;
@@ -41,7 +39,6 @@ body {
     gap: 0;
 }
 
-/* ===== HEADER ===== */
 .header {
     background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-card) 100%);
     border-bottom: 1px solid var(--border);
@@ -115,7 +112,6 @@ body {
     color: var(--accent-red);
 }
 
-/* ===== NAVIGATION ===== */
 .navigation {
     background: var(--bg-secondary);
     border-bottom: 1px solid var(--border);
@@ -168,7 +164,6 @@ body {
     font-size: 1.125rem;
 }
 
-/* ===== MAIN CONTENT ===== */
 .main-content {
     max-width: 1400px;
     margin: 0 auto;
@@ -216,7 +211,6 @@ body {
     font-size: 1.125rem;
 }
 
-/* ===== UNIFIED CARD SYSTEM ===== */
 .device-card,
 .endpoint-card,
 .status-card,
@@ -319,6 +313,17 @@ body {
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
+    padding: 1rem;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    transition: all 0.3s ease;
+}
+
+.stats-grid .stat-item:hover {
+    border-color: var(--accent-blue);
+    transform: translateY(-2px);
+    box-shadow: var(--shadow);
 }
 
 .stats-grid .stat-value {
@@ -917,21 +922,6 @@ body {
 }
 
 
-
-/* ===== LOOP STATISTICS (ENHANCED) ===== */
-.stats-grid .stat-item {
-    padding: 1rem;
-    background: var(--bg-secondary);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    transition: all 0.3s ease;
-}
-
-.stats-grid .stat-item:hover {
-    border-color: var(--accent-blue);
-    transform: translateY(-2px);
-    box-shadow: var(--shadow);
-}
 
 .stat-timing {
     font-size: 0.75rem;
