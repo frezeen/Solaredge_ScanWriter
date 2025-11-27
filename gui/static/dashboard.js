@@ -472,7 +472,6 @@ class SolarDashboard {
     async toggleGroupMetric(metric, enabled) {
         if (!this.validateMetric(metric)) return;
         const optimizers = this.getOptimizers();
-        const allDisabled = optimizers.every(id => !this.state.devices[id].enabled);
         await Promise.all(optimizers.map(id => {
             if (!this.state.devices[id].measurements?.[metric]) return Promise.resolve();
             return fetch(`/api/devices/metrics/toggle?id=${id}&metric=${metric}`, { method: 'POST' })
