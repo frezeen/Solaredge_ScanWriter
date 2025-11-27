@@ -25,35 +25,58 @@ class SimpleWebGUI:
         self.cache = cache  # Cache manager condiviso
         self.auto_start_loop = auto_start_loop  # Flag per avvio automatico
         
-        # Attributi per loop mode
-        self.loop_mode = False
-        self.loop_running = False  # Stato attuale del loop
-        self.log_buffer = []  # Buffer per i log realtime
-        self.max_log_buffer = 1000  # Massimo numero di log da tenere
-        self.stop_requested = False  # Flag per richiesta di stop
+        # REFACTORED: Usa componenti separati per Single Responsibility
+        from gui.core.config_handler import ConfigHandler
+        from gui.core.state_manager import StateManager
+        from gui.core.toggle_handler import ToggleHandler
         
-        # Tracking delle run per flow type (mantiene solo ultime 3 run per tipo)
-        self.flow_runs = {
-            'api': [],      # Lista di run, ogni run è una lista di log entries
-            'web': [],
-            'realtime': [],
-            'general': []
-        }
-        self.max_runs_per_flow = 3  # Mantieni solo ultime 3 run per flow
-        
-        # Inizializza statistiche vuote
-        from datetime import datetime
-        self.loop_stats = {
-            'api_stats': {'executed': 0, 'success': 0, 'failed': 0},
-            'web_stats': {'executed': 0, 'success': 0, 'failed': 0},
-            'realtime_stats': {'executed': 0, 'success': 0, 'failed': 0},
-            'start_time': None,
-            'last_api_web_run': None,
-            'status': 'stopped'
-        }
+        self.config_handler = ConfigHandler()
+        self.state_manager = StateManager(max_log_buffer=1000, max_runs_per_flow=3)
+        self.toggle_handler = ToggleHandler()
         
         # Setup log capture per la GUI
         self._setup_log_capture()
+    
+    # Backward compatibility properties (puntano a StateManager)
+    @property
+    def loop_mode(self):
+        return self.state_manager.loop_mode
+    
+    @loop_mode.setter
+    def loop_mode(self, value):
+        self.state_manager.loop_mode = value
+    
+    @property
+    def loop_running(self):
+        return self.state_manager.loop_running
+    
+    @loop_running.setter
+    def loop_running(self, value):
+        self.state_manager.loop_running = value
+    
+    @property
+    def log_buffer(self):
+        return self.state_manager.log_buffer
+    
+    @property
+    def flow_runs(self):
+        return self.state_manager.flow_runs
+    
+    @property
+    def loop_stats(self):
+        return self.state_manager.loop_stats
+    
+    @property
+    def stop_requested(self):
+        return self.state_manager.stop_requested
+    
+    @stop_requested.setter
+    def stop_requested(self, value):
+        self.state_manager.stop_requested = value
+    
+    @property
+    def max_runs_per_flow(self):
+        return self.state_manager.max_runs_per_flow
 
     async def _auto_start_loop(self):
         """Avvia automaticamente il loop senza richiesta HTTP"""
@@ -167,98 +190,17 @@ class SimpleWebGUI:
         return False, old_enabled
         
     async def load_config(self):
-        """Carica la configurazione YAML dal main.yaml (senza sources)"""
-        try:
-            if self.config_file.exists():
-                # Usa aiofiles per I/O non bloccante
-                import aiofiles
-                async with aiofiles.open(self.config_file, 'r', encoding='utf-8') as f:
-                    content = await f.read()
-                
-                # Sostituisci variabili d'ambiente come fa config_manager
-                from config.config_manager import get_config_manager
-                config_manager = get_config_manager()
-                content = config_manager._substitute_env_vars(content)
-                
-                self.config = yaml.safe_load(content) or {}
-            return self.config
-        except Exception as e:
-            self.logger.error(f"[GUI] Errore caricamento config: {e}")
-            return {}
+        """Carica la configurazione YAML dal main.yaml - REFACTORED"""
+        self.config = await self.config_handler.load_main_config(self.config_file)
+        return self.config
 
     async def save_config(self):
-        """Salva la configurazione YAML principale"""
-        try:
-            # Usa aiofiles per I/O non bloccante
-            import aiofiles
-            content = yaml.dump(self.config, default_flow_style=False, allow_unicode=True, indent=2)
-            async with aiofiles.open(self.config_file, 'w', encoding='utf-8') as f:
-                await f.write(content)
-            return True
-        except Exception as e:
-            self.logger.error(f"[GUI] Errore salvataggio config: {e}")
-            return False
+        """Salva la configurazione YAML principale - REFACTORED"""
+        return await self.config_handler.save_main_config(self.config_file, self.config)
 
     async def _load_source_config(self, source_type: str) -> dict:
-        """
-        Metodo unificato per caricare configurazioni da file sources/ (ASYNC + DRY)
-        
-        Args:
-            source_type: Tipo di sorgente ('web', 'api', 'modbus')
-            
-        Returns:
-            Dizionario con endpoints/devices della sorgente
-        """
-        # Mappa configurazione per tipo
-        config_map = {
-            'web': {
-                'file': 'config/sources/web_endpoints.yaml',
-                'root_key': 'web_scraping',
-                'data_key': 'endpoints'
-            },
-            'api': {
-                'file': 'config/sources/api_endpoints.yaml',
-                'root_key': 'api_ufficiali',
-                'data_key': 'endpoints'
-            },
-            'modbus': {
-                'file': 'config/sources/modbus_endpoints.yaml',
-                'root_key': 'modbus',
-                'data_key': 'endpoints'
-            }
-        }
-        
-        if source_type not in config_map:
-            self.logger.error(f"[GUI] Tipo sorgente non valido: {source_type}")
-            return {}
-        
-        config_info = config_map[source_type]
-        file_path = Path(config_info['file'])
-        
-        try:
-            if not file_path.exists():
-                return {}
-            
-            # Async I/O per non bloccare event loop
-            import aiofiles
-            async with aiofiles.open(file_path, 'r', encoding='utf-8') as f:
-                content = await f.read()
-            
-            # Sostituisci variabili d'ambiente
-            from config.config_manager import get_config_manager
-            config_manager = get_config_manager()
-            content = config_manager._substitute_env_vars(content)
-            
-            # Parse YAML
-            data = yaml.safe_load(content) or {}
-            
-            # Estrai dati specifici
-            root_data = data.get(config_info['root_key'], {})
-            return root_data.get(config_info['data_key'], {})
-            
-        except Exception as e:
-            self.logger.error(f"[GUI] Errore caricamento {source_type} endpoints: {e}")
-            return {}
+        """Delega a ConfigHandler - REFACTORED"""
+        return await self.config_handler.load_source_config(source_type)
 
     # Backward compatibility wrappers (deprecati ma mantenuti per compatibilità)
     async def _get_web_devices(self):
@@ -337,11 +279,18 @@ class SimpleWebGUI:
         return web.json_response(self.config)
 
     async def handle_get_yaml_file(self, request):
-        """Restituisce il contenuto di un file di configurazione specifico"""
+        """Restituisce il contenuto di un file di configurazione specifico - REFACTORED"""
         try:
             file_type = request.query.get('file', 'main')
             
-            # Mappa dei file di configurazione disponibili
+            # Delega a ConfigHandler
+            content, error = await self.config_handler.get_yaml_file_content(file_type)
+            
+            if error:
+                status = 404 if 'non trovato' in error else 400
+                return web.json_response({'error': error}, status=status)
+            
+            # Mappa path per response
             config_files = {
                 'main': 'config/main.yaml',
                 'web_endpoints': 'config/sources/web_endpoints.yaml',
@@ -350,18 +299,9 @@ class SimpleWebGUI:
                 'env': '.env'
             }
             
-            if file_type not in config_files:
-                return web.json_response({'error': f'File di configurazione non valido: {file_type}'}, status=400)
-            
-            file_path = Path(config_files[file_type])
-            if not file_path.exists():
-                return web.json_response({'error': f'File non trovato: {file_path}'}, status=404)
-            
-            content = file_path.read_text(encoding='utf-8')
-            
             return web.json_response({
                 'file': file_type,
-                'path': str(file_path),
+                'path': config_files.get(file_type, ''),
                 'content': content
             })
             
@@ -370,13 +310,19 @@ class SimpleWebGUI:
             return web.json_response({'error': f'Errore interno: {str(e)}'}, status=500)
 
     async def handle_save_yaml_file(self, request):
-        """Salva il contenuto di un file di configurazione specifico"""
+        """Salva il contenuto di un file di configurazione specifico - REFACTORED"""
         try:
             data = await request.json()
             file_type = data.get('file', 'main')
             content = data.get('content', '')
             
-            # Mappa dei file di configurazione disponibili
+            # Delega a ConfigHandler
+            success, error = await self.config_handler.save_yaml_file(file_type, content)
+            
+            if not success:
+                return web.json_response({'error': error}, status=400)
+            
+            # Mappa path per response
             config_files = {
                 'main': 'config/main.yaml',
                 'web_endpoints': 'config/sources/web_endpoints.yaml',
@@ -385,32 +331,10 @@ class SimpleWebGUI:
                 'env': '.env'
             }
             
-            if file_type not in config_files:
-                return web.json_response({'error': f'File di configurazione non valido: {file_type}'}, status=400)
-            
-            # Valida il contenuto prima di salvare (solo per file YAML)
-            if file_type != 'env':
-                try:
-                    yaml.safe_load(content)
-                except yaml.YAMLError as e:
-                    return web.json_response({'error': f'YAML non valido: {str(e)}'}, status=400)
-            
-            file_path = Path(config_files[file_type])
-            
-            # Crea la directory se non esiste
-            file_path.parent.mkdir(parents=True, exist_ok=True)
-            
-            # Salva il file (usa aiofiles per I/O non bloccante)
-            import aiofiles
-            async with aiofiles.open(file_path, 'w', encoding='utf-8') as f:
-                await f.write(content)
-            
-            self.logger.info(f"[GUI] Salvato file YAML: {file_path}")
-            
             return web.json_response({
                 'success': True,
                 'file': file_type,
-                'path': str(file_path),
+                'path': config_files.get(file_type, ''),
                 'message': f'File {file_type} salvato con successo'
             })
             
@@ -439,82 +363,32 @@ class SimpleWebGUI:
             return web.json_response({"error": str(e)}, status=500)
 
     async def handle_loop_status(self, request):
-        """Restituisce lo stato del loop mode"""
+        """Restituisce lo stato del loop mode - REFACTORED"""
         try:
-            if not self.loop_mode:
-                return web.json_response({
-                    "loop_mode": False,
-                    "message": "GUI in modalità standalone"
-                })
-            
-            # Calcola statistiche aggiornate
-            stats = self.loop_stats.copy()
-            if 'start_time' in stats and stats['start_time']:
-                stats['uptime_seconds'] = (datetime.now() - stats['start_time']).total_seconds()
-                stats['uptime_formatted'] = str(datetime.now() - stats['start_time']).split('.')[0]
-                # Rimuovi l'oggetto datetime per la serializzazione JSON
-                del stats['start_time']
-            
-            if 'last_update' in stats and stats['last_update']:
-                stats['last_update_formatted'] = stats['last_update'].strftime('%H:%M:%S')
-                del stats['last_update']
-            
-            if 'last_api_web_run' in stats and stats['last_api_web_run']:
-                if hasattr(stats['last_api_web_run'], 'strftime'):
-                    stats['api_last_run'] = stats['last_api_web_run'].strftime('%H:%M:%S')
-                    stats['web_last_run'] = stats['last_api_web_run'].strftime('%H:%M:%S')
-                del stats['last_api_web_run']
-            
-            if 'next_api_web_run' in stats and stats['next_api_web_run']:
-                if hasattr(stats['next_api_web_run'], 'strftime'):
-                    stats['api_next_run'] = stats['next_api_web_run'].strftime('%H:%M:%S')
-                    stats['web_next_run'] = stats['next_api_web_run'].strftime('%H:%M:%S')
-                del stats['next_api_web_run']
-            
-            # Rimuovi tutti gli oggetti datetime e timedelta rimanenti
-            for key in list(stats.keys()):
-                if hasattr(stats[key], 'strftime') or hasattr(stats[key], 'total_seconds'):  # È un datetime o timedelta
-                    del stats[key]
-            
-            return web.json_response({
-                "loop_mode": self.loop_running,
-                "stats": stats
-            })
+            # Delega a StateManager (gestisce serializzazione datetime)
+            return web.json_response(self.state_manager.get_loop_status())
             
         except Exception as e:
             self.logger.error(f"[GUI] Errore loop status: {e}")
             return web.json_response({"error": str(e)}, status=500)
 
     async def handle_loop_logs(self, request):
-        """Restituisce i log del loop mode con filtro opzionale per flow (ultime 3 run)"""
+        """Restituisce i log del loop mode con filtro opzionale per flow - REFACTORED"""
         try:
-            # Parametri query per paginazione e filtro
-            limit = int(request.query.get('limit', 500))  # Aumentato per contenere 3 run
-            flow_filter = request.query.get('flow', 'all')  # Filtro per flow type (api/web/realtime/general/all)
+            # Parametri query
+            limit = int(request.query.get('limit', 500))
+            flow_filter = request.query.get('flow', 'all')
             
-            # Ottieni log filtrati dalle ultime 3 run
-            filtered_logs = self._get_filtered_logs(flow_filter, limit)
-            
-            # Conta totale per flow type
-            total_count = len(filtered_logs)
-            
-            # Conta run per flow type
-            if flow_filter == 'all':
-                run_counts = {
-                    'api': len(self.flow_runs['api']),
-                    'web': len(self.flow_runs['web']),
-                    'realtime': len(self.flow_runs['realtime']),
-                    'general': len(self.flow_runs['general'])
-                }
-            else:
-                run_counts = {flow_filter: len(self.flow_runs.get(flow_filter, []))}
+            # Delega a StateManager
+            filtered_logs = self.state_manager.get_filtered_logs(flow_filter, limit)
+            run_counts = self.state_manager.get_run_counts()
             
             return web.json_response({
                 "logs": filtered_logs,
-                "total": total_count,
+                "total": len(filtered_logs),
                 "run_counts": run_counts,
                 "flow_filter": flow_filter,
-                "max_runs_per_flow": self.max_runs_per_flow
+                "max_runs_per_flow": self.state_manager.max_runs_per_flow
             })
             
         except Exception as e:
@@ -522,79 +396,21 @@ class SimpleWebGUI:
             return web.json_response({"error": str(e)}, status=500)
 
     def add_log_entry(self, level, message, timestamp=None):
-        """Aggiunge un entry al buffer dei log (deprecato - usa il log handler)"""
-        if timestamp is None:
-            timestamp = datetime.now()
-        
-        log_entry = {
-            "timestamp": timestamp.strftime('%H:%M:%S'),
-            "level": level,
-            "message": message
-        }
-        
-        self.log_buffer.append(log_entry)
-        
-        # Mantieni solo gli ultimi N log
-        if len(self.log_buffer) > self.max_log_buffer:
-            self.log_buffer = self.log_buffer[-self.max_log_buffer:]
+        """Aggiunge un entry al buffer dei log - REFACTORED (delega a StateManager)"""
+        # Delega a StateManager (gestisce flow_type='general' di default)
+        self.state_manager.add_log_entry(level, message, 'general', timestamp)
     
     def _is_run_start_marker(self, message):
-        """Verifica se il messaggio è un marker di inizio run"""
-        message_lower = message.lower()
-        return any(marker in message_lower for marker in [
-            '🚀 avvio flusso api',
-            '🚀 avvio flusso web', 
-            '🚀 avvio flusso realtime'
-        ])
+        """Verifica se il messaggio è un marker di inizio run - REFACTORED (delega a StateManager)"""
+        return self.state_manager._is_run_start_marker(message)
     
     def _add_log_to_flow_runs(self, log_entry):
-        """Aggiunge un log alla struttura delle run per flow type"""
-        flow_type = log_entry.get('flow_type', 'general')
-        
-        # Se è un marker di inizio run, crea una nuova run
-        if self._is_run_start_marker(log_entry['message']):
-            # Crea nuova run
-            self.flow_runs[flow_type].append([log_entry])
-            
-            # Mantieni solo le ultime N run
-            if len(self.flow_runs[flow_type]) > self.max_runs_per_flow:
-                self.flow_runs[flow_type] = self.flow_runs[flow_type][-self.max_runs_per_flow:]
-        else:
-            # Aggiungi alla run corrente (se esiste)
-            if self.flow_runs[flow_type]:
-                self.flow_runs[flow_type][-1].append(log_entry)
-            else:
-                # Se non c'è una run corrente, creane una nuova
-                self.flow_runs[flow_type].append([log_entry])
+        """Aggiunge un log alla struttura delle run per flow type - REFACTORED (delega a StateManager)"""
+        self.state_manager._add_log_to_flow_runs(log_entry)
     
     def _get_filtered_logs(self, flow_filter='all', limit=500):
-        """Ottiene i log filtrati per flow type dalle ultime 3 run"""
-        filtered_logs = []
-        
-        if flow_filter == 'all':
-            # Combina le ultime 3 run di tutti i flow types
-            for flow_type in ['api', 'web', 'realtime', 'general']:
-                for run in self.flow_runs[flow_type]:
-                    filtered_logs.extend(run)
-            
-            # Ordina per timestamp per avere ordine cronologico corretto
-            # Converti timestamp HH:MM:SS in secondi per ordinamento
-            def timestamp_to_seconds(ts_str):
-                try:
-                    h, m, s = map(int, ts_str.split(':'))
-                    return h * 3600 + m * 60 + s
-                except:
-                    return 0
-            
-            filtered_logs.sort(key=lambda log: timestamp_to_seconds(log.get('timestamp', '00:00:00')))
-        else:
-            # Solo le ultime 3 run del flow type specifico
-            for run in self.flow_runs.get(flow_filter, []):
-                filtered_logs.extend(run)
-            # I log di un singolo flow sono già in ordine cronologico
-        
-        # Applica limit (prendi gli ultimi N log)
-        return filtered_logs[-limit:] if len(filtered_logs) > limit else filtered_logs
+        """Ottiene i log filtrati per flow type - REFACTORED (delega a StateManager)"""
+        return self.state_manager.get_filtered_logs(flow_filter, limit)
 
     async def handle_loop_start(self, request):
         """Avvia il loop mode con ricaricamento configurazione"""
@@ -684,16 +500,12 @@ class SimpleWebGUI:
             return web.json_response({"error": str(e)}, status=500)
     
     async def handle_clear_logs(self, request):
-        """Pulisce i log e le run salvate"""
+        """Pulisce i log e le run salvate - REFACTORED"""
         try:
             self.logger.info("[GUI] Richiesta clear logs ricevuta")
             
-            # Pulisci buffer log
-            self.log_buffer.clear()
-            
-            # Pulisci run per ogni flow type
-            for flow_type in self.flow_runs:
-                self.flow_runs[flow_type].clear()
+            # Delega a StateManager
+            self.state_manager.clear_logs()
             
             self.logger.info("[GUI] ✅ Log puliti con successo")
             
@@ -1281,22 +1093,14 @@ class SimpleWebGUI:
                     if 'pipeline' in message.lower() and 'completata' in message.lower():
                         self.current_flow = None
                     
-                    # Formatta il log
-                    log_entry = {
-                        'timestamp': datetime.now().strftime('%H:%M:%S'),
-                        'level': record.levelname,
-                        'logger': record.name,
-                        'message': message,
-                        'flow_type': flow_type  # Campo per filtrare i log
-                    }
-                    
-                    # Aggiungi al buffer della GUI (deprecato ma mantenuto per compatibilità)
-                    self.gui.log_buffer.append(log_entry)
-                    if len(self.gui.log_buffer) > self.gui.max_log_buffer:
-                        self.gui.log_buffer = self.gui.log_buffer[-self.gui.max_log_buffer:]
-                    
-                    # Aggiungi alla struttura delle run (nuovo sistema)
-                    self.gui._add_log_to_flow_runs(log_entry)
+                    # REFACTORED: Usa StateManager per aggiungere log
+                    # StateManager gestisce automaticamente buffer, flow_runs e deque
+                    self.gui.state_manager.add_log_entry(
+                        level=record.levelname,
+                        message=message,
+                        flow_type=flow_type,
+                        timestamp=datetime.now()
+                    )
                         
                 except Exception:
                     pass  # Ignora errori nel logging per evitare loop infiniti
@@ -1306,13 +1110,10 @@ class SimpleWebGUI:
                 message_lower = message.lower()
                 logger_lower = logger_name.lower()
                 
-                # 0. PRIMA DI TUTTO: Escludi log di sistema (scheduler, cache, config, GUI)
-                system_keywords = [
-                    'scheduler inizializzato', 'cache', 'config', '[gui]', 
-                    'intervalli configurati', 'loop', 'gui web', 'server gui'
-                ]
-                if any(keyword in message_lower for keyword in system_keywords):
-                    return 'general'
+                # 0. PRIORITÀ MASSIMA: Controlla marker di inizio/fine pipeline e keywords flow
+                # Questi hanno priorità su tutto, anche su [GUI]
+                if 'gme' in message_lower and ('raccolta' in message_lower or 'esecuzione' in message_lower or 'completata' in message_lower):
+                    return 'gme'
                 
                 # 1. Controlla marker di inizio/fine pipeline (più affidabili)
                 if 'avvio flusso api' in message_lower or 'pipeline api completata' in message_lower:
@@ -1321,6 +1122,8 @@ class SimpleWebGUI:
                     return 'web'
                 elif 'avvio flusso realtime' in message_lower or 'pipeline realtime completata' in message_lower:
                     return 'realtime'
+                elif 'avvio flusso gme' in message_lower or 'pipeline gme completata' in message_lower:
+                    return 'gme'
                 
                 # 2. Controlla il nome del logger (più affidabile del messaggio)
                 if any(name in logger_lower for name in ['collector.collector_api', 'parser.api', 'api_parser']):
@@ -1349,6 +1152,12 @@ class SimpleWebGUI:
                     'metriche abilitate', 'parsing completato',
                     '[realtime]'  # Cache logs con tag source
                 ]
+                gme_keywords = [
+                    'gme', 'mercato elettrico', 'pun', 'prezzo energia',
+                    'elaborazione data', 'download dati gme', 'generati', 'influxdb points gme',
+                    'media mensile', 'bucket gme', 'punti orari',
+                    '[gme]'  # Cache logs con tag source
+                ]
                 
                 if any(keyword in message_lower for keyword in api_keywords):
                     return 'api'
@@ -1356,6 +1165,8 @@ class SimpleWebGUI:
                     return 'web'
                 elif any(keyword in message_lower for keyword in realtime_keywords):
                     return 'realtime'
+                elif any(keyword in message_lower for keyword in gme_keywords):
+                    return 'gme'
                 
                 # 4. Controlla logger generico 'main' - usa context dal messaggio
                 if logger_lower == 'main':
@@ -1388,6 +1199,28 @@ class SimpleWebGUI:
                     if 'inizializzato' in message_lower or 'influxwriter' in message_lower:
                         # Questi sono log di setup, possono stare in general
                         pass
+                
+                # 6. ULTIMO: Controlla system keywords (dopo tutti i flow checks)
+                system_keywords = [
+                    'scheduler inizializzato', 'intervalli configurati', 
+                    '[gui]', 'gui web', 'server gui', 'loop avviato', 'loop personalizzato',
+                    'config manager', 'variabili d\'ambiente', 'configurazione yaml',
+                    'avvio gui', 'porta 8092', 'dashboard moderna', 'ctrl+c',
+                    'accesso rete locale', 'firewall', 'usa la gui',
+                    'device_id cached',  # Cache hits per device_id
+                    'influxwriter inizializzato',  # InfluxDB init
+                ]
+                
+                # Escludi anche log che iniziano con certi pattern (con emoji)
+                system_prefixes = [
+                    '✅ server gui', '🌐 gui disponibile', '📡 accesso rete'
+                    # NOTA: cache hit/saved NON sono qui, vanno nei rispettivi flow
+                ]
+                if any(message_lower.startswith(prefix.lower()) for prefix in system_prefixes):
+                    return 'general'
+                
+                if any(keyword in message_lower for keyword in system_keywords):
+                    return 'general'
                 
                 # Default: general (solo per log veramente di sistema: GUI, cache, scheduler, config)
                 return 'general'
@@ -1617,19 +1450,28 @@ class SimpleWebGUI:
                 if gme_enabled and time_until_gme <= 0:
                     from main import run_gme_flow
                     self.logger.info("[GUI] 🔋 Esecuzione raccolta GME...")
+                    self.loop_stats['gme_stats']['executed'] += 1
                     try:
                         await asyncio.get_event_loop().run_in_executor(
                             None, run_gme_flow, log, cache, config
                         )
+                        self.loop_stats['gme_stats']['success'] += 1
                         self.logger.info("[GUI] ✅ Raccolta GME completata")
                     except Exception as e:
+                        self.loop_stats['gme_stats']['failed'] += 1
                         self.logger.error(f"[GUI] ❌ Errore raccolta GME: {e}")
                     
-                    last_gme_run = datetime.now()
-                    self.loop_stats['last_update'] = datetime.now()
+                    last_gme_run = current_time
+                    self.loop_stats['last_gme_run'] = current_time
+                    self.loop_stats['last_update'] = current_time
                     
-                    # Ricalcola tempo dopo l'esecuzione
+                    # Calcola next run per GME
+                    next_gme_run = current_time + gme_interval
+                    self.loop_stats['next_gme_run'] = next_gme_run
+                    
+                    # Ricalcola tempi dopo l'esecuzione
                     time_until_gme = gme_interval.total_seconds()
+                    time_until_api_web = (last_api_web_run + api_web_interval - datetime.now()).total_seconds()
                 elif not gme_enabled:
                     # Se GME disabilitato, imposta a un valore alto
                     time_until_gme = 999999

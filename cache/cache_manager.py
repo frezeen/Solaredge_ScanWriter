@@ -161,7 +161,7 @@ class CacheManager:
         if not self._validate_cache_age_from_filename(cache_path, source, date):
             return None
         
-        self._log.info(f"✅ CACHE HIT: {self.get_cache_key(source, endpoint, date)} ({date})")
+        self._log.info(f"✅ CACHE HIT [{source}]: {self.get_cache_key(source, endpoint, date)} ({date})")
         return cache_data['data']
 
     def _build_cache_entry(self, source: str, endpoint: str, date: str, data: Dict[str, Any], data_hash: str) -> Dict[str, Any]:
