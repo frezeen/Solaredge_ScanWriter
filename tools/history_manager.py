@@ -2,6 +2,7 @@ import calendar
 from datetime import datetime, timedelta
 from collector.collector_api import CollectorAPI
 from utils.color_logger import color
+from scheduler.scheduler_loop import SchedulerLoop, SchedulerConfig
 
 class HistoryManager:
     """Gestisce il download dello storico completo con suddivisione mensile"""
@@ -26,6 +27,10 @@ class HistoryManager:
         
         # Inizializza collector CON cache per evitare chiamate API duplicate
         self.collector = CollectorAPI(cache=self.cache, scheduler=None)
+        
+        # Inizializza Scheduler persistente per GME (per mantenere il delay tra i mesi)
+        scheduler_config = SchedulerConfig.from_config(self.config)
+        self.gme_scheduler = SchedulerLoop(scheduler_config)
         
         # Inizializza variabili per gestione return
         interrupted = False
@@ -146,7 +151,7 @@ class HistoryManager:
                         from flows.gme_flow import run_gme_month_flow
                         
                         # Esegui flow GME (gestisce internamente cache check)
-                        gme_result = run_gme_month_flow(self.log, self.cache, self.config, year, month)
+                        gme_result = run_gme_month_flow(self.log, self.cache, self.config, year, month, scheduler=self.gme_scheduler)
                         
                         if gme_result == 0:
                             gme_success_count += 1

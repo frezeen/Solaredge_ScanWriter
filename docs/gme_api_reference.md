@@ -170,67 +170,82 @@ Stores calculated monthly average prices.
 - `source`: Always `"GME"`
 - `market`: Always `"MGP"`
 - `year`: Year (e.g., "2024")
-- `month`: Month (e.g., "11")
+- `month`: English month name (e.g., "March", "May", "January")
 
 **Fields:**
 - `pun_kwh_avg`: Average monthly price in €/kWh
 
+> [!NOTE]
+> The `month` tag uses **English month names** (e.g., "March", "May") not numeric values (e.g., "3", "5").
+
 ### Example Flux Queries
+
+> [!IMPORTANT]
+> GME data is stored in the **`GME` bucket**, not the `Solaredge` bucket.
 
 #### 1. Hourly Trend (Last 7 Days)
 Visualizes the hourly price trend in €/kWh.
 
 ```flux
-from(bucket: "Solaredge")
+from(bucket: "GME")
   |> range(start: -7d)
-  |> filter(fn: (r) => r["_measurement"] == "gme_prices")
-  |> filter(fn: (r) => r["_field"] == "pun_kwh")
-  |> filter(fn: (r) => r["source"] == "GME")
+  |> filter(fn: (r) => r._measurement == "gme_prices")
+  |> filter(fn: (r) => r._field == "pun_kwh")
   |> aggregateWindow(every: 1h, fn: mean, createEmpty: false)
-  |> yield(name: "hourly_price")
 ```
 
 #### 2. Monthly Average Trend (Last Year)
 Shows how the average monthly price has evolved over the last year.
 
 ```flux
-from(bucket: "Solaredge")
+from(bucket: "GME")
   |> range(start: -1y)
-  |> filter(fn: (r) => r["_measurement"] == "gme_monthly_avg")
-  |> filter(fn: (r) => r["_field"] == "pun_kwh_avg")
-  |> filter(fn: (r) => r["source"] == "GME")
-  |> yield(name: "monthly_average")
+  |> filter(fn: (r) => r._measurement == "gme_monthly_avg")
+  |> filter(fn: (r) => r._field == "pun_kwh_avg")
 ```
 
-#### 3. Daily Average Calculation from Hourly Data
+#### 3. Specific Month Average (e.g., March 2024)
+Retrieves the pre-calculated monthly average for a specific month.
+
+```flux
+from(bucket: "GME")
+  |> range(start: 0)
+  |> filter(fn: (r) => r._measurement == "gme_monthly_avg")
+  |> filter(fn: (r) => r._field == "pun_kwh_avg")
+  |> filter(fn: (r) => r.month == "March")
+  |> filter(fn: (r) => r.year == "2024")
+```
+
+> [!TIP]
+> Use `range(start: 0)` for monthly averages instead of relative ranges like `-1y`. Monthly average data points have timestamps at the first day of each month, and using `start: 0` ensures all historical data is included.
+
+#### 4. Daily Average Calculation from Hourly Data
 Calculates the daily average price dynamically from hourly data.
 
 ```flux
-from(bucket: "Solaredge")
+from(bucket: "GME")
   |> range(start: -30d)
-  |> filter(fn: (r) => r["_measurement"] == "gme_prices")
-  |> filter(fn: (r) => r["_field"] == "pun_kwh")
-  |> filter(fn: (r) => r["source"] == "GME")
+  |> filter(fn: (r) => r._measurement == "gme_prices")
+  |> filter(fn: (r) => r._field == "pun_kwh")
   |> aggregateWindow(every: 1d, fn: mean, createEmpty: false)
-  |> yield(name: "daily_average")
 ```
 
-#### 4. Energy Cost Calculation (Example)
-Estimates cost by multiplying consumption by GME price (requires `consumption` measurement).
+#### 5. Energy Cost Calculation (Example)
+Estimates cost by multiplying consumption by GME price (requires `consumption` measurement from Solaredge bucket).
 
 ```flux
 // Fetch GME Prices
-prices = from(bucket: "Solaredge")
+prices = from(bucket: "GME")
   |> range(start: -1d)
-  |> filter(fn: (r) => r["_measurement"] == "gme_prices")
-  |> filter(fn: (r) => r["_field"] == "pun_kwh")
+  |> filter(fn: (r) => r._measurement == "gme_prices")
+  |> filter(fn: (r) => r._field == "pun_kwh")
   |> aggregateWindow(every: 1h, fn: mean)
 
 // Fetch Consumption
 consumption = from(bucket: "Solaredge")
   |> range(start: -1d)
-  |> filter(fn: (r) => r["_measurement"] == "consumption")
-  |> filter(fn: (r) => r["_field"] == "value")
+  |> filter(fn: (r) => r._measurement == "consumption")
+  |> filter(fn: (r) => r._field == "value")
   |> aggregateWindow(every: 1h, fn: mean)
 
 // Join and Calculate Cost
