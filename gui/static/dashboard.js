@@ -11,7 +11,18 @@ class SolarDashboard {
             loopStatus: null,
             autoScroll: true
         };
-        this._optimizersCache = null; // Cache for optimizers list
+        this._optimizersCache = null; // Cache for optimizers list (array)
+        this._optimizersSet = null; // Cache for optimizers set (O(1) lookups)
+        
+        // API response cache with TTL
+        this._apiCache = new Map();
+        this._cacheTTL = {
+            'loop-status': 5000,      // 5 seconds for loop status
+            'devices': 30000,          // 30 seconds for device list
+            'endpoints': 30000,        // 30 seconds for endpoint list
+            'modbus': 30000,           // 30 seconds for modbus list
+            'config': 60000            // 60 seconds for config
+        };
         
         // Cleanup tracking per memory leak prevention
         this.intervals = [];
@@ -44,23 +55,15 @@ class SolarDashboard {
         });
         this.eventListeners = [];
         
+        // Clear API cache
+        this.clearCache();
+        
         console.log('Dashboard destroyed, resources cleaned up');
     }
 
     // Unified logging
     async log(level, message, error = null) {
-        try {
-            await fetch('/api/log', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    level,
-                    message,
-                    error: error?.message,
-                    timestamp: new Date().toISOString()
-                })
-            });
-        } catch { }
+        await logToBackend(level, message, error);
     }
 
     // Unified error handler
@@ -99,7 +102,57 @@ class SolarDashboard {
         }
     }
 
+    // Get cached API response or fetch if expired
+    async getCached(cacheKey, fetchFn, ttl = null) {
+        const cached = this._apiCache.get(cacheKey);
+        const now = Date.now();
+        
+        // Return cached data if fresh
+        if (cached && (now - cached.timestamp) < (ttl || this._cacheTTL[cacheKey] || 30000)) {
+            return cached.data;
+        }
+        
+        // Fetch fresh data
+        const data = await fetchFn();
+        
+        // Store in cache with timestamp
+        this._apiCache.set(cacheKey, {
+            data,
+            timestamp: now
+        });
+        
+        return data;
+    }
+
+    // Invalidate specific cache entry
+    invalidateCache(cacheKey) {
+        this._apiCache.delete(cacheKey);
+    }
+
+    // Invalidate all cache entries
+    clearCache() {
+        this._apiCache.clear();
+    }
+
+    // Memoize a pure function (cache computed values)
+    memoize(fn, keyFn = (...args) => JSON.stringify(args)) {
+        const cache = new Map();
+        
+        return function(...args) {
+            const key = keyFn(...args);
+            
+            if (cache.has(key)) {
+                return cache.get(key);
+            }
+            
+            const result = fn.apply(this, args);
+            cache.set(key, result);
+            return result;
+        };
+    }
+
     setupEventListeners() {
+        // Delegated click handler for navigation buttons
         const clickHandler = e => {
             const btn = e.target.closest('[data-section], [data-category]');
             if (!btn) return;
@@ -111,6 +164,44 @@ class SolarDashboard {
         document.addEventListener('click', clickHandler, { signal: this.abortController.signal });
         this.eventListeners.push({ element: document, event: 'click', handler: clickHandler });
 
+        // Delegated change handler for all toggle switches
+        const toggleHandler = e => {
+            const toggle = e.target.closest('.toggle-switch input[type="checkbox"]');
+            if (!toggle) return;
+
+            const toggleSwitch = toggle.closest('.toggle-switch');
+            const { toggleType, deviceId, metricName, endpointId } = toggleSwitch.dataset;
+            const checked = toggle.checked;
+
+            // Route to appropriate handler based on toggle type
+            switch (toggleType) {
+                case 'device':
+                    this.toggleDevice(deviceId, checked);
+                    break;
+                case 'metric':
+                    this.toggleMetric(deviceId, metricName, checked);
+                    break;
+                case 'optimizer-group':
+                    this.toggleGroup(checked);
+                    break;
+                case 'optimizer-metric':
+                    this.toggleGroupMetric(metricName, checked);
+                    break;
+                case 'endpoint':
+                    this.toggleEndpoint(endpointId, checked, e);
+                    break;
+                case 'modbus-device':
+                    this.toggleModbusDevice(deviceId, checked);
+                    break;
+                case 'modbus-metric':
+                    this.toggleModbusMetric(deviceId, metricName, checked);
+                    break;
+            }
+        };
+
+        document.addEventListener('change', toggleHandler, { signal: this.abortController.signal });
+        this.eventListeners.push({ element: document, event: 'change', handler: toggleHandler });
+
         const connectionInterval = setInterval(() => this.updateConnectionStatus(), 30000);
         this.intervals.push(connectionInterval);
     }
@@ -120,14 +211,14 @@ class SolarDashboard {
         const contentSelector = type === 'section' ? '.content-section' : null;
 
         // Update buttons
-        document.querySelectorAll(selector).forEach(btn => {
-            btn.classList.toggle('active', btn.dataset[type] === value);
+        $$(selector).forEach(btn => {
+            toggleClass(btn, 'active', btn.dataset[type] === value);
         });
 
         // Update content sections
         if (contentSelector) {
-            document.querySelectorAll(contentSelector).forEach(sec => {
-                sec.classList.toggle('active', sec.id === `${value}-section`);
+            $$(contentSelector).forEach(sec => {
+                toggleClass(sec, 'active', sec.id === `${value}-section`);
             });
         }
 
@@ -141,16 +232,16 @@ class SolarDashboard {
     async loadData() {
         try {
             const [devices, endpoints, modbus, config] = await Promise.all([
-                this.apiCall('GET', '/api/sources?type=web'),
-                this.apiCall('GET', '/api/sources?type=api'),
-                this.apiCall('GET', '/api/sources?type=modbus'),
-                this.apiCall('GET', '/api/config')
+                this.getCached('devices', () => this.apiCall('GET', '/api/sources?type=web')),
+                this.getCached('endpoints', () => this.apiCall('GET', '/api/sources?type=api')),
+                this.getCached('modbus', () => this.apiCall('GET', '/api/sources?type=modbus')),
+                this.getCached('config', () => this.apiCall('GET', '/api/config'))
             ]);
 
             Object.assign(this.state, { devices, endpoints, modbus, config });
-            this._optimizersCache = null;
+            this._invalidateOptimizerCache();
 
-            const editor = document.getElementById('yamlEditor');
+            const editor = $('#yamlEditor');
             if (editor) {
                 YAMLConfig.loadFile('main');
             }
@@ -170,29 +261,35 @@ class SolarDashboard {
     }
 
     renderDevices() {
-        const container = document.getElementById('devicesGrid');
+        const container = $('#devicesGrid');
         if (!container) return;
 
+        // Use cached optimizer check for O(1) lookups
         const { optimizers, others } = Object.entries(this.state.devices).reduce((acc, [id, data]) => {
-            const key = id.includes('optimizer') || data.device_type === 'OPTIMIZER' || data.device_type === 'Optimizer' ? 'optimizers' : 'others';
+            // Skip invalid entries
+            if (!id || !data) return acc;
+            const key = this.isOptimizer(id) ? 'optimizers' : 'others';
             acc[key][id] = data;
             return acc;
         }, { optimizers: {}, others: {} });
 
-        container.innerHTML = '';
+        // Use DocumentFragment for batch DOM insertions (optimized)
+        const fragment = document.createDocumentFragment();
         let delay = 0;
 
         Object.entries(others).forEach(([id, data]) => {
             const card = this.createDeviceCard(id, data);
-            this.animateCard(card, delay += 100);
-            container.appendChild(card);
+            animateElement(card, 'slide-in', delay += 100);
+            fragment.appendChild(card);
         });
 
         if (Object.keys(optimizers).length) {
             const card = this.createOptimizersCard(optimizers);
-            this.animateCard(card, delay += 100);
-            container.appendChild(card);
+            animateElement(card, 'slide-in', delay += 100);
+            fragment.appendChild(card);
         }
+
+        container.replaceChildren(fragment);
     }
 
     // Helper: Create device header HTML
@@ -204,7 +301,7 @@ class SolarDashboard {
                     <div class="device-type">${type}</div>
                     ${data.device_id ? `<div class="device-id">ID: ${data.device_id}</div>` : ''}
                 </div>
-                ${this.createToggle(data.enabled, `dashboard.toggle('device','${id}',this.checked)`, '', `Abilita device ${data.device_name || id}`)}
+                ${this.createToggle(data.enabled, 'device', { deviceId: id }, '', `Abilita device ${data.device_name || id}`)}
             </div>
         `;
     }
@@ -246,7 +343,7 @@ class SolarDashboard {
                     <div class="device-type">OPTIMIZER GROUP</div>
                     <div class="device-stats"><span class="stat">Attivi: ${enabled}/${total}</span></div>
                 </div>
-                ${this.createToggle(allEnabled, 'dashboard.toggleGroup(this.checked)', '', 'Abilita tutti gli optimizer')}
+                ${this.createToggle(allEnabled, 'optimizer-group', {}, '', 'Abilita tutti gli optimizer')}
             </div>
             <div class="device-metrics">
                 <h4>📊 Metriche Comuni (${metrics.length})</h4>
@@ -254,10 +351,10 @@ class SolarDashboard {
                     ${metrics.map(m => `
                         <div class="metric-item">
                             <div class="metric-info">
-                                <span class="metric-name">${m.name.replace(/_/g, ' ')}</span>
+                                <span class="metric-name">${this.formatMetricName(m.name)}</span>
                                 <span class="metric-count">${m.count}/${total} optimizer</span>
                             </div>
-                            ${this.createToggle(m.enabled, `dashboard.toggleGroupMetric('${m.name}',this.checked)`, 'metric-toggle')}
+                            ${this.createToggle(m.enabled, 'optimizer-metric', { metricName: m.name }, 'metric-toggle')}
                         </div>
                     `).join('')}
                 </div>
@@ -275,9 +372,9 @@ class SolarDashboard {
                     ${metrics.map(([name, data]) => `
                         <div class="metric-item" data-metric="${name}">
                             <div class="metric-info">
-                                <span class="metric-name">${name.replace(/_/g, ' ')}</span>
+                                <span class="metric-name">${this.formatMetricName(name)}</span>
                             </div>
-                            ${this.createToggle(data.enabled, `dashboard.toggle('metric','${deviceId}','${name}',this.checked)`, 'metric-toggle', `Abilita metrica ${name}`)}
+                            ${this.createToggle(data.enabled, 'metric', { deviceId, metricName: name }, 'metric-toggle', `Abilita metrica ${name}`)}
                         </div>
                     `).join('')}
                 </div>
@@ -285,17 +382,19 @@ class SolarDashboard {
         `;
     }
 
-    createToggle(checked, onChange, extraClass = '', ariaLabel = 'Toggle') {
+    createToggle(checked, toggleType, dataAttrs = {}, extraClass = '', ariaLabel = 'Toggle') {
+        const dataAttrStr = this.generateDataAttrs(dataAttrs);
+        
         return `
-            <label class="toggle-switch ${extraClass}" role="switch" aria-checked="${checked}" aria-label="${ariaLabel}">
-                <input type="checkbox" ${checked ? 'checked' : ''} onchange="${onChange}" aria-hidden="true">
+            <label class="toggle-switch ${extraClass}" role="switch" aria-checked="${checked}" aria-label="${ariaLabel}" data-toggle-type="${toggleType}" ${dataAttrStr}>
+                <input type="checkbox" ${checked ? 'checked' : ''} aria-hidden="true">
                 <span class="toggle-slider" aria-hidden="true"></span>
             </label>
         `;
     }
 
     renderEndpoints() {
-        const container = document.getElementById('endpointsGrid');
+        const container = $('#endpointsGrid');
         if (!container) return;
 
         const filtered = Object.entries(this.state.endpoints).filter(([_, data]) => {
@@ -303,28 +402,24 @@ class SolarDashboard {
             return data.category === this.state.category;
         });
 
-        container.innerHTML = '';
+        // Use DocumentFragment for batch DOM insertions (optimized)
+        const fragment = document.createDocumentFragment();
+        
         filtered.forEach(([id, data], i) => {
             const card = this.createEndpointCard(id, data);
-            this.animateCard(card, i * 80);
-            container.appendChild(card);
+            animateElement(card, 'slide-in', i * 80);
+            fragment.appendChild(card);
         });
+
+        container.replaceChildren(fragment);
     }
 
     createEndpointCard(id, data) {
         const card = document.createElement('div');
         card.className = 'endpoint-card';
 
-        // Lookup table for category icons
-        const CATEGORY_ICONS = {
-            'Info': 'ℹ️',
-            'Inverter': '⚡',
-            'Meter': '📊',
-            'Flusso': '🔄'
-        };
-        
         const category = data.category || 'Info';
-        const icon = CATEGORY_ICONS[category] || '❓';
+        const icon = this.getCategoryIcon(category);
 
         card.innerHTML = `
             <div class="endpoint-header">
@@ -333,7 +428,7 @@ class SolarDashboard {
                     <span class="format-icon">${icon}</span>
                     <span class="format-label">${category}</span>
                 </div>
-                ${this.createToggle(data.enabled, `dashboard.toggleEndpoint('${id}',this.checked,event)`)}
+                ${this.createToggle(data.enabled, 'endpoint', { endpointId: id })}
             </div>
             <div class="endpoint-description">${data.description || 'Nessuna descrizione disponibile'}</div>
             <div class="endpoint-meta">
@@ -348,7 +443,7 @@ class SolarDashboard {
     }
 
     renderModbus() {
-        const container = document.getElementById('modbusGrid');
+        const container = $('#modbusGrid');
         if (!container) return;
 
         const filtered = Object.entries(this.state.modbus).filter(([_, data]) => {
@@ -356,12 +451,16 @@ class SolarDashboard {
             return data.category === this.state.category;
         });
 
-        container.innerHTML = '';
+        // Use DocumentFragment for batch DOM insertions (optimized)
+        const fragment = document.createDocumentFragment();
+        
         filtered.forEach(([id, data], i) => {
             const card = this.createModbusCard(id, data);
-            this.animateCard(card, i * 80);
-            container.appendChild(card);
+            animateElement(card, 'slide-in', i * 80);
+            fragment.appendChild(card);
         });
+
+        container.replaceChildren(fragment);
     }
 
     createModbusCard(id, data) {
@@ -369,17 +468,10 @@ class SolarDashboard {
         card.className = 'device-card modbus-card';
         card.dataset.deviceId = id;
 
-        // Lookup table for modbus category icons
-        const MODBUS_CATEGORY_ICONS = {
-            'Inverter': '🔋',
-            'Meter': '⚡',
-            'Battery': '🔋'
-        };
-        
         const category = data.category || 'Modbus';
         const deviceType = data.device_type || 'Unknown';
         const metrics = Object.entries(data.measurements || {});
-        const categoryIcon = MODBUS_CATEGORY_ICONS[category] || '⚡';
+        const categoryIcon = this.getModbusCategoryIcon(category);
 
         card.innerHTML = `
             <div class="device-header">
@@ -388,7 +480,7 @@ class SolarDashboard {
                     <div class="device-type">${deviceType} - ${category}</div>
                     ${data.device_id ? `<div class="device-id">Unit: ${data.device_id}</div>` : ''}
                 </div>
-                ${this.createToggle(data.enabled, `dashboard.toggleModbus('device','${id}',this.checked)`)}
+                ${this.createToggle(data.enabled, 'modbus-device', { deviceId: id })}
             </div>
             ${metrics.length ? this.createModbusMetricsSection(id, metrics) : ''}
         `;
@@ -404,11 +496,11 @@ class SolarDashboard {
                     ${metrics.map(([name, data]) => `
                         <div class="metric-item" data-metric="${name}">
                             <div class="metric-info">
-                                <span class="metric-name">${name.replace(/_/g, ' ')}</span>
+                                <span class="metric-name">${this.formatMetricName(name)}</span>
                                 <span class="metric-description">${data.description || ''}</span>
                                 ${data.unit ? `<span class="metric-unit">${data.unit}</span>` : ''}
                             </div>
-                            ${this.createToggle(data.enabled, `dashboard.toggleModbus('metric','${deviceId}','${name}',this.checked)`, 'metric-toggle')}
+                            ${this.createToggle(data.enabled, 'modbus-metric', { deviceId, metricName: name }, 'metric-toggle')}
                         </div>
                     `).join('')}
                 </div>
@@ -416,23 +508,7 @@ class SolarDashboard {
         `;
     }
 
-    // Unified toggle handler
-    async toggle(type, ...args) {
-        const handlers = {
-            device: () => this.toggleDevice(...args),
-            metric: () => this.toggleMetric(...args)
-        };
-        await handlers[type]?.();
-    }
 
-    // Modbus toggle handler
-    async toggleModbus(type, ...args) {
-        const handlers = {
-            device: () => this.toggleModbusDevice(...args),
-            metric: () => this.toggleModbusMetric(...args)
-        };
-        await handlers[type]?.();
-    }
 
     async toggleDevice(id, enabled) {
         if (!this.validateId(id, 'device')) return;
@@ -440,6 +516,7 @@ class SolarDashboard {
             const data = await this.apiCall('POST', `/api/devices/toggle?id=${id}`);
             Object.assign(this.state.devices[id], data);
             this.updateDeviceUI(id, data);
+            this.invalidateCache('devices'); // Invalidate cache after modification
             this.notify(`Device ${id} ${enabled ? 'abilitato' : 'disabilitato'}`, 'success');
         } catch (error) {
             if (error.name !== 'AbortError') {
@@ -468,6 +545,7 @@ class SolarDashboard {
             });
 
             this.updateGroupUI();
+            this.invalidateCache('devices'); // Invalidate cache after modification
 
             let message = `Metrica ${metric.replace(/_/g, ' ')} ${enabled ? 'abilitata' : 'disabilitata'}`;
             if (data.device_changed) {
@@ -495,6 +573,7 @@ class SolarDashboard {
             }
         }));
         this.updateGroupUI();
+        this.invalidateCache('devices'); // Invalidate cache after modification
         this.notify(`Gruppo optimizers ${enabled ? 'abilitato' : 'disabilitato'}`, 'success');
     }
 
@@ -527,6 +606,7 @@ class SolarDashboard {
             }
         }));
         this.updateGroupUI();
+        this.invalidateCache('devices'); // Invalidate cache after modification
 
         const optimizerCount = optimizers.length;
         this.notify(`Metrica ${metric.replace(/_/g, ' ')} ${enabled ? 'abilitata' : 'disabilitata'} su ${optimizerCount} optimizer`, 'success');
@@ -543,6 +623,7 @@ class SolarDashboard {
             status.textContent = enabled ? 'Abilitato' : 'Disabilitato';
             status.className = `endpoint-status ${enabled ? 'enabled' : 'disabled'}`;
 
+            this.invalidateCache('endpoints'); // Invalidate cache after modification
             this.notify(`Endpoint ${id} ${enabled ? 'abilitato' : 'disabilitato'}`, 'success');
         } catch (error) {
             if (error.name !== 'AbortError') {
@@ -557,6 +638,7 @@ class SolarDashboard {
             const data = await this.apiCall('POST', `/api/modbus/devices/toggle?id=${id}`);
             Object.assign(this.state.modbus[id], data);
             this.updateModbusDeviceUI(id, data);
+            this.invalidateCache('modbus'); // Invalidate cache after modification
             this.notify(`Device Modbus ${id} ${enabled ? 'abilitato' : 'disabilitato'}`, 'success');
         } catch (error) {
             if (error.name !== 'AbortError') {
@@ -580,6 +662,8 @@ class SolarDashboard {
                 enabled: data.device_enabled,
                 measurements: { [metric]: { enabled: data.enabled } }
             });
+
+            this.invalidateCache('modbus'); // Invalidate cache after modification
 
             let message = `Metrica Modbus ${metric.replace(/_/g, ' ')} ${data.enabled ? 'abilitata' : 'disabilitata'}`;
             if (data.device_changed) {
@@ -610,6 +694,13 @@ class SolarDashboard {
         return true;
     }
 
+    // Invalidate optimizer cache when devices change
+    _invalidateOptimizerCache() {
+        this._optimizersCache = null;
+        this._optimizersSet = null;
+    }
+
+    // Get optimizers list (cached for performance)
     getOptimizers() {
         if (this._optimizersCache === null) {
             this._optimizersCache = Object.keys(this.state.devices).filter(id =>
@@ -617,11 +708,26 @@ class SolarDashboard {
                 this.state.devices[id].device_type === 'OPTIMIZER' ||
                 this.state.devices[id].device_type === 'Optimizer'
             );
+            // Also build Set for O(1) lookups
+            this._optimizersSet = new Set(this._optimizersCache);
         }
         return this._optimizersCache;
     }
 
-    inferDeviceType(id) {
+    // Check if device is optimizer (O(1) lookup using Set)
+    isOptimizer(id) {
+        // Safety check for undefined/null IDs
+        if (!id || typeof id !== 'string') {
+            return false;
+        }
+        if (this._optimizersSet === null) {
+            this.getOptimizers(); // Build cache if needed
+        }
+        return this._optimizersSet.has(id);
+    }
+
+    // Memoized device type inference (pure function)
+    inferDeviceType = this.memoize((id) => {
         // Lookup table for device type inference
         const typePatterns = {
             'inverter': 'INVERTER',
@@ -633,37 +739,99 @@ class SolarDashboard {
         // Find first matching pattern
         const matchedType = Object.entries(typePatterns).find(([pattern]) => id.includes(pattern));
         return matchedType ? matchedType[1] : 'DEVICE';
-    }
+    });
 
-    animateCard(card, delay) {
-        Object.assign(card.style, { animationDelay: `${delay}ms` });
-        card.classList.add('slide-in');
-    }
+    // Memoized category icon lookup (pure function)
+    getCategoryIcon = this.memoize((category) => {
+        const CATEGORY_ICONS = {
+            'Info': 'ℹ️',
+            'Inverter': '⚡',
+            'Meter': '📊',
+            'Flusso': '🔄'
+        };
+        return CATEGORY_ICONS[category] || '❓';
+    });
+
+    // Memoized modbus category icon lookup (pure function)
+    getModbusCategoryIcon = this.memoize((category) => {
+        const MODBUS_CATEGORY_ICONS = {
+            'Inverter': '🔋',
+            'Meter': '⚡',
+            'Battery': '🔋'
+        };
+        return MODBUS_CATEGORY_ICONS[category] || '⚡';
+    });
+
+    // Memoized flow icon lookup (pure function)
+    getFlowIcon = this.memoize((flowType) => {
+        const FLOW_ICONS = {
+            'api': '🌐',
+            'web': '🔌',
+            'realtime': '⚡',
+            'gme': '💰',
+            'general': 'ℹ️'
+        };
+        return FLOW_ICONS[flowType] || 'ℹ️';
+    });
+
+    // Memoized filter name lookup (pure function)
+    getFilterName = this.memoize((flow) => {
+        const FILTER_NAMES = {
+            'all': 'Tutti',
+            'api': 'API',
+            'web': 'Web',
+            'realtime': 'Realtime',
+            'gme': 'GME',
+            'general': 'Sistema'
+        };
+        return FILTER_NAMES[flow] || flow;
+    });
+
+    // Memoized metric name formatting (pure function)
+    formatMetricName = this.memoize((name) => {
+        return name.replace(/_/g, ' ');
+    });
+
+    // Memoized data attribute string generation (pure function)
+    generateDataAttrs = this.memoize((dataAttrs) => {
+        const toKebabCase = str => str.replace(/([A-Z])/g, '-$1').toLowerCase();
+        return Object.entries(dataAttrs)
+            .map(([key, value]) => `data-${toKebabCase(key)}="${value}"`)
+            .join(' ');
+    }, (dataAttrs) => JSON.stringify(dataAttrs));
+
+    // Memoized stats formatting (pure function)
+    formatStats = this.memoize((stat) => {
+        if (!stat) return '0/0/0';
+        return `${stat.executed || 0}/${stat.success || 0}/${stat.failed || 0}`;
+    }, (stat) => JSON.stringify(stat));
+
+    // Removed - now using animateElement from dom-utils.js
 
     updateDeviceUI(id, data) {
-        const card = document.querySelector(`[data-device-id="${id}"]`);
+        const card = $(`[data-device-id="${id}"]`);
         if (!card) return;
 
         // Update device toggle
-        const deviceToggle = card.querySelector('.device-header input');
+        const deviceToggle = $('.device-header input', card);
         if (deviceToggle) deviceToggle.checked = data.enabled;
 
         // Update metric toggles
         if (data.measurements) {
             Object.entries(data.measurements).forEach(([metric, metricData]) => {
-                const metricToggle = card.querySelector(`[data-metric="${metric}"] input`);
+                const metricToggle = $(`[data-metric="${metric}"] input`, card);
                 if (metricToggle) metricToggle.checked = metricData.enabled;
             });
         }
         
-        const isOptimizer = id.includes('optimizer') || 
-                           data.device_type === 'OPTIMIZER' || 
-                           data.device_type === 'Optimizer';
-        if (isOptimizer) this._optimizersCache = null;
+        // Invalidate cache if this is an optimizer
+        if (this.isOptimizer(id)) {
+            this._invalidateOptimizerCache();
+        }
     }
 
     updateGroupUI() {
-        const card = document.querySelector('[data-device-id="optimizers-group"]');
+        const card = $('[data-device-id="optimizers-group"]');
         if (!card) return;
 
         const optimizers = this.getOptimizers();
@@ -672,38 +840,38 @@ class SolarDashboard {
         const total = opts.length;
         const allEnabled = opts.every(o => o.enabled);
 
-        const mainToggle = card.querySelector('.device-header input');
+        const mainToggle = $('.device-header input', card);
         if (mainToggle) mainToggle.checked = allEnabled;
 
-        const stats = card.querySelector('.device-stats .stat');
-        if (stats) stats.textContent = `Attivi: ${enabled}/${total}`;
+        const stats = $('.device-stats .stat', card);
+        if (stats) setTextContent(stats, `Attivi: ${enabled}/${total}`);
 
         const metrics = opts.length > 0 ? Object.keys(opts[0].measurements || {}) : [];
 
-        card.querySelectorAll('.metric-item').forEach((item, index) => {
+        $$('.metric-item', card).forEach((item, index) => {
             if (index >= metrics.length) return;
 
             const metric = metrics[index];
             const count = opts.filter(o => o.measurements?.[metric]?.enabled).length;
 
-            const input = item.querySelector('input');
+            const input = $('input', item);
             if (input) input.checked = count > 0;
 
-            const counter = item.querySelector('.metric-count');
-            if (counter) counter.textContent = `${count}/${total} optimizer`;
+            const counter = $('.metric-count', item);
+            if (counter) setTextContent(counter, `${count}/${total} optimizer`);
         });
     }
 
     updateModbusDeviceUI(id, data) {
-        const card = document.querySelector(`[data-device-id="${id}"]`);
+        const card = $(`[data-device-id="${id}"]`);
         if (!card) return;
 
-        const deviceToggle = card.querySelector('.device-header input');
+        const deviceToggle = $('.device-header input', card);
         if (deviceToggle) deviceToggle.checked = data.enabled;
 
         if (data.measurements) {
             Object.entries(data.measurements).forEach(([metric, metricData]) => {
-                const metricToggle = card.querySelector(`[data-metric="${metric}"] input`);
+                const metricToggle = $(`[data-metric="${metric}"] input`, card);
                 if (metricToggle) metricToggle.checked = metricData.enabled;
             });
         }
@@ -712,56 +880,29 @@ class SolarDashboard {
     async updateConnectionStatus() {
         try {
             await this.apiCall('GET', '/api/ping');
-            const el = document.getElementById('connectionStatus');
-            el.textContent = 'Online';
-            el.className = 'stat-value online';
+            const el = $('#connectionStatus');
+            updateElement(el, {
+                text: 'Online',
+                class: 'stat-value online'
+            });
             this.state.connectionStatus = 'online';
         } catch (error) {
             // Only log connection errors if we were previously online to avoid spam
             if (this.state.connectionStatus !== 'offline' && error.name !== 'AbortError') {
                 console.error('Connection lost:', error);
             }
-            const el = document.getElementById('connectionStatus');
-            el.textContent = 'Offline';
-            el.className = 'stat-value offline';
+            const el = $('#connectionStatus');
+            updateElement(el, {
+                text: 'Offline',
+                class: 'stat-value offline'
+            });
             this.state.connectionStatus = 'offline';
         }
     }
 
     notify(message, type = 'info') {
-        // Lookup table for notification colors
-        const NOTIFICATION_COLORS = {
-            'success': 'var(--accent-green)',
-            'error': 'var(--accent-red)',
-            'info': 'var(--accent-blue)'
-        };
-        
-        // Lookup table for notification durations
-        const NOTIFICATION_DURATIONS = {
-            'error': 8000,
-            'success': 3000,
-            'info': 3000
-        };
-
-        const el = document.createElement('div');
-        Object.assign(el.style, {
-            position: 'fixed', top: '20px', right: '20px',
-            background: NOTIFICATION_COLORS[type] || NOTIFICATION_COLORS.info,
-            color: 'white',
-            padding: '1rem 1.5rem', borderRadius: '8px',
-            boxShadow: 'var(--shadow-lg)', zIndex: '1000',
-            fontWeight: '500', transform: 'translateX(100%)',
-            transition: 'transform 0.3s ease', maxWidth: '400px'
-        });
-
-        el.textContent = message;
-        document.body.appendChild(el);
-
-        setTimeout(() => el.style.transform = 'translateX(0)', 100);
-        setTimeout(() => {
-            el.style.transform = 'translateX(100%)';
-            setTimeout(() => el.remove(), 300);
-        }, NOTIFICATION_DURATIONS[type] || NOTIFICATION_DURATIONS.info);
+        // Delegate to global notify function from notification-utils.js
+        notify(message, type);
     }
 
     startLoopMonitoring() {
@@ -794,7 +935,7 @@ class SolarDashboard {
 
     async updateLoopStatus() {
         try {
-            const data = await this.apiCall('GET', '/api/loop/status');
+            const data = await this.getCached('loop-status', () => this.apiCall('GET', '/api/loop/status'));
             const previousLoopMode = this.state.loopStatus?.loop_mode;
 
             this.state.loopStatus = data;
@@ -823,17 +964,12 @@ class SolarDashboard {
         }
 
         if (loop_mode && stats) {
-            const formatStats = (stat) => {
-                if (!stat) return '0/0/0';
-                return `${stat.executed || 0}/${stat.success || 0}/${stat.failed || 0}`;
-            };
-
             const elements = {
                 'loopUptime': stats.uptime_formatted || '--',
-                'apiRuns': formatStats(stats.api_stats),
-                'webRuns': formatStats(stats.web_stats),
-                'realtimeRuns': formatStats(stats.realtime_stats),
-                'gmeRuns': formatStats(stats.gme_stats),
+                'apiRuns': this.formatStats(stats.api_stats),
+                'webRuns': this.formatStats(stats.web_stats),
+                'realtimeRuns': this.formatStats(stats.realtime_stats),
+                'gmeRuns': this.formatStats(stats.gme_stats),
                 'lastUpdate': stats.last_update_formatted || '--'
             };
 
@@ -909,24 +1045,13 @@ const YAMLConfig = {
 
             if (this.currentFile !== 'env') jsyaml.load(content);
 
-            const response = await fetch('/api/config/yaml', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    file: this.currentFile,
-                    content: content
-                })
+            const result = await apiPost('/api/config/yaml', {
+                file: this.currentFile,
+                content: content
             });
 
-            const result = await response.json();
-
-            if (response.ok) {
-                this.setStatus(`✅ ${result.message}`, 'success');
-                dashboard.notify(`File ${this.currentFile} salvato`, 'success');
-            } else {
-                this.setStatus(`❌ ${result.error}`, 'error');
-                dashboard.notify('Errore nel salvataggio', 'error');
-            }
+            this.setStatus(`✅ ${result.message}`, 'success');
+            dashboard.notify(`File ${this.currentFile} salvato`, 'success');
         } catch (error) {
             this.setStatus(`❌ Errore salvataggio: ${error.message}`, 'error');
             dashboard.notify('Errore nel salvataggio', 'error');
@@ -935,17 +1060,12 @@ const YAMLConfig = {
 
     async loadFile(fileType) {
         try {
-            const response = await fetch(`/api/config/yaml?file=${fileType}`);
-            const result = await response.json();
-
-            if (response.ok) {
-                const editor = document.getElementById('yamlEditor');
-                editor.value = result.content;
-                this.currentFile = fileType;
-                this.setStatus(`📄 Caricato: ${result.path}`, 'info');
-            } else {
-                this.setStatus(`❌ ${result.error}`, 'error');
-            }
+            const result = await apiGet(`/api/config/yaml?file=${fileType}`);
+            
+            const editor = document.getElementById('yamlEditor');
+            editor.value = result.content;
+            this.currentFile = fileType;
+            this.setStatus(`📄 Caricato: ${result.path}`, 'info');
         } catch (error) {
             this.setStatus(`❌ Errore caricamento: ${error.message}`, 'error');
         }
@@ -970,18 +1090,12 @@ const loadSelectedYaml = () => {
 // Loop control functions
 const startLoop = async () => {
     try {
-        const response = await fetch('/api/loop/start', { method: 'POST' });
-        const result = await response.json();
-
-        if (response.ok) {
-            dashboard.notify('Loop avviato con successo', 'success');
-            updateLoopButtons(true);
-            // Non aggiorniamo più i log automaticamente
-        } else {
-            dashboard.notify(`Errore avvio loop: ${result.error}`, 'error');
-        }
+        await apiPost('/api/loop/start');
+        dashboard.notify('Loop avviato con successo', 'success');
+        updateLoopButtons(true);
+        // Non aggiorniamo più i log automaticamente
     } catch (error) {
-        dashboard.notify(`Errore di connessione: ${error.message}`, 'error');
+        dashboard.notify(`Errore avvio loop: ${error.message}`, 'error');
     }
 };
 
@@ -991,18 +1105,12 @@ const stopLoop = async () => {
     }
 
     try {
-        const response = await fetch('/api/loop/stop', { method: 'POST' });
-        const result = await response.json();
-
-        if (response.ok) {
-            dashboard.notify('Loop fermato con successo', 'success');
-            updateLoopButtons(false);
-            // Non aggiorniamo più i log automaticamente
-        } else {
-            dashboard.notify(`Errore stop loop: ${result.error}`, 'error');
-        }
+        await apiPost('/api/loop/stop');
+        dashboard.notify('Loop fermato con successo', 'success');
+        updateLoopButtons(false);
+        // Non aggiorniamo più i log automaticamente
     } catch (error) {
-        dashboard.notify(`Errore di connessione: ${error.message}`, 'error');
+        dashboard.notify(`Errore stop loop: ${error.message}`, 'error');
     }
 };
 
@@ -1029,16 +1137,31 @@ const FILTER_NAMES = {
     'general': 'Sistema'
 };
 
+// Log cache and index for faster filtering (O(1) lookups)
+let logCache = {
+    logs: [],           // All logs
+    byFlow: new Map(),  // Index by flow type for O(1) filtering
+    lastUpdate: 0       // Timestamp of last update
+};
+
 function switchLogTab(flow) {
     currentLogFlow = flow;
 
-    document.querySelectorAll('.log-tab').forEach(tab => {
-        tab.classList.toggle('active', tab.dataset.flow === flow);
+    $$('.log-tab').forEach(tab => {
+        toggleClass(tab, 'active', tab.dataset.flow === flow);
     });
 
-    document.getElementById('logsFilter').textContent = `Filtro: ${FILTER_NAMES[flow] || flow}`;
+    const filterName = dashboard ? dashboard.getFilterName(flow) : (FILTER_NAMES[flow] || flow);
+    setTextContent($('#logsFilter'), `Filtro: ${filterName}`);
 
-    loadFilteredLogs();
+    // Use cached data if available and fresh (O(1) filtering)
+    if (isCacheFresh() && logCache.logs.length > 0) {
+        const filteredLogs = getFilteredLogsFromCache(flow);
+        renderFilteredLogs(filteredLogs, filteredLogs.length, null);
+    } else {
+        // Otherwise fetch from server
+        loadFilteredLogs();
+    }
 
     if (!logUpdateInterval) {
         logUpdateInterval = setInterval(loadFilteredLogs, 3000);
@@ -1048,11 +1171,49 @@ function switchLogTab(flow) {
     }
 }
 
+// Build index for logs by flow type (O(n) build, O(1) lookups)
+function indexLogs(logs) {
+    const byFlow = new Map();
+    
+    // Initialize all flow types
+    Object.keys(FILTER_NAMES).forEach(flow => {
+        if (flow !== 'all') byFlow.set(flow, []);
+    });
+    
+    // Index logs by flow type
+    logs.forEach(log => {
+        const flowType = log.flow_type || 'general';
+        if (!byFlow.has(flowType)) {
+            byFlow.set(flowType, []);
+        }
+        byFlow.get(flowType).push(log);
+    });
+    
+    return byFlow;
+}
+
+// Get filtered logs from cache (O(1) lookup using index)
+function getFilteredLogsFromCache(flow) {
+    if (flow === 'all') {
+        return logCache.logs;
+    }
+    return logCache.byFlow.get(flow) || [];
+}
+
+// Check if cache is fresh (less than 3 seconds old)
+function isCacheFresh() {
+    return (Date.now() - logCache.lastUpdate) < 3000;
+}
+
 async function loadFilteredLogs() {
     try {
-        const response = await fetch(`/api/loop/logs?flow=${currentLogFlow}&limit=500`);
-        const data = await response.json();
-
+        const data = await apiGet(`/api/loop/logs?flow=${currentLogFlow}&limit=500`);
+        
+        // Update cache with indexed logs for faster future filtering
+        logCache.logs = data.logs;
+        logCache.byFlow = indexLogs(data.logs);
+        logCache.lastUpdate = Date.now();
+        
         renderFilteredLogs(data.logs, data.total, data.run_counts);
     } catch (error) {
         console.error('Error loading filtered logs:', error);
@@ -1079,7 +1240,7 @@ const FLOW_ICONS = {
     'general': 'ℹ️'
 };
 
-// Helper: Create log entry element
+// Helper: Create log entry element (optimized with createTextNode for safety)
 function createLogEntry(log) {
     const flowType = log.flow_type || 'general';
     const entry = document.createElement('div');
@@ -1087,20 +1248,21 @@ function createLogEntry(log) {
     
     const timestamp = document.createElement('span');
     timestamp.className = 'log-timestamp';
-    timestamp.textContent = log.timestamp;
+    timestamp.appendChild(document.createTextNode(log.timestamp));
     
     const level = document.createElement('span');
     level.className = `log-level ${log.level.toLowerCase()}`;
-    level.textContent = log.level;
+    level.appendChild(document.createTextNode(log.level));
     
     const flow = document.createElement('span');
     flow.className = 'log-flow';
     flow.dataset.flow = flowType;
-    flow.textContent = `${FLOW_ICONS[flowType] || 'ℹ️'} ${flowType.toUpperCase()}`;
+    const flowIcon = dashboard ? dashboard.getFlowIcon(flowType) : (FLOW_ICONS[flowType] || 'ℹ️');
+    flow.appendChild(document.createTextNode(`${flowIcon} ${flowType.toUpperCase()}`));
     
     const message = document.createElement('span');
     message.className = 'log-message';
-    message.textContent = log.message;
+    message.appendChild(document.createTextNode(log.message));
     
     entry.appendChild(timestamp);
     entry.appendChild(level);
@@ -1119,16 +1281,17 @@ function updateLogCount(total, runCounts) {
             countText += ` (ultime ${totalRuns} run)`;
         }
     }
-    document.getElementById('logsCount').textContent = countText;
+    setTextContent($('#logsCount'), countText);
 }
 
 function renderFilteredLogs(logs, total, runCounts) {
-    const container = document.getElementById('logsContent');
+    const container = $('#logsContent');
     if (!container || !logs) return;
 
     const shouldScroll = autoScrollEnabled ||
         (container.scrollTop + container.clientHeight >= container.scrollHeight - 10);
 
+    // Use DocumentFragment for batch rendering (optimized)
     const fragment = document.createDocumentFragment();
     
     if (logs.length === 0) {
@@ -1137,6 +1300,7 @@ function renderFilteredLogs(logs, total, runCounts) {
         logs.forEach(log => fragment.appendChild(createLogEntry(log)));
     }
     
+    // Replace all children at once with the fragment
     container.replaceChildren(fragment);
     updateLogCount(total, runCounts);
 
@@ -1149,21 +1313,16 @@ async function clearLogs() {
     }
 
     try {
-        const response = await fetch('/api/loop/logs/clear', { method: 'POST' });
-        const result = await response.json();
-
-        if (response.ok) {
-            const container = document.getElementById('logsContent');
-            if (container) {
-                container.innerHTML = '<div class="log-entry info"><span class="log-message">Log puliti - in attesa di nuovi log...</span></div>';
-            }
-            document.getElementById('logsCount').textContent = '0 log visualizzati';
-            dashboard.notify('Log puliti con successo', 'success');
-        } else {
-            dashboard.notify(`Errore pulizia log: ${result.error}`, 'error');
+        await apiPost('/api/loop/logs/clear');
+        
+        const container = $('#logsContent');
+        if (container) {
+            setInnerHTML(container, '<div class="log-entry info"><span class="log-message">Log puliti - in attesa di nuovi log...</span></div>');
         }
+        setTextContent($('#logsCount'), '0 log visualizzati');
+        dashboard.notify('Log puliti con successo', 'success');
     } catch (error) {
-        dashboard.notify(`Errore di connessione: ${error.message}`, 'error');
+        dashboard.notify(`Errore pulizia log: ${error.message}`, 'error');
     }
 }
 

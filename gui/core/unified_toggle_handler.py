@@ -112,20 +112,25 @@ class UnifiedToggleHandler:
             entities = config[source_key][entity_container]
             
             # Step 3-4: Toggle state (with cascade if needed)
+            # Build toggle context dictionary to reduce parameter count
+            toggle_context = {
+                'entities': entities,
+                'entity_id': entity_id,
+                'source_name': source_name,
+                'source_key': source_key,
+                'config': config,
+                'config_path': config_path
+            }
+            
             if entity_type in ('web_device', 'modbus_device'):
-                success, response_data = self._toggle_device(
-                    entities, entity_id, source_name, source_key, config, config_path
-                )
+                success, response_data = self._toggle_device(toggle_context)
             elif entity_type in ('web_metric', 'modbus_metric'):
                 if not metric:
                     return False, {'error': 'Missing metric name'}
-                success, response_data = self._toggle_metric(
-                    entities, entity_id, metric, source_name, source_key, config, config_path
-                )
+                toggle_context['metric'] = metric
+                success, response_data = self._toggle_metric(toggle_context)
             elif entity_type == 'api_endpoint':
-                success, response_data = self._toggle_endpoint(
-                    entities, entity_id, source_name, source_key, config, config_path
-                )
+                success, response_data = self._toggle_endpoint(toggle_context)
             else:
                 return False, {'error': f'Unsupported entity type: {entity_type}'}
             
@@ -143,9 +148,25 @@ class UnifiedToggleHandler:
             self.logger.error(f"Error in _toggle_entity({entity_type}, {entity_id}, {metric}): {e}")
             return False, {'error': f'Internal server error: {str(e)}'}
     
-    def _toggle_device(self, entities: Dict, entity_id: str, source_name: str, 
-                      source_key: str, config: Dict, config_path: Path) -> Tuple[bool, Dict]:
-        """Toggle device with cascade to all metrics."""
+    def _toggle_device(self, toggle_context: Dict) -> Tuple[bool, Dict]:
+        """Toggle device with cascade to all metrics.
+        
+        Args:
+            toggle_context: Dictionary containing:
+                - entities: Dict of entities
+                - entity_id: ID of entity to toggle
+                - source_name: Display name of source
+                - source_key: Config key for source
+                - config: Full configuration dict
+                - config_path: Path to config file
+        """
+        entities = toggle_context['entities']
+        entity_id = toggle_context['entity_id']
+        source_name = toggle_context['source_name']
+        source_key = toggle_context['source_key']
+        config = toggle_context['config']
+        config_path = toggle_context['config_path']
+        
         if entity_id not in entities:
             return False, {'error': f'Device not found: {entity_id}'}
         
@@ -187,9 +208,27 @@ class UnifiedToggleHandler:
         
         return True, response_data
     
-    def _toggle_metric(self, entities: Dict, entity_id: str, metric: str, source_name: str,
-                      source_key: str, config: Dict, config_path: Path) -> Tuple[bool, Dict]:
-        """Toggle metric with smart device auto-toggle using guard clauses."""
+    def _toggle_metric(self, toggle_context: Dict) -> Tuple[bool, Dict]:
+        """Toggle metric with smart device auto-toggle using guard clauses.
+        
+        Args:
+            toggle_context: Dictionary containing:
+                - entities: Dict of entities
+                - entity_id: ID of entity to toggle
+                - metric: Name of metric to toggle
+                - source_name: Display name of source
+                - source_key: Config key for source
+                - config: Full configuration dict
+                - config_path: Path to config file
+        """
+        entities = toggle_context['entities']
+        entity_id = toggle_context['entity_id']
+        metric = toggle_context['metric']
+        source_name = toggle_context['source_name']
+        source_key = toggle_context['source_key']
+        config = toggle_context['config']
+        config_path = toggle_context['config_path']
+        
         # Guard clause: Check device exists
         if entity_id not in entities:
             return False, {'error': f'Device not found: {entity_id}'}
@@ -255,9 +294,25 @@ class UnifiedToggleHandler:
         
         return True, response_data
     
-    def _toggle_endpoint(self, entities: Dict, entity_id: str, source_name: str,
-                        source_key: str, config: Dict, config_path: Path) -> Tuple[bool, Dict]:
-        """Toggle API endpoint."""
+    def _toggle_endpoint(self, toggle_context: Dict) -> Tuple[bool, Dict]:
+        """Toggle API endpoint.
+        
+        Args:
+            toggle_context: Dictionary containing:
+                - entities: Dict of entities
+                - entity_id: ID of entity to toggle
+                - source_name: Display name of source
+                - source_key: Config key for source
+                - config: Full configuration dict
+                - config_path: Path to config file
+        """
+        entities = toggle_context['entities']
+        entity_id = toggle_context['entity_id']
+        source_name = toggle_context['source_name']
+        source_key = toggle_context['source_key']
+        config = toggle_context['config']
+        config_path = toggle_context['config_path']
+        
         if entity_id not in entities:
             return False, {'error': f'Endpoint not found: {entity_id}'}
         
@@ -294,7 +349,14 @@ class UnifiedToggleHandler:
         Uses callback if provided, otherwise performs default logic.
         """
         if self.auto_update_source_callback:
-            return self.auto_update_source_callback(config, source_key, entities, config_path, source_name)
+            update_context = {
+                'config': config,
+                'source_key': source_key,
+                'endpoints_or_devices': entities,
+                'config_path': config_path,
+                'source_name': source_name
+            }
+            return self.auto_update_source_callback(update_context)
         
         # Default logic: enable source if any entity is enabled
         any_entity_enabled = any(
