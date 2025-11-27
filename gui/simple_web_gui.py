@@ -199,53 +199,79 @@ class SimpleWebGUI:
             self.logger.error(f"[GUI] Errore salvataggio config: {e}")
             return False
 
-    def _get_web_devices(self):
-        """Helper: ottiene dispositivi web scraping dal file separato"""
+    async def _load_source_config(self, source_type: str) -> dict:
+        """
+        Metodo unificato per caricare configurazioni da file sources/ (ASYNC + DRY)
+        
+        Args:
+            source_type: Tipo di sorgente ('web', 'api', 'modbus')
+            
+        Returns:
+            Dizionario con endpoints/devices della sorgente
+        """
+        # Mappa configurazione per tipo
+        config_map = {
+            'web': {
+                'file': 'config/sources/web_endpoints.yaml',
+                'root_key': 'web_scraping',
+                'data_key': 'endpoints'
+            },
+            'api': {
+                'file': 'config/sources/api_endpoints.yaml',
+                'root_key': 'api_ufficiali',
+                'data_key': 'endpoints'
+            },
+            'modbus': {
+                'file': 'config/sources/modbus_endpoints.yaml',
+                'root_key': 'modbus',
+                'data_key': 'endpoints'
+            }
+        }
+        
+        if source_type not in config_map:
+            self.logger.error(f"[GUI] Tipo sorgente non valido: {source_type}")
+            return {}
+        
+        config_info = config_map[source_type]
+        file_path = Path(config_info['file'])
+        
         try:
-            web_file = Path("config/sources/web_endpoints.yaml")
-            if web_file.exists():
-                content = web_file.read_text(encoding='utf-8')
-                # Sostituisci variabili d'ambiente
-                from config.config_manager import get_config_manager
-                config_manager = get_config_manager()
-                content = config_manager._substitute_env_vars(content)
-                web_data = yaml.safe_load(content) or {}
-                return web_data.get('web_scraping', {}).get('endpoints', {})
+            if not file_path.exists():
+                return {}
+            
+            # Async I/O per non bloccare event loop
+            import aiofiles
+            async with aiofiles.open(file_path, 'r', encoding='utf-8') as f:
+                content = await f.read()
+            
+            # Sostituisci variabili d'ambiente
+            from config.config_manager import get_config_manager
+            config_manager = get_config_manager()
+            content = config_manager._substitute_env_vars(content)
+            
+            # Parse YAML
+            data = yaml.safe_load(content) or {}
+            
+            # Estrai dati specifici
+            root_data = data.get(config_info['root_key'], {})
+            return root_data.get(config_info['data_key'], {})
+            
         except Exception as e:
-            self.logger.error(f"[GUI] Errore caricamento web endpoints: {e}")
-        return {}
+            self.logger.error(f"[GUI] Errore caricamento {source_type} endpoints: {e}")
+            return {}
 
-    def _get_api_endpoints(self):
-        """Helper: ottiene endpoint API dal file separato"""
-        try:
-            api_file = Path("config/sources/api_endpoints.yaml")
-            if api_file.exists():
-                content = api_file.read_text(encoding='utf-8')
-                # Sostituisci variabili d'ambiente
-                from config.config_manager import get_config_manager
-                config_manager = get_config_manager()
-                content = config_manager._substitute_env_vars(content)
-                api_data = yaml.safe_load(content) or {}
-                return api_data.get('api_ufficiali', {}).get('endpoints', {})
-        except Exception as e:
-            self.logger.error(f"[GUI] Errore caricamento API endpoints: {e}")
-        return {}
+    # Backward compatibility wrappers (deprecati ma mantenuti per compatibilità)
+    async def _get_web_devices(self):
+        """DEPRECATED: Usa _load_source_config('web')"""
+        return await self._load_source_config('web')
 
-    def _get_modbus_endpoints(self):
-        """Helper: ottiene endpoint Modbus dal file separato"""
-        try:
-            modbus_file = Path("config/sources/modbus_endpoints.yaml")
-            if modbus_file.exists():
-                content = modbus_file.read_text(encoding='utf-8')
-                # Sostituisci variabili d'ambiente
-                from config.config_manager import get_config_manager
-                config_manager = get_config_manager()
-                content = config_manager._substitute_env_vars(content)
-                modbus_data = yaml.safe_load(content) or {}
-                return modbus_data.get('modbus', {}).get('endpoints', {})
-        except Exception as e:
-            self.logger.error(f"[GUI] Errore caricamento Modbus endpoints: {e}")
-        return {}
+    async def _get_api_endpoints(self):
+        """DEPRECATED: Usa _load_source_config('api')"""
+        return await self._load_source_config('api')
+
+    async def _get_modbus_endpoints(self):
+        """DEPRECATED: Usa _load_source_config('modbus')"""
+        return await self._load_source_config('modbus')
 
     async def handle_index(self, request):
         """Serve la pagina principale"""
@@ -393,22 +419,18 @@ class SimpleWebGUI:
             return web.json_response({'error': f'Errore interno: {str(e)}'}, status=500)
 
     async def handle_get_sources(self, request):
-        """Restituisce sorgenti unificate (web devices, api endpoints o modbus endpoints)"""
+        """Restituisce sorgenti unificate (web devices, api endpoints o modbus endpoints) - OTTIMIZZATO"""
         try:
             source_type = request.query.get('type', 'web')  # 'web', 'api' o 'modbus'
             
+            # Validazione input
+            if source_type not in ('web', 'api', 'modbus'):
+                return web.json_response({"error": "Tipo sorgente non valido"}, status=400)
+            
             await self.load_config()
             
-            # Esegui in executor per evitare blocking I/O
-            import asyncio
-            if source_type == 'web':
-                sources = await asyncio.get_event_loop().run_in_executor(None, self._get_web_devices)
-            elif source_type == 'api':
-                sources = await asyncio.get_event_loop().run_in_executor(None, self._get_api_endpoints)
-            elif source_type == 'modbus':
-                sources = await asyncio.get_event_loop().run_in_executor(None, self._get_modbus_endpoints)
-            else:
-                return web.json_response({"error": "Tipo sorgente non valido"}, status=400)
+            # Usa metodo unificato async (no executor needed!)
+            sources = await self._load_source_config(source_type)
             
             return web.json_response(sources)
             
