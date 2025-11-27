@@ -36,7 +36,6 @@ class UpdateConfig:
     """Configurazione immutabile per il sistema di aggiornamento"""
     preserve_files: Tuple[str, ...] = (
         ".env",
-        "config/main.yaml",
         "config/sources/api_endpoints.yaml",
         "config/sources/web_endpoints.yaml", 
         "config/sources/modbus_endpoints.yaml",
