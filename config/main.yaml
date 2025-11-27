@@ -30,6 +30,7 @@ scheduler:
   api_delay_seconds: ${SCHEDULER_API_DELAY_SECONDS}
   web_delay_seconds: ${SCHEDULER_WEB_DELAY_SECONDS}
   realtime_delay_seconds: ${SCHEDULER_REALTIME_DELAY_SECONDS}
+  gme_delay_seconds: ${SCHEDULER_GME_DELAY_SECONDS}
   skip_delay_on_cache_hit: ${SCHEDULER_SKIP_DELAY_ON_CACHE_HIT}
 solaredge:
   api:
