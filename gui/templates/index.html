@@ -9,6 +9,9 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/js-yaml@4.1.0/dist/js-yaml.min.js"></script>
     
+    <!-- Carica dom-utils PRIMA per avere $ e $$ disponibili -->
+    <script src="/static/dom-utils.js"></script>
+    
     <!-- Inline script per mostrare messaggio update SUBITO (nell'head per esecuzione immediata) -->
     <script>
         if (localStorage.getItem('updateInProgress') === 'true') {
@@ -290,8 +293,7 @@
         </main>
     </div>
 
-    <script src="/static/api-utils.js">
-    <script src="/static/dom-utils.js"></script>
+    <script src="/static/api-utils.js"></script>
     <script src="/static/notification-utils.js"></script>
     <script src="/static/updates-checker.js"></script>
     <script src="/static/dashboard.js"></script>
