@@ -219,13 +219,15 @@ class UpdateChecker {
 // Controlla subito se c'è stato un aggiornamento (prima di tutto)
 if (localStorage.getItem('updateInProgress') === 'true') {
     localStorage.removeItem('updateInProgress');
-    // Mostra il messaggio appena possibile
-    window.addEventListener('load', () => {
+    // Mostra il messaggio appena il DOM è pronto (molto più veloce di 'load')
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', () => {
+            alert('✅ Aggiornamento completato con successo!\n\nIl sistema è stato aggiornato e riavviato.');
+        });
+    } else {
+        // DOM già pronto, mostra subito
         alert('✅ Aggiornamento completato con successo!\n\nIl sistema è stato aggiornato e riavviato.');
-        if (typeof notify === 'function') {
-            notify('✅ Sistema aggiornato con successo!', 'success');
-        }
-    });
+    }
 }
 
 // Istanza globale
