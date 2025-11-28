@@ -82,15 +82,16 @@ class UpdateChecker {
         const { updates_available, remote_commits, message, restart_required } = data;
         
         if (restart_required) {
-            // Mostra prompt di riavvio
-            this.showRestartPrompt();
+            // Riavvia automaticamente se necessario
+            this.restartService();
         } else if (updates_available) {
             console.log(`📦 Aggiornamenti disponibili: ${remote_commits} commit`);
             this.showUpdatesBanner();
-            this.notify(`${message} - Clicca il banner per aggiornare`, 'info');
+            this.notify(`${message}`, 'info');
         } else {
             console.log('✅ Sei già aggiornato');
             this.hideUpdatesBanner();
+            this.notify('✅ Sei già aggiornato', 'success');
         }
     }
     
@@ -143,27 +144,65 @@ class UpdateChecker {
         try {
             this.notify('🔄 Riavvio servizio in corso... La pagina si ricaricherà automaticamente.', 'info');
             
-            const response = await fetch('/api/updates/restart', {
+            // Invia richiesta di riavvio (potrebbe disconnettersi)
+            fetch('/api/updates/restart', {
                 method: 'POST'
+            }).catch(() => {
+                // Ignora errori di connessione (normale durante riavvio)
+                console.log('Servizio in riavvio...');
             });
             
-            const data = await response.json();
+            // Attendi 5 secondi e prova a riconnettersi
+            setTimeout(() => {
+                this.waitForReconnection();
+            }, 5000);
             
-            if (data.status === 'success') {
-                console.log('✅ Servizio riavviato');
-                
-                // Attendi 5 secondi e ricarica la pagina
-                setTimeout(() => {
-                    location.reload();
-                }, 5000);
-            } else {
-                console.error('❌ Errore riavvio:', data.message);
-                this.notify(`Errore riavvio: ${data.message}`, 'error');
-            }
         } catch (error) {
             console.error('❌ Errore durante il riavvio:', error);
-            this.notify('Errore durante il riavvio del servizio', 'error');
+            // Prova comunque a riconnettersi
+            setTimeout(() => {
+                this.waitForReconnection();
+            }, 5000);
         }
+    }
+    
+    async waitForReconnection() {
+        console.log('🔄 Tentativo di riconnessione...');
+        
+        let attempts = 0;
+        const maxAttempts = 20; // 20 tentativi = 1 minuto
+        
+        const tryReconnect = async () => {
+            attempts++;
+            
+            try {
+                const response = await fetch('/api/ping', {
+                    method: 'GET',
+                    cache: 'no-cache'
+                });
+                
+                if (response.ok) {
+                    console.log('✅ Riconnesso!');
+                    this.notify('✅ Servizio riavviato! Ricaricamento...', 'success');
+                    setTimeout(() => {
+                        location.reload();
+                    }, 1000);
+                    return;
+                }
+            } catch (error) {
+                // Server non ancora disponibile
+            }
+            
+            if (attempts < maxAttempts) {
+                console.log(`Tentativo ${attempts}/${maxAttempts}...`);
+                setTimeout(tryReconnect, 3000); // Riprova ogni 3 secondi
+            } else {
+                console.error('❌ Timeout riconnessione');
+                this.notify('⚠️ Timeout riconnessione. Ricarica manualmente la pagina.', 'warning');
+            }
+        };
+        
+        tryReconnect();
     }
     
     notify(message, type = 'info') {
