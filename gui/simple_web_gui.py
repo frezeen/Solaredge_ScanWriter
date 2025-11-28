@@ -1020,6 +1020,10 @@ time /t >> {log_file}
                 try:
                     message = self.ansi_escape.sub('', record.getMessage())
                     
+                    # Filtra messaggi di orchestrazione [GUI] - non mostrarli nella GUI
+                    if message.startswith('[GUI]'):
+                        return
+                    
                     # Parse flow markers [FLOW:TYPE:ACTION]
                     if '[FLOW:' in message:
                         parts = message.split('[FLOW:')[1].split(']')[0].split(':')
@@ -1028,16 +1032,20 @@ time /t >> {log_file}
                         
                         if action == 'START':
                             self.flow_stack.append(flow_type)
+                            return  # Non mostrare START
                         elif action == 'STOP' and self.flow_stack:
-                            # Determina flow PRIMA di fare pop (così STOP va nel flow giusto)
-                            current_flow = self.flow_stack[-1]
                             self.flow_stack.pop()
-                            
-                            # Non mostrare il marker STOP nella GUI (è solo per tracking interno)
+                            return  # Non mostrare STOP
+                        elif action == 'COMPLETION':
+                            # Messaggi di completamento: rimuovi marker e mostra nel flow corretto
+                            clean_message = message.split(']', 1)[1] if ']' in message else message
+                            self.gui.state_manager.add_log_entry(
+                                level=record.levelname,
+                                message=clean_message,
+                                flow_type=flow_type,
+                                timestamp=datetime.now()
+                            )
                             return
-                        
-                        # Non mostrare il marker START nella GUI (è solo per tracking interno)
-                        return
                     
                     # Determina flow corrente dallo stack
                     current_flow = self.flow_stack[-1] if self.flow_stack else 'general'
@@ -1189,7 +1197,7 @@ time /t >> {log_file}
                                 None, run_web_flow, log, cache, config
                             )
                             self.state_manager.loop_stats['web_stats']['success'] += 1
-                            self.logger.info("[GUI] ✅ Raccolta web completata")
+                            log.info("[FLOW:WEB:COMPLETION]✅ Raccolta web completata")
                         except Exception as e:
                             self.state_manager.loop_stats['web_stats']['failed'] += 1
                             self.logger.error(f"[GUI] ❌ Errore raccolta web: {e}")
@@ -1202,7 +1210,7 @@ time /t >> {log_file}
                                 None, run_api_flow, log, cache, config
                             )
                             self.state_manager.loop_stats['api_stats']['success'] += 1
-                            self.logger.info("[GUI] ✅ Raccolta API completata")
+                            log.info("[FLOW:API:COMPLETION]✅ Raccolta API completata")
                         except Exception as e:
                             self.state_manager.loop_stats['api_stats']['failed'] += 1
                             self.logger.error(f"[GUI] ❌ Errore raccolta API: {e}")
@@ -1233,7 +1241,7 @@ time /t >> {log_file}
                         # result == 0 significa successo
                         if result == 0:
                             self.state_manager.loop_stats['realtime_stats']['success'] += 1
-                            self.logger.debug("[GUI] ✅ Raccolta realtime completata")
+                            log.info("[FLOW:REALTIME:COMPLETION]✅ Raccolta realtime completata")
                         else:
                             self.state_manager.loop_stats['realtime_stats']['failed'] += 1
                     except Exception as e:
@@ -1260,7 +1268,7 @@ time /t >> {log_file}
                             None, run_gme_flow, log, cache, config
                         )
                         self.state_manager.loop_stats['gme_stats']['success'] += 1
-                        self.logger.info("[GUI] ✅ Raccolta GME completata")
+                        log.info("[FLOW:GME:COMPLETION]✅ Raccolta GME completata")
                     except Exception as e:
                         self.state_manager.loop_stats['gme_stats']['failed'] += 1
                         self.logger.error(f"[GUI] ❌ Errore raccolta GME: {e}")

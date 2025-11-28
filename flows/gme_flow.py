@@ -94,7 +94,6 @@ def run_gme_flow(
                     writer.write_points([monthly_avg_point], measurement_type="gme_monthly_avg")
                 total_points += len(influx_points) + (1 if monthly_avg_point else 0)
             
-            log.info(color.success(f"   ✅ Salvati {len(influx_points)} punti orari per {date_str}"))
             current_date += timedelta(days=1)
 
     except Exception as e:
