@@ -228,7 +228,7 @@ body {
     background: var(--bg-card);
     border: 1px solid var(--border);
     border-radius: var(--radius-lg);
-    padding: 2rem;
+    padding: 1.5rem;
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
@@ -279,9 +279,9 @@ body {
 
 .status-card h3,
 .logs-header h3 {
-    margin-bottom: 1.5rem;
+    margin-bottom: 1rem;
     color: var(--text-primary);
-    font-size: 1.25rem;
+    font-size: 1.125rem;
 }
 
 /* ===== MODBUS CARD VARIANT ===== */
@@ -314,12 +314,12 @@ body {
 
 .stats-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    gap: 1.5rem;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 1rem;
 }
 
 .stats-grid .stat-item {
-    padding: 1rem;
+    padding: 0.75rem;
     background: var(--bg-secondary);
     border: 1px solid var(--border);
     border-radius: var(--radius);
@@ -333,7 +333,7 @@ body {
 }
 
 .stats-grid .stat-value {
-    font-size: 1.5rem;
+    font-size: 1.25rem;
     font-weight: 700;
     color: var(--text-primary);
 }
@@ -621,7 +621,7 @@ h4 {
 
 /* ===== LOOP MONITOR ===== */
 .loop-status-container {
-    margin-bottom: 2rem;
+    margin-bottom: 1.5rem;
 }
 
 /* ===== LOGS ===== */

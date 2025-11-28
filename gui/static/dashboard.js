@@ -808,8 +808,11 @@ class SolarDashboard {
 
     // Memoized stats formatting (pure function)
     formatStats = this.memoize((stat) => {
-        if (!stat) return '0/0/0';
-        return `${stat.executed || 0}/${stat.success || 0}/${stat.failed || 0}`;
+        if (!stat) return '▶️0 ✅0 ❌0';
+        const exec = stat.executed || 0;
+        const succ = stat.success || 0;
+        const fail = stat.failed || 0;
+        return `▶️${exec} ✅${succ} ❌${fail}`;
     }, (stat) => JSON.stringify(stat));
 
     updateDeviceUI(id, data) {
