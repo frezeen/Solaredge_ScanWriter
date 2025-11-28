@@ -12,16 +12,6 @@ class UpdateChecker {
     init() {
         this.createUpdatesBanner();
         this.startAutoCheck();
-        
-        // Controlla se c'è stato un aggiornamento
-        if (localStorage.getItem('updateInProgress') === 'true') {
-            localStorage.removeItem('updateInProgress');
-            setTimeout(() => {
-                alert('✅ Aggiornamento completato con successo!\n\nIl sistema è stato aggiornato e riavviato.');
-                this.notify('✅ Sistema aggiornato con successo!', 'success');
-            }, 1000);
-        }
-        
         // Controlla subito al caricamento
         this.checkForUpdates();
     }
@@ -224,6 +214,18 @@ class UpdateChecker {
             this.updatesBanner = null;
         }
     }
+}
+
+// Controlla subito se c'è stato un aggiornamento (prima di tutto)
+if (localStorage.getItem('updateInProgress') === 'true') {
+    localStorage.removeItem('updateInProgress');
+    // Mostra il messaggio appena possibile
+    window.addEventListener('load', () => {
+        alert('✅ Aggiornamento completato con successo!\n\nIl sistema è stato aggiornato e riavviato.');
+        if (typeof notify === 'function') {
+            notify('✅ Sistema aggiornato con successo!', 'success');
+        }
+    });
 }
 
 // Istanza globale
