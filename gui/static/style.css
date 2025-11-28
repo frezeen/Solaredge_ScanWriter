@@ -356,6 +356,12 @@ body {
     font-size: 0.85rem;
 }
 
+.stat-item-compact .stat-value.stat-multiline {
+    font-size: 0.7rem;
+    line-height: 1.4;
+    white-space: pre-line;
+}
+
 .stat-item-compact .stat-timing {
     font-size: 0.65rem;
     color: var(--text-muted);
