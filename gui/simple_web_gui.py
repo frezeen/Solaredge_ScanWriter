@@ -542,7 +542,6 @@ class SimpleWebGUI:
         self.app.router.add_get('/api/updates/check', self.handle_check_updates)
         self.app.router.add_post('/api/updates/run', self.handle_run_update)
         self.app.router.add_get('/api/updates/status', self.handle_get_update_status)
-        self.app.router.add_post('/api/updates/restart', self.handle_restart_service)
 
         return self.app
 
@@ -850,8 +849,11 @@ class SimpleWebGUI:
             return self.error_handler.handle_api_error(e, "checking updates", "Error checking for updates")
 
     async def handle_run_update(self, request):
-        """Esegue lo script update.sh in background"""
+        """Esegue l'aggiornamento in un processo separato che sopravvive alla chiusura della GUI"""
         try:
+            import subprocess
+            import os
+            
             update_script = Path('update.sh')
             if not update_script.exists():
                 return web.json_response({
@@ -859,139 +861,72 @@ class SimpleWebGUI:
                     'message': 'Script update.sh non trovato'
                 }, status=404)
             
-            self.logger.info("[GUI] 🚀 Avvio aggiornamento in background...")
+            self.logger.info("[GUI] 🚀 Avvio aggiornamento in processo separato...")
             
-            # Lancia l'update in background (non blocca la risposta HTTP)
-            asyncio.create_task(self._run_update_background())
+            # Usa 'at now' per eseguire update.sh in un processo completamente separato
+            # che continua anche se la GUI viene chiusa
+            # L'input 'y\n' conferma automaticamente il prompt di update.sh
             
-            # Restituisci subito una risposta di successo
-            return web.json_response({
-                'status': 'success',
-                'message': 'Aggiornamento avviato in background. La GUI rimane online durante l\'aggiornamento.'
-            })
-                
-        except Exception as e:
-            self.logger.error(f"[GUI] ❌ Errore avvio update: {e}", exc_info=True)
-            return self.error_handler.handle_api_error(e, "running update", "Error running update")
-    
-    async def _run_update_background(self):
-        """Esegue l'aggiornamento completo usando smart_update.py"""
-        try:
-            import subprocess
-            import os
-            
-            self.logger.info("[GUI] 🔄 Esecuzione aggiornamento completo con smart_update.py...")
-            
-            # Usa smart_update.py che gestisce:
-            # - Backup configurazioni
-            # - Git pull/reset
-            # - Ripristino configurazioni
-            # - Fix permessi (incluso update.sh)
-            # - Aggiornamento dipendenze
-            # - Validazione
-            
-            result = await asyncio.get_event_loop().run_in_executor(
-                None,
-                lambda: subprocess.run(
-                    ['python3', 'scripts/smart_update.py', '--no-service-restart'],
-                    cwd=os.getcwd(),
+            try:
+                # Prova con 'at' (migliore soluzione)
+                result = subprocess.run(
+                    ['which', 'at'],
                     capture_output=True,
-                    text=True,
-                    timeout=300  # 5 minuti
+                    timeout=5
                 )
-            )
-            
-            # Log output completo
-            if result.stdout:
-                self.logger.info(f"[GUI] Update output:\n{result.stdout}")
-            if result.stderr:
-                self.logger.warning(f"[GUI] Update stderr:\n{result.stderr}")
-            
-            if result.returncode == 0:
-                self.logger.info("[GUI] ✅ Aggiornamento completato con successo")
-                self.state_manager.updates_available = False
-                self.state_manager.restart_required = True
                 
-            else:
-                error_msg = result.stderr or result.stdout or 'Errore sconosciuto'
-                self.logger.error(f"[GUI] ❌ Aggiornamento fallito (exit code {result.returncode}): {error_msg}")
+                if result.returncode == 0:
+                    # 'at' è disponibile - usa questo metodo
+                    cmd = f"cd {os.getcwd()} && echo 'y' | ./update.sh"
+                    subprocess.Popen(
+                        ['at', 'now'],
+                        stdin=subprocess.PIPE,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                        text=True
+                    ).communicate(input=cmd, timeout=5)
+                    
+                    self.logger.info("[GUI] ✅ Update schedulato con 'at now'")
+                    
+                else:
+                    # Fallback: usa nohup
+                    subprocess.Popen(
+                        ['nohup', 'bash', '-c', f"echo 'y' | ./update.sh"],
+                        cwd=os.getcwd(),
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                        stdin=subprocess.DEVNULL,
+                        start_new_session=True
+                    )
+                    
+                    self.logger.info("[GUI] ✅ Update avviato con 'nohup'")
                 
-        except subprocess.TimeoutExpired:
-            self.logger.error("[GUI] ❌ Timeout durante l'aggiornamento (>5 minuti)")
+                return web.json_response({
+                    'status': 'success',
+                    'message': 'Aggiornamento avviato! Il servizio si riavvierà automaticamente. La GUI si riconnetterà tra circa 30 secondi.'
+                })
+                
+            except Exception as e:
+                self.logger.error(f"[GUI] ❌ Errore avvio update: {e}")
+                return web.json_response({
+                    'status': 'error',
+                    'message': f'Errore durante l\'avvio dell\'aggiornamento: {str(e)}'
+                }, status=500)
+                
         except Exception as e:
-            self.logger.error(f"[GUI] ❌ Errore esecuzione update: {e}", exc_info=True)
+            self.logger.error(f"[GUI] ❌ Errore: {e}", exc_info=True)
+            return self.error_handler.handle_api_error(e, "running update", "Error running update")
 
     async def handle_get_update_status(self, request):
         """Restituisce lo stato attuale degli aggiornamenti"""
         try:
             return web.json_response({
                 'updates_available': getattr(self.state_manager, 'updates_available', False),
-                'restart_required': getattr(self.state_manager, 'restart_required', False),
                 'last_check': getattr(self.state_manager, 'last_update_check', None),
                 'last_check_str': self.state_manager.last_update_check.strftime('%H:%M:%S') if getattr(self.state_manager, 'last_update_check', None) else 'Mai'
             })
         except Exception as e:
             return self.error_handler.handle_api_error(e, "getting update status", "Error getting update status")
-
-    async def handle_restart_service(self, request):
-        """Riavvia il servizio systemd"""
-        try:
-            import subprocess
-            
-            self.logger.info("[GUI] 🔄 Riavvio servizio richiesto...")
-            
-            # Trova il servizio attivo
-            services = ['solaredge-scanwriter', 'solaredge-collector', 'solaredge']
-            service_found = None
-            
-            for service in services:
-                try:
-                    result = subprocess.run(
-                        ['systemctl', 'is-enabled', service],
-                        capture_output=True,
-                        text=True,
-                        timeout=5
-                    )
-                    if result.returncode == 0:
-                        service_found = service
-                        break
-                except Exception:
-                    continue
-            
-            if not service_found:
-                return web.json_response({
-                    'status': 'error',
-                    'message': 'Nessun servizio systemd trovato. Riavvia manualmente con: sudo systemctl restart solaredge-scanwriter'
-                }, status=404)
-            
-            # Riavvia il servizio
-            result = subprocess.run(
-                ['systemctl', 'restart', service_found],
-                capture_output=True,
-                text=True,
-                timeout=30
-            )
-            
-            if result.returncode == 0:
-                self.logger.info(f"[GUI] ✅ Servizio {service_found} riavviato con successo")
-                self.state_manager.restart_required = False
-                
-                return web.json_response({
-                    'status': 'success',
-                    'message': f'Servizio {service_found} riavviato con successo. La GUI si riconnetterà automaticamente.'
-                })
-            else:
-                error_msg = result.stderr or 'Errore sconosciuto'
-                self.logger.error(f"[GUI] ❌ Errore riavvio servizio: {error_msg}")
-                
-                return web.json_response({
-                    'status': 'error',
-                    'message': f'Errore durante il riavvio: {error_msg}'
-                }, status=500)
-                
-        except Exception as e:
-            self.logger.error(f"[GUI] ❌ Errore riavvio servizio: {e}", exc_info=True)
-            return self.error_handler.handle_api_error(e, "restarting service", "Error restarting service")
 
     def _setup_log_capture(self):
         """Setup log capture per la GUI con identificazione flow"""
