@@ -312,10 +312,10 @@ body {
     gap: 1.5rem;
 }
 
-/* Layout ultra-compatto: 6 colonne per riga */
+/* Layout ultra-compatto: 4 colonne x 2 righe */
 .stats-grid-compact {
     display: grid;
-    grid-template-columns: repeat(6, 1fr);
+    grid-template-columns: repeat(4, 1fr);
     gap: 0.5rem;
 }
 
