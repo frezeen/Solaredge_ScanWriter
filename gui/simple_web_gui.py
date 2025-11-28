@@ -214,25 +214,50 @@ class SimpleWebGUI:
             return self.error_handler.handle_api_error(e, "serving index", "Error loading page")
 
     async def handle_static(self, request):
-        """Serve i file statici"""
+        """Serve i file statici (testo e binari)"""
         try:
             filename = request.match_info['filename']
             static_path = Path(f"gui/static/{filename}")
             
             if static_path.exists():
-                content = static_path.read_text(encoding='utf-8')
-                
-                # Determina content type
+                # Determina content type e se è un file binario
                 if filename.endswith('.css'):
                     content_type = 'text/css'
+                    is_binary = False
                 elif filename.endswith('.js'):
                     content_type = 'application/javascript'
+                    is_binary = False
+                elif filename.endswith('.png'):
+                    content_type = 'image/png'
+                    is_binary = True
+                elif filename.endswith('.jpg') or filename.endswith('.jpeg'):
+                    content_type = 'image/jpeg'
+                    is_binary = True
+                elif filename.endswith('.gif'):
+                    content_type = 'image/gif'
+                    is_binary = True
+                elif filename.endswith('.svg'):
+                    content_type = 'image/svg+xml'
+                    is_binary = False
+                elif filename.endswith('.ico'):
+                    content_type = 'image/x-icon'
+                    is_binary = True
                 else:
                     content_type = 'text/plain'
-                    
-                return web.Response(text=content, content_type=content_type)
+                    is_binary = False
+                
+                # Leggi file in base al tipo
+                if is_binary:
+                    content = static_path.read_bytes()
+                    return web.Response(body=content, content_type=content_type)
+                else:
+                    content = static_path.read_text(encoding='utf-8')
+                    return web.Response(text=content, content_type=content_type)
             else:
                 return self.error_handler.handle_not_found_error("file", filename, "serving static")
+        except UnicodeDecodeError as e:
+            self.logger.error(f"Errore decodifica UTF-8 per {filename}: {e}")
+            return self.error_handler.handle_api_error(e, "serving static file", "Errore decodifica file")
         except Exception as e:
             return self.error_handler.handle_api_error(e, "serving static file", "Error loading static file")
 

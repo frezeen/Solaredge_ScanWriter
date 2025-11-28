@@ -53,8 +53,13 @@ class SchedulerLoop:
         self._log = logging.getLogger(__name__)
         self._last_call_time: Dict[SourceType, float] = {}
         
-        self._log.info(f"Scheduler inizializzato - API: {config.api_delay_seconds}s, "
-                      f"Web: {config.web_delay_seconds}s, Realtime: {config.realtime_delay_seconds}s")
+        self._log.info(
+            f"⏱️  Scheduler inizializzato - "
+            f"API: {config.api_delay_seconds}s, "
+            f"Web: {config.web_delay_seconds}s, "
+            f"Realtime: {config.realtime_delay_seconds}s, "
+            f"GME: {config.gme_delay_seconds}s"
+        )
     
     def execute_with_timing(self, 
                            source_type: SourceType, 
