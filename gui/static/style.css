@@ -391,6 +391,8 @@ body {
     font-size: 0.8rem;
     color: var(--text-muted);
     margin-top: 0.25rem;
+    text-align: center;
+    width: 100%;
 }
 
 .stat-item-compact.stat-spacer {
