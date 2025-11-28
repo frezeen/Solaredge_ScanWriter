@@ -120,12 +120,13 @@ class UpdateChecker {
                 return;
             }
             
-            // Ci sono aggiornamenti, chiedi conferma
-            if (!confirm('Sei sicuro di voler eseguire l\'aggiornamento?\n\nIl servizio verrà riavviato automaticamente.')) {
+            // Conferma dall'utente
+            if (!confirm('Sei sicuro di voler eseguire l\'aggiornamento?\n\nIl servizio si riavvierà automaticamente e la GUI si riconnetterà tra circa 30 secondi.')) {
                 return;
             }
             
-            this.notify('⏳ Aggiornamento in corso...', 'info');
+            // Avvia aggiornamento
+            this.notify('🚀 Avvio aggiornamento...', 'info');
             
             const response = await fetch('/api/updates/run', {
                 method: 'POST'
@@ -134,55 +135,31 @@ class UpdateChecker {
             const data = await response.json();
             
             if (data.status === 'success') {
-                console.log('✅ Aggiornamento completato');
+                console.log('✅ Update avviato');
                 this.hideUpdatesBanner();
+                this.notify('✅ Aggiornamento avviato! Attendi la riconnessione...', 'success');
                 
-                // Riavvia automaticamente il servizio
-                this.notify('✅ Aggiornamento completato! Riavvio servizio...', 'success');
+                // Attendi 30 secondi e prova a riconnettersi
                 setTimeout(() => {
-                    this.restartService();
-                }, 1500);
+                    this.waitForReconnection();
+                }, 30000);
+                
             } else {
-                console.error('❌ Errore aggiornamento:', data.message);
+                console.error('❌ Errore:', data.message);
                 this.notify(`Errore: ${data.message}`, 'error');
             }
         } catch (error) {
-            console.error('❌ Errore durante l\'aggiornamento:', error);
-            this.notify('Errore durante l\'aggiornamento', 'error');
-        }
-    }
-    
-    async restartService() {
-        try {
-            this.notify('🔄 Riavvio servizio in corso... La pagina si ricaricherà automaticamente.', 'info');
-            
-            // Invia richiesta di riavvio (potrebbe disconnettersi)
-            fetch('/api/updates/restart', {
-                method: 'POST'
-            }).catch(() => {
-                // Ignora errori di connessione (normale durante riavvio)
-                console.log('Servizio in riavvio...');
-            });
-            
-            // Attendi 5 secondi e prova a riconnettersi
-            setTimeout(() => {
-                this.waitForReconnection();
-            }, 5000);
-            
-        } catch (error) {
-            console.error('❌ Errore durante il riavvio:', error);
-            // Prova comunque a riconnettersi
-            setTimeout(() => {
-                this.waitForReconnection();
-            }, 5000);
+            console.error('❌ Errore:', error);
+            this.notify('Errore durante la richiesta', 'error');
         }
     }
     
     async waitForReconnection() {
         console.log('🔄 Tentativo di riconnessione...');
+        this.notify('🔄 Riconnessione in corso...', 'info');
         
         let attempts = 0;
-        const maxAttempts = 20; // 20 tentativi = 1 minuto
+        const maxAttempts = 30; // 30 tentativi = 1.5 minuti
         
         const tryReconnect = async () => {
             attempts++;
