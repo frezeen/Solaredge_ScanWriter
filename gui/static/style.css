@@ -356,12 +356,27 @@ body {
     font-size: 0.9rem;
     line-height: 1.6;
     white-space: pre-line;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+}
+
+.stat-item-compact .stat-value.stat-small > * {
+    display: flex;
+    justify-content: space-between;
+    width: 100%;
 }
 
 .stat-item-compact .stat-value.stat-list {
     font-size: 0.8rem;
-    line-height: 1.5;
+    line-height: 1.6;
     white-space: pre-line;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    flex: 1;
 }
 
 .stat-item-compact .stat-timing {
