@@ -971,13 +971,28 @@ class SolarDashboard {
         }
 
         if (loop_mode && stats) {
+            // Calcola totale runs
+            const totalRuns = (stats.api_stats?.executed || 0) + 
+                            (stats.web_stats?.executed || 0) + 
+                            (stats.realtime_stats?.executed || 0) + 
+                            (stats.gme_stats?.executed || 0);
+            
+            // Trova prossima run (la più vicina tra API/Web/GME)
+            const nextRuns = [
+                stats.api_next_run,
+                stats.web_next_run, 
+                stats.gme_next_run
+            ].filter(r => r && r !== '--');
+            const nextRun = nextRuns.length > 0 ? nextRuns[0] : '--';
+            
             const elements = {
                 'loopUptime': stats.uptime_formatted || '--',
                 'apiRuns': this.formatStats(stats.api_stats),
                 'webRuns': this.formatStats(stats.web_stats),
                 'realtimeRuns': this.formatStats(stats.realtime_stats),
                 'gmeRuns': this.formatStats(stats.gme_stats),
-                'lastUpdate': stats.last_update_formatted || '--'
+                'totalRuns': totalRuns,
+                'nextRun': nextRun
             };
 
             Object.entries(elements).forEach(([id, value]) => {
@@ -985,25 +1000,20 @@ class SolarDashboard {
                 if (el) el.textContent = value;
             });
 
-            if (stats.api_last_run && stats.api_next_run) {
-                const apiTimingEl = document.getElementById('apiTiming');
-                if (apiTimingEl) {
-                    apiTimingEl.innerHTML = `last: ${stats.api_last_run}<br>next: ${stats.api_next_run}`;
-                }
+            // Update timing (solo next, più compatto)
+            if (stats.api_next_run) {
+                const el = document.getElementById('apiTiming');
+                if (el) el.textContent = `next: ${stats.api_next_run}`;
             }
 
-            if (stats.web_last_run && stats.web_next_run) {
-                const webTimingEl = document.getElementById('webTiming');
-                if (webTimingEl) {
-                    webTimingEl.innerHTML = `last: ${stats.web_last_run}<br>next: ${stats.web_next_run}`;
-                }
+            if (stats.web_next_run) {
+                const el = document.getElementById('webTiming');
+                if (el) el.textContent = `next: ${stats.web_next_run}`;
             }
 
-            if (stats.gme_last_run && stats.gme_next_run) {
-                const gmeTimingEl = document.getElementById('gmeTiming');
-                if (gmeTimingEl) {
-                    gmeTimingEl.innerHTML = `last: ${stats.gme_last_run}<br>next: ${stats.gme_next_run}`;
-                }
+            if (stats.gme_next_run) {
+                const el = document.getElementById('gmeTiming');
+                if (el) el.textContent = `next: ${stats.gme_next_run}`;
             }
         }
 
