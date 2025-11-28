@@ -977,8 +977,8 @@ class SolarDashboard {
                             (stats.realtime_stats?.executed || 0) + 
                             (stats.gme_stats?.executed || 0);
             
-            // Scheduling info (intervalli configurati)
-            const scheduling = 'API/Web: 15m | RT: 5s | GME: 24h';
+            // Scheduling info (intervalli configurati su 3 righe)
+            const scheduling = 'API/Web: 15m\nRealtime: 5s\nGME: 24h';
             
             const elements = {
                 'loopUptime': stats.uptime_formatted || '--',
