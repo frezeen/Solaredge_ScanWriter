@@ -137,9 +137,9 @@ class UpdateChecker {
     }
     
     notify(message, type = 'info') {
-        // Usa il sistema di notifiche globale se disponibile
-        if (typeof showNotification === 'function') {
-            showNotification(message, type);
+        // Usa il sistema di notifiche globale
+        if (typeof notify === 'function') {
+            notify(message, type);
         } else {
             console.log(`[${type.toUpperCase()}] ${message}`);
         }
