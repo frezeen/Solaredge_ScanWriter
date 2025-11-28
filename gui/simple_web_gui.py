@@ -542,6 +542,7 @@ class SimpleWebGUI:
         self.app.router.add_get('/api/updates/check', self.handle_check_updates)
         self.app.router.add_post('/api/updates/run', self.handle_run_update)
         self.app.router.add_get('/api/updates/status', self.handle_get_update_status)
+        self.app.router.add_post('/api/updates/restart', self.handle_restart_service)
 
         return self.app
 
@@ -874,50 +875,97 @@ class SimpleWebGUI:
             return self.error_handler.handle_api_error(e, "running update", "Error running update")
     
     async def _run_update_background(self):
-        """Esegue l'aggiornamento in background senza bloccare il server"""
+        """Esegue l'aggiornamento in background senza riavviare il servizio (soft update)"""
         try:
             import subprocess
             import os
-            import platform
             
-            self.logger.info("[GUI] 🔄 Esecuzione aggiornamento in background...")
+            self.logger.info("[GUI] 🔄 Esecuzione soft update (git pull senza riavvio)...")
             
-            # Determina il comando in base al sistema operativo
-            if platform.system() == 'Windows':
-                cmd = ['powershell', '-NoProfile', '-Command', 'bash update.sh']
-                input_data = 'y\n'
-            else:
-                cmd = ['bash', 'update.sh']
-                input_data = 'y\n'
+            # Soft update: solo git pull senza fermare/riavviare il servizio
+            # Questo permette alla GUI di rimanere online durante l'update
             
-            # Esegui lo script in background
+            # 1. Git stash (salva modifiche locali)
+            try:
+                result = await asyncio.get_event_loop().run_in_executor(
+                    None,
+                    lambda: subprocess.run(
+                        ['git', 'stash', 'push', '-m', f'Auto-stash GUI update {datetime.now()}'],
+                        cwd=os.getcwd(),
+                        capture_output=True,
+                        text=True,
+                        timeout=30
+                    )
+                )
+                self.logger.info("[GUI] Git stash completato")
+            except Exception as e:
+                self.logger.warning(f"[GUI] Git stash warning: {e}")
+            
+            # 2. Git pull
             result = await asyncio.get_event_loop().run_in_executor(
                 None,
                 lambda: subprocess.run(
-                    cmd,
+                    ['git', 'pull', 'origin', 'main'],
                     cwd=os.getcwd(),
-                    input=input_data,
                     capture_output=True,
                     text=True,
-                    timeout=300
+                    timeout=120
                 )
             )
             
-            # Log output dello script
-            if result.stdout:
-                self.logger.info(f"[GUI] Update output:\n{result.stdout}")
-            if result.stderr:
-                self.logger.warning(f"[GUI] Update stderr:\n{result.stderr}")
-            
             if result.returncode == 0:
-                self.logger.info("[GUI] ✅ Aggiornamento completato con successo")
+                self.logger.info("[GUI] ✅ Git pull completato con successo")
+                self.logger.info(f"[GUI] Output: {result.stdout}")
+                
+                # 3. Aggiorna dipendenze Python (se necessario)
+                try:
+                    pip_result = await asyncio.get_event_loop().run_in_executor(
+                        None,
+                        lambda: subprocess.run(
+                            ['python3', '-m', 'pip', 'install', '-r', 'requirements.txt', 
+                             '--upgrade-strategy', 'only-if-needed', '--break-system-packages'],
+                            cwd=os.getcwd(),
+                            capture_output=True,
+                            text=True,
+                            timeout=180
+                        )
+                    )
+                    if pip_result.returncode == 0:
+                        self.logger.info("[GUI] ✅ Dipendenze Python aggiornate")
+                    else:
+                        self.logger.warning(f"[GUI] ⚠️ Dipendenze Python: {pip_result.stderr}")
+                except Exception as e:
+                    self.logger.warning(f"[GUI] ⚠️ Errore aggiornamento dipendenze: {e}")
+                
                 self.state_manager.updates_available = False
+                self.state_manager.restart_required = True
+                self.logger.info("[GUI] ✅ Soft update completato - Riavvio richiesto per applicare le modifiche")
+                
             else:
                 error_msg = result.stderr or result.stdout or 'Errore sconosciuto'
-                self.logger.error(f"[GUI] ❌ Errore durante l'aggiornamento (exit code {result.returncode}): {error_msg}")
+                self.logger.error(f"[GUI] ❌ Git pull fallito (exit code {result.returncode}): {error_msg}")
+                
+                # Prova git reset come fallback
+                self.logger.info("[GUI] Tentativo git reset...")
+                reset_result = await asyncio.get_event_loop().run_in_executor(
+                    None,
+                    lambda: subprocess.run(
+                        ['git', 'reset', '--hard', 'origin/main'],
+                        cwd=os.getcwd(),
+                        capture_output=True,
+                        text=True,
+                        timeout=60
+                    )
+                )
+                
+                if reset_result.returncode == 0:
+                    self.logger.info("[GUI] ✅ Git reset completato con successo")
+                    self.state_manager.updates_available = False
+                else:
+                    self.logger.error(f"[GUI] ❌ Git reset fallito: {reset_result.stderr}")
                 
         except subprocess.TimeoutExpired:
-            self.logger.error("[GUI] ❌ Timeout durante l'aggiornamento (>5 minuti)")
+            self.logger.error("[GUI] ❌ Timeout durante l'aggiornamento")
         except Exception as e:
             self.logger.error(f"[GUI] ❌ Errore esecuzione update in background: {e}", exc_info=True)
 
@@ -926,11 +974,72 @@ class SimpleWebGUI:
         try:
             return web.json_response({
                 'updates_available': getattr(self.state_manager, 'updates_available', False),
+                'restart_required': getattr(self.state_manager, 'restart_required', False),
                 'last_check': getattr(self.state_manager, 'last_update_check', None),
                 'last_check_str': self.state_manager.last_update_check.strftime('%H:%M:%S') if getattr(self.state_manager, 'last_update_check', None) else 'Mai'
             })
         except Exception as e:
             return self.error_handler.handle_api_error(e, "getting update status", "Error getting update status")
+
+    async def handle_restart_service(self, request):
+        """Riavvia il servizio systemd"""
+        try:
+            import subprocess
+            
+            self.logger.info("[GUI] 🔄 Riavvio servizio richiesto...")
+            
+            # Trova il servizio attivo
+            services = ['solaredge-scanwriter', 'solaredge-collector', 'solaredge']
+            service_found = None
+            
+            for service in services:
+                try:
+                    result = subprocess.run(
+                        ['systemctl', 'is-enabled', service],
+                        capture_output=True,
+                        text=True,
+                        timeout=5
+                    )
+                    if result.returncode == 0:
+                        service_found = service
+                        break
+                except Exception:
+                    continue
+            
+            if not service_found:
+                return web.json_response({
+                    'status': 'error',
+                    'message': 'Nessun servizio systemd trovato. Riavvia manualmente con: sudo systemctl restart solaredge-scanwriter'
+                }, status=404)
+            
+            # Riavvia il servizio
+            result = subprocess.run(
+                ['systemctl', 'restart', service_found],
+                capture_output=True,
+                text=True,
+                timeout=30
+            )
+            
+            if result.returncode == 0:
+                self.logger.info(f"[GUI] ✅ Servizio {service_found} riavviato con successo")
+                self.state_manager.restart_required = False
+                
+                return web.json_response({
+                    'status': 'success',
+                    'message': f'Servizio {service_found} riavviato con successo. La GUI si riconnetterà automaticamente.'
+                })
+            else:
+                error_msg = result.stderr or 'Errore sconosciuto'
+                self.logger.error(f"[GUI] ❌ Errore riavvio servizio: {error_msg}")
+                
+                return web.json_response({
+                    'status': 'error',
+                    'message': f'Errore durante il riavvio: {error_msg}'
+                }, status=500)
+                
+        except Exception as e:
+            self.logger.error(f"[GUI] ❌ Errore riavvio servizio: {e}", exc_info=True)
+            return self.error_handler.handle_api_error(e, "restarting service", "Error restarting service")
 
     def _setup_log_capture(self):
         """Setup log capture per la GUI con identificazione flow"""

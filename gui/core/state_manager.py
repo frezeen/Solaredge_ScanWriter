@@ -43,6 +43,7 @@ class StateManager:
         # Update tracking
         self.updates_available = False
         self.last_update_check = None
+        self.restart_required = False
         
         # Statistiche loop
         self.loop_stats = {

@@ -79,9 +79,12 @@ class UpdateChecker {
     }
     
     handleCheckResult(data) {
-        const { updates_available, remote_commits, message } = data;
+        const { updates_available, remote_commits, message, restart_required } = data;
         
-        if (updates_available) {
+        if (restart_required) {
+            // Mostra prompt di riavvio
+            this.showRestartPrompt();
+        } else if (updates_available) {
             console.log(`📦 Aggiornamenti disponibili: ${remote_commits} commit`);
             this.showUpdatesBanner();
             this.notify(`${message} - Clicca il banner per aggiornare`, 'info');
@@ -104,7 +107,7 @@ class UpdateChecker {
     }
     
     async runUpdate() {
-        if (!confirm('Sei sicuro di voler eseguire l\'aggiornamento? L\'applicazione potrebbe riavviarsi.')) {
+        if (!confirm('Sei sicuro di voler eseguire l\'aggiornamento?\n\nIl servizio verrà riavviato automaticamente.')) {
             return;
         }
         
@@ -119,13 +122,13 @@ class UpdateChecker {
             
             if (data.status === 'success') {
                 console.log('✅ Aggiornamento completato');
-                this.notify('✅ Aggiornamento completato con successo!', 'success');
                 this.hideUpdatesBanner();
                 
-                // Ricarica la pagina dopo 2 secondi
+                // Riavvia automaticamente il servizio
+                this.notify('✅ Aggiornamento completato! Riavvio servizio...', 'success');
                 setTimeout(() => {
-                    location.reload();
-                }, 2000);
+                    this.restartService();
+                }, 1500);
             } else {
                 console.error('❌ Errore aggiornamento:', data.message);
                 this.notify(`Errore: ${data.message}`, 'error');
@@ -133,6 +136,33 @@ class UpdateChecker {
         } catch (error) {
             console.error('❌ Errore durante l\'aggiornamento:', error);
             this.notify('Errore durante l\'aggiornamento', 'error');
+        }
+    }
+    
+    async restartService() {
+        try {
+            this.notify('🔄 Riavvio servizio in corso... La pagina si ricaricherà automaticamente.', 'info');
+            
+            const response = await fetch('/api/updates/restart', {
+                method: 'POST'
+            });
+            
+            const data = await response.json();
+            
+            if (data.status === 'success') {
+                console.log('✅ Servizio riavviato');
+                
+                // Attendi 5 secondi e ricarica la pagina
+                setTimeout(() => {
+                    location.reload();
+                }, 5000);
+            } else {
+                console.error('❌ Errore riavvio:', data.message);
+                this.notify(`Errore riavvio: ${data.message}`, 'error');
+            }
+        } catch (error) {
+            console.error('❌ Errore durante il riavvio:', error);
+            this.notify('Errore durante il riavvio del servizio', 'error');
         }
     }
     
