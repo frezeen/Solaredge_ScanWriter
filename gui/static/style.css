@@ -312,10 +312,10 @@ body {
     gap: 1.5rem;
 }
 
-/* Layout ultra-compatto: 4 colonne per riga */
+/* Layout ultra-compatto: 6 colonne per riga */
 .stats-grid-compact {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(6, 1fr);
     gap: 0.5rem;
 }
 
@@ -360,6 +360,12 @@ body {
     font-size: 0.65rem;
     color: var(--text-muted);
     margin-top: 0.15rem;
+}
+
+.stat-item-compact.stat-spacer {
+    background: transparent;
+    border: none;
+    pointer-events: none;
 }
 
 /* ===== DEVICE CARD CONTENT ===== */
