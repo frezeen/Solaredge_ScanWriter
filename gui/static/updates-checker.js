@@ -142,10 +142,8 @@ class UpdateChecker {
                 // Salva flag per mostrare messaggio dopo riconnessione
                 localStorage.setItem('updateInProgress', 'true');
                 
-                // Attendi 5 secondi e prova a riconnettersi
-                setTimeout(() => {
-                    this.waitForReconnection();
-                }, 5000);
+                // Inizia subito a provare la riconnessione
+                this.waitForReconnection();
                 
             } else {
                 console.error('❌ Errore:', data.message);
@@ -162,7 +160,7 @@ class UpdateChecker {
         this.notify('🔄 Riconnessione in corso...', 'info');
         
         let attempts = 0;
-        const maxAttempts = 30; // 30 tentativi = 1.5 minuti
+        const maxAttempts = 120; // 120 tentativi = 2 minuti
         
         const tryReconnect = async () => {
             attempts++;
@@ -184,8 +182,10 @@ class UpdateChecker {
             }
             
             if (attempts < maxAttempts) {
-                console.log(`Tentativo ${attempts}/${maxAttempts}...`);
-                setTimeout(tryReconnect, 3000); // Riprova ogni 3 secondi
+                if (attempts % 10 === 0) {
+                    console.log(`Tentativo ${attempts}/${maxAttempts}...`);
+                }
+                setTimeout(tryReconnect, 1000); // Riprova ogni secondo
             } else {
                 console.error('❌ Timeout riconnessione');
                 this.notify('⚠️ Timeout riconnessione. Ricarica manualmente la pagina.', 'warning');
