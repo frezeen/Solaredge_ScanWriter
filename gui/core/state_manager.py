@@ -40,6 +40,10 @@ class StateManager:
         # Timestamp per reset automatico del tab "Tutti" ogni ora
         self.last_all_reset = datetime.now()
         
+        # Update tracking
+        self.updates_available = False
+        self.last_update_check = None
+        
         # Statistiche loop
         self.loop_stats = {
             'api_stats': {'executed': 0, 'success': 0, 'failed': 0},
