@@ -1050,19 +1050,29 @@ time /t >> {log_file}
             def _update_current_flow(self, message):
                 """Update current flow based on pipeline markers"""
                 message_lower = message.lower()
-                if '🚀 avvio flusso' in message_lower:
-                    for flow in ['api', 'web', 'realtime', 'gme']:
+                # Check for flow start markers (highest priority)
+                if '🚀 avvio flusso' in message_lower or 'avvio flusso' in message_lower:
+                    for flow in ['gme', 'api', 'web', 'realtime']:  # GME first for specificity
                         if flow in message_lower:
                             self.current_flow = flow
-                            break
+                            return
+                # Check for explicit flow markers in brackets
+                elif '[api]' in message_lower or 'flusso api' in message_lower:
+                    self.current_flow = 'api'
+                elif '[web]' in message_lower or 'flusso web' in message_lower:
+                    self.current_flow = 'web'
+                elif '[realtime]' in message_lower or 'flusso realtime' in message_lower:
+                    self.current_flow = 'realtime'
+                elif '[gme]' in message_lower or 'flusso gme' in message_lower:
+                    self.current_flow = 'gme'
+                # Reset flow context on completion messages
                 elif 'pipeline' in message_lower and 'completata' in message_lower:
                     self.current_flow = None
-                # Reset flow context on completion messages
                 elif any(marker in message_lower for marker in [
-                    '[gui] ✅ raccolta gme completata',
-                    '[gui] ✅ raccolta realtime completata',
-                    '[gui] ✅ raccolta api completata',
-                    '[gui] ✅ raccolta web completata'
+                    'raccolta gme completata',
+                    'raccolta realtime completata',
+                    'raccolta api completata',
+                    'raccolta web completata'
                 ]):
                     self.current_flow = None
             
