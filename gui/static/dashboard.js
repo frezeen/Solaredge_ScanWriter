@@ -1010,29 +1010,29 @@ class SolarDashboard {
                 }
             });
 
-            // Update timing (senza "next:", solo orario)
+            // Update timing (con "next:")
             if (stats.api_next_run) {
                 const el = document.getElementById('apiTiming');
-                if (el) el.textContent = stats.api_next_run;
+                if (el) el.textContent = `next: ${stats.api_next_run}`;
             }
 
             if (stats.web_next_run) {
                 const el = document.getElementById('webTiming');
-                if (el) el.textContent = stats.web_next_run;
+                if (el) el.textContent = `next: ${stats.web_next_run}`;
             }
 
             if (stats.gme_next_run) {
                 const el = document.getElementById('gmeTiming');
-                if (el) el.textContent = stats.gme_next_run;
+                if (el) el.textContent = `next: ${stats.gme_next_run}`;
             }
             
-            // Realtime next (calcola prossima esecuzione basata su 5s, senza "next:")
+            // Realtime next (calcola prossima esecuzione basata su 5s, con "next:")
             const realtimeTimingEl = document.getElementById('realtimeTiming');
             if (realtimeTimingEl) {
                 const now = new Date();
                 const nextRealtime = new Date(now.getTime() + 5000);
                 const nextStr = nextRealtime.toLocaleTimeString('it-IT', {hour: '2-digit', minute: '2-digit', second: '2-digit'});
-                realtimeTimingEl.textContent = nextStr;
+                realtimeTimingEl.textContent = `next: ${nextStr}`;
             }
         }
 
