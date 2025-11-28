@@ -222,6 +222,25 @@ class SolarEdgeAPIParser:
             meter_type = meter.get('type', 'PRODUCTION')
             values = meter.get('values', [])
             
+            # Per Production e FeedIn, aggiungi sempre un punto a 0 a mezzanotte
+            # Questo garantisce che Grafana possa fare fill() correttamente
+            if meter_type in ['Production', 'FeedIn'] and values:
+                first_item = values[0] if isinstance(values[0], dict) else {}
+                time_str = first_item.get(extraction.get('time_field', 'date'))
+                if time_str:
+                    ts = self._parse_timestamp(time_str)
+                    if ts:
+                        # Crea timestamp a mezzanotte dello stesso giorno
+                        midnight = ts.replace(hour=0, minute=0, second=1, microsecond=0)
+                        unit = extraction.get('unit') or first_item.get('unit') or first_item.get('unitType')
+                        
+                        midnight_dict = self._create_structured_dict(
+                            endpoint_name, category, 0.0,
+                            meter_type=meter_type, unit=unit, ts=midnight
+                        )
+                        if midnight_dict:
+                            structured_dicts.append(midnight_dict)
+            
             for item in values:
                 if not isinstance(item, dict):
                     continue

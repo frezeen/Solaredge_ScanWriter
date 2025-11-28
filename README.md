@@ -200,6 +200,22 @@ la visualizzazione Charts** nel portale SolarEdge.
 **Nota**: Senza Charts abilitato, il web scraping non funzionerà per nessun device. Puoi comunque usare API 
 e Modbus per raccogliere dati.
 
+### ℹ️ Nota Importante: Disponibilità Dati Notturni
+
+**Il Web Scraping SolarEdge va in errore dopo le 24:00** (mezzanotte). Il portale web SolarEdge non rende 
+disponibili i dati durante le ore notturne, causando il fallimento delle richieste di raccolta web.
+
+**Comportamento normale**:
+- ✅ Durante il giorno: Dati web raccolti regolarmente ogni 15 minuti
+- ❌ Dopo le 24:00: Le runs web vanno in errore (comportamento atteso)
+- 🔄 Mattina successiva: Raccolta riprende normalmente appena i dati tornano disponibili
+
+**Implicazioni**:
+- ✅ **API Ufficiali**: Continuano a funzionare normalmente 24/7
+- ❌ **Web Scraping**: Errori notturni sono normali e attesi (non è un bug)
+- ✅ **Modbus Realtime**: Continua a funzionare sempre (se configurato)
+- Gli errori web notturni nella GUI sono normali e non richiedono intervento
+
 ## 🚀 Installazione
 
 ### Metodo 1: One-Liner (Raccomandato)
