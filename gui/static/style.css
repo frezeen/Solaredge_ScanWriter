@@ -968,6 +968,98 @@ h4 {
     background: var(--text-muted);
 }
 
+/* ===== UPDATES BANNER ===== */
+.updates-banner {
+    background: linear-gradient(135deg, var(--accent-orange) 0%, #f97316 100%);
+    border-bottom: 2px solid #ea580c;
+    padding: 1rem 2rem;
+    position: sticky;
+    top: 0;
+    z-index: 200;
+    box-shadow: 0 4px 12px rgba(245, 158, 11, 0.3);
+    animation: slideDown 0.4s ease-out;
+}
+
+.updates-banner.hidden {
+    display: none;
+}
+
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        transform: translateY(-100%);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.updates-banner-content {
+    max-width: 1400px;
+    margin: 0 auto;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 2rem;
+}
+
+.updates-message {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    flex: 1;
+    color: white;
+    font-weight: 600;
+    font-size: 1rem;
+}
+
+.updates-icon {
+    font-size: 1.5rem;
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% {
+        transform: scale(1);
+    }
+    50% {
+        transform: scale(1.1);
+    }
+}
+
+.updates-text {
+    color: white;
+}
+
+.updates-actions {
+    display: flex;
+    gap: 0.75rem;
+}
+
+.updates-banner .btn {
+    background: rgba(255, 255, 255, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.4);
+    color: white;
+    font-weight: 600;
+    transition: all 0.3s ease;
+}
+
+.updates-banner .btn:hover {
+    background: rgba(255, 255, 255, 0.3);
+    border-color: rgba(255, 255, 255, 0.6);
+    transform: translateY(-2px);
+}
+
+.updates-banner .btn-success {
+    background: rgba(255, 255, 255, 0.25);
+    border-color: rgba(255, 255, 255, 0.5);
+}
+
+.updates-banner .btn-success:hover {
+    background: rgba(255, 255, 255, 0.35);
+}
+
 /* ===== RESPONSIVE ===== */
 @media (max-width: 768px) {
     .header-content {

@@ -537,6 +537,11 @@ class SimpleWebGUI:
         self.app.router.add_post('/api/modbus/devices/metrics/toggle', self.handle_toggle_modbus_metric)
         
         self.app.router.add_post('/api/log', self.handle_log)
+        
+        # Update check routes
+        self.app.router.add_get('/api/updates/check', self.handle_check_updates)
+        self.app.router.add_post('/api/updates/run', self.handle_run_update)
+        self.app.router.add_get('/api/updates/status', self.handle_get_update_status)
 
         return self.app
 
@@ -771,6 +776,139 @@ class SimpleWebGUI:
                 
         except Exception as e:
             return self.error_handler.handle_api_error(e, "toggling modbus device metric", "Error toggling modbus metric")
+
+    async def handle_check_updates(self, request):
+        """Controlla se ci sono nuovi aggiornamenti disponibili"""
+        try:
+            import subprocess
+            import os
+            
+            # Esegui git fetch per aggiornare le informazioni remote
+            result = subprocess.run(
+                ['git', 'fetch', 'origin'],
+                cwd=os.getcwd(),
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+            
+            if result.returncode != 0:
+                return web.json_response({
+                    'status': 'error',
+                    'message': 'Errore durante il controllo degli aggiornamenti',
+                    'error': result.stderr
+                }, status=500)
+            
+            # Controlla se il branch locale è dietro rispetto al remote
+            result = subprocess.run(
+                ['git', 'rev-list', '--left-right', '--count', 'HEAD...origin/main'],
+                cwd=os.getcwd(),
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+            
+            if result.returncode != 0:
+                # Prova con 'master' se 'main' non esiste
+                result = subprocess.run(
+                    ['git', 'rev-list', '--left-right', '--count', 'HEAD...origin/master'],
+                    cwd=os.getcwd(),
+                    capture_output=True,
+                    text=True,
+                    timeout=10
+                )
+            
+            if result.returncode == 0:
+                local, remote = map(int, result.stdout.strip().split())
+                updates_available = remote > 0
+                
+                # Salva lo stato nel state manager
+                self.state_manager.updates_available = updates_available
+                self.state_manager.last_update_check = datetime.now()
+                
+                return web.json_response({
+                    'status': 'success',
+                    'updates_available': updates_available,
+                    'local_commits': local,
+                    'remote_commits': remote,
+                    'message': f'Aggiornamenti disponibili: {remote} commit' if updates_available else 'Sei già aggiornato'
+                })
+            else:
+                return web.json_response({
+                    'status': 'error',
+                    'message': 'Errore durante il controllo degli aggiornamenti',
+                    'error': result.stderr
+                }, status=500)
+                
+        except subprocess.TimeoutExpired:
+            return web.json_response({
+                'status': 'error',
+                'message': 'Timeout durante il controllo degli aggiornamenti'
+            }, status=500)
+        except Exception as e:
+            return self.error_handler.handle_api_error(e, "checking updates", "Error checking for updates")
+
+    async def handle_run_update(self, request):
+        """Esegue lo script update.sh"""
+        try:
+            import subprocess
+            import os
+            
+            update_script = Path('update.sh')
+            if not update_script.exists():
+                return web.json_response({
+                    'status': 'error',
+                    'message': 'Script update.sh non trovato'
+                }, status=404)
+            
+            self.logger.info("[GUI] 🚀 Avvio aggiornamento tramite update.sh...")
+            
+            # Esegui lo script in background
+            result = subprocess.run(
+                ['bash', 'update.sh'],
+                cwd=os.getcwd(),
+                capture_output=True,
+                text=True,
+                timeout=300  # 5 minuti di timeout
+            )
+            
+            if result.returncode == 0:
+                self.logger.info("[GUI] ✅ Aggiornamento completato con successo")
+                self.state_manager.updates_available = False
+                
+                return web.json_response({
+                    'status': 'success',
+                    'message': 'Aggiornamento completato con successo',
+                    'output': result.stdout
+                })
+            else:
+                self.logger.error(f"[GUI] ❌ Errore durante l'aggiornamento: {result.stderr}")
+                
+                return web.json_response({
+                    'status': 'error',
+                    'message': 'Errore durante l\'esecuzione dell\'aggiornamento',
+                    'error': result.stderr
+                }, status=500)
+                
+        except subprocess.TimeoutExpired:
+            self.logger.error("[GUI] ❌ Timeout durante l'aggiornamento")
+            return web.json_response({
+                'status': 'error',
+                'message': 'Timeout durante l\'aggiornamento (>5 minuti)'
+            }, status=500)
+        except Exception as e:
+            return self.error_handler.handle_api_error(e, "running update", "Error running update")
+
+    async def handle_get_update_status(self, request):
+        """Restituisce lo stato attuale degli aggiornamenti"""
+        try:
+            return web.json_response({
+                'updates_available': getattr(self.state_manager, 'updates_available', False),
+                'last_check': getattr(self.state_manager, 'last_update_check', None),
+                'last_check_str': self.state_manager.last_update_check.strftime('%H:%M:%S') if getattr(self.state_manager, 'last_update_check', None) else 'Mai'
+            })
+        except Exception as e:
+            return self.error_handler.handle_api_error(e, "getting update status", "Error getting update status")
 
     def _setup_log_capture(self):
         """Setup log capture per la GUI con identificazione flow"""
