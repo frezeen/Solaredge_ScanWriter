@@ -63,21 +63,21 @@ body {
     gap: 1rem;
 }
 
-.logo-icon {
-    font-size: 2rem;
+.logo-icon,
+.logo h1 {
     background: linear-gradient(135deg, var(--accent-blue), var(--accent-green));
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
 }
 
+.logo-icon {
+    font-size: 2rem;
+}
+
 .logo h1 {
     font-size: 1.75rem;
     font-weight: 700;
-    background: linear-gradient(135deg, var(--text-primary), var(--text-secondary));
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
 }
 
 .header-stats {
@@ -89,6 +89,12 @@ body {
     display: flex;
     flex-direction: column;
     align-items: flex-end;
+}
+
+.stat-item {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
 }
 
 .stat-label {
@@ -136,7 +142,6 @@ body {
     gap: 0.5rem;
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     position: relative;
-    font-family: inherit;
 }
 
 .nav-btn:hover {
@@ -200,10 +205,6 @@ body {
     font-size: 2rem;
     font-weight: 700;
     margin-bottom: 0.5rem;
-    background: linear-gradient(135deg, var(--text-primary), var(--accent-blue));
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
 }
 
 .section-header p {
@@ -224,8 +225,8 @@ body {
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.endpoint-card,
-.device-card {
+.device-card,
+.endpoint-card {
     position: relative;
     overflow: hidden;
 }
@@ -242,8 +243,7 @@ body {
     transition: opacity 0.3s ease;
 }
 
-.device-card:hover,
-.endpoint-card:hover {
+.device-card:hover {
     transform: translateY(-4px);
     box-shadow: var(--shadow-lg);
     border-color: var(--border-light);
@@ -260,6 +260,7 @@ body {
 .endpoint-card:hover {
     transform: translateY(-2px);
     box-shadow: var(--shadow);
+    border-color: var(--border-light);
 }
 
 .logs-container,
@@ -269,7 +270,8 @@ body {
     overflow: hidden;
 }
 
-.status-card h3 {
+.status-card h3,
+.logs-header h3 {
     margin-bottom: 1.5rem;
     color: var(--text-primary);
     font-size: 1.25rem;
@@ -310,9 +312,6 @@ body {
 }
 
 .stats-grid .stat-item {
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
     padding: 1rem;
     background: var(--bg-secondary);
     border: 1px solid var(--border);
@@ -331,8 +330,6 @@ body {
     font-weight: 700;
     color: var(--text-primary);
 }
-
-
 
 /* ===== DEVICE CARD CONTENT ===== */
 .device-header {
@@ -389,7 +386,7 @@ body {
     border-top: 1px solid var(--border);
 }
 
-.device-metrics h4 {
+h4 {
     color: var(--text-secondary);
     font-size: 0.9rem;
     margin-bottom: 12px;
@@ -450,8 +447,6 @@ body {
     box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.2), 0 0 0 3px rgba(59, 130, 246, 0.1);
 }
 
-
-
 /* ===== METRICS & LISTS ===== */
 .metrics-list {
     display: flex;
@@ -475,8 +470,6 @@ body {
     border-color: var(--accent-blue);
     background: rgba(100, 149, 237, 0.1);
 }
-
-
 
 .metric-info {
     display: flex;
@@ -512,8 +505,6 @@ body {
     transform: scale(0.9);
 }
 
-
-
 /* ===== CATEGORIES (API & MODBUS) ===== */
 .api-categories,
 .modbus-categories {
@@ -531,7 +522,7 @@ body {
     align-items: center;
     gap: 0.5rem;
     padding: 0.75rem 1.25rem;
-    background: transparent;
+    background: none;
     border: 1px solid var(--border);
     border-radius: var(--radius);
     color: var(--text-secondary);
@@ -602,8 +593,6 @@ body {
     margin-bottom: 0.75rem;
 }
 
-
-
 .endpoint-status {
     font-size: 0.75rem;
     padding: 0.25rem 0.5rem;
@@ -642,8 +631,6 @@ body {
 
 .logs-header h3 {
     margin: 0;
-    color: var(--text-primary);
-    font-size: 1.25rem;
 }
 
 .log-tabs {
@@ -680,7 +667,7 @@ body {
     color: white;
 }
 
-.log-tab .tab-icon {
+.tab-icon {
     font-size: 1rem;
 }
 
@@ -838,7 +825,6 @@ body {
     color: var(--text-primary);
     padding: 0.5rem;
     border-radius: 6px;
-    font-family: inherit;
     font-size: 0.875rem;
     min-width: 200px;
 }
@@ -864,7 +850,6 @@ body {
     font-weight: 500;
     font-size: 0.875rem;
     transition: all 0.3s ease;
-    font-family: inherit;
 }
 
 .btn:hover {
@@ -945,12 +930,6 @@ body {
 
 .slide-in {
     animation: slideIn 0.4s ease-out;
-}
-
-@keyframes spin {
-    to {
-        transform: rotate(360deg);
-    }
 }
 
 

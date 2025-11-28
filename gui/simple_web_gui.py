@@ -153,23 +153,23 @@ class SimpleWebGUI:
         """
         config = update_context['config']
         source_key = update_context['source_key']
-        endpoints_or_devices = update_context['endpoints_or_devices']
+        entities = update_context['endpoints_or_devices']
         source_name = update_context['source_name']
         
         # Controlla se almeno un endpoint/device è abilitato
-        any_endpoint_enabled = any(
+        any_enabled = any(
             ep.get('enabled', False) 
-            for ep in endpoints_or_devices.values() 
+            for ep in entities.values() 
             if isinstance(ep, dict)
         )
         
         old_enabled = config[source_key].get('enabled', False)
         
-        if old_enabled != any_endpoint_enabled:
-            config[source_key]['enabled'] = any_endpoint_enabled
-            enabled_count = sum(1 for ep in endpoints_or_devices.values() if isinstance(ep, dict) and ep.get('enabled', False))
-            self.logger.info(f"{source_name} auto-{'abilitato' if any_endpoint_enabled else 'disabilitato'} (endpoint attivi: {enabled_count})")
-            return True, any_endpoint_enabled
+        if old_enabled != any_enabled:
+            config[source_key]['enabled'] = any_enabled
+            enabled_count = sum(1 for ep in entities.values() if isinstance(ep, dict) and ep.get('enabled', False))
+            self.logger.info(f"{source_name} auto-{'abilitato' if any_enabled else 'disabilitato'} (endpoint attivi: {enabled_count})")
+            return True, any_enabled
         
         return False, old_enabled
         
@@ -637,8 +637,8 @@ class SimpleWebGUI:
             current_state, new_state, endpoints = toggle_result
             
             # Auto-update source.enabled for API endpoints
-            source_auto_updated = False
-            any_endpoint_enabled = False
+            source_updated = False
+            any_enabled = False
             if source_type == 'api_ufficiali':
                 update_context = {
                     'config': config,
@@ -647,7 +647,7 @@ class SimpleWebGUI:
                     'config_path': config_path,
                     'source_name': 'API'
                 }
-                source_auto_updated, any_endpoint_enabled = self._auto_update_source_enabled(update_context)
+                source_updated, any_enabled = self._auto_update_source_enabled(update_context)
             
             success, error = self._save_endpoint_config(config_path, config)
             if not success:
@@ -662,10 +662,10 @@ class SimpleWebGUI:
                 'message': f'Endpoint {endpoint_id} {"enabled" if new_state else "disabled"}'
             }
             
-            if source_auto_updated:
+            if source_updated:
                 response_data['source_auto_updated'] = True
-                response_data['source_enabled'] = any_endpoint_enabled
-                response_data['message'] += f" - API {'abilitato' if any_endpoint_enabled else 'disabilitato'} automaticamente"
+                response_data['source_enabled'] = any_enabled
+                response_data['message'] += f" - API {'abilitato' if any_enabled else 'disabilitato'} automaticamente"
             
             return web.json_response(response_data)
                 
@@ -793,8 +793,8 @@ class SimpleWebGUI:
                     if record.levelname in ('ERROR', 'CRITICAL'):
                         # Check if it's a flow-specific error that should stay in its flow
                         # Otherwise, send to general/sistema
-                        flow_specific_errors = ['pipeline', 'flusso', 'flow', 'raccolta']
-                        if not any(kw in message.lower() for kw in flow_specific_errors):
+                        flow_errors = ['pipeline', 'flusso', 'flow', 'raccolta']
+                        if not any(kw in message.lower() for kw in flow_errors):
                             flow_type = 'general'
                     
                     self.gui.state_manager.add_log_entry(
@@ -1058,14 +1058,14 @@ class SimpleWebGUI:
         
         # Leggi intervalli dal file .env (stessi del main.py)
         import os
-        api_interval_minutes = int(os.getenv('LOOP_API_INTERVAL_MINUTES', '15'))
-        web_interval_minutes = int(os.getenv('LOOP_WEB_INTERVAL_MINUTES', '15'))
-        realtime_interval_seconds = int(os.getenv('LOOP_REALTIME_INTERVAL_SECONDS', '5'))
-        gme_interval_minutes = int(os.getenv('LOOP_GME_INTERVAL_MINUTES', '1440'))
+        api_mins = int(os.getenv('LOOP_API_INTERVAL_MINUTES', '15'))
+        web_mins = int(os.getenv('LOOP_WEB_INTERVAL_MINUTES', '15'))
+        realtime_secs = int(os.getenv('LOOP_REALTIME_INTERVAL_SECONDS', '5'))
+        gme_mins = int(os.getenv('LOOP_GME_INTERVAL_MINUTES', '1440'))
         
-        api_web_interval = timedelta(minutes=max(api_interval_minutes, web_interval_minutes))
-        realtime_interval = timedelta(seconds=realtime_interval_seconds)
-        gme_interval = timedelta(minutes=gme_interval_minutes)
+        api_web_interval = timedelta(minutes=max(api_mins, web_mins))
+        realtime_interval = timedelta(seconds=realtime_secs)
+        gme_interval = timedelta(minutes=gme_mins)
         last_realtime_run = datetime.min
         # Initialize GME to trigger immediately on first loop iteration
         # GME uses cache, so it's safe to run at startup
@@ -1086,14 +1086,14 @@ class SimpleWebGUI:
                     # Se il source è enabled, verifica che ci sia almeno un endpoint abilitato
                     if source_enabled:
                         endpoints = data.get(key, {}).get('endpoints', {})
-                        has_enabled_endpoint = any(
+                        has_enabled = any(
                             ep.get('enabled', False) 
                             for ep in endpoints.values() 
                             if isinstance(ep, dict)
                         )
                         
                         # Se non ci sono endpoint abilitati, considera il source come disabilitato
-                        if not has_enabled_endpoint:
+                        if not has_enabled:
                             self.logger.warning(f"[GUI] ⚠️ {key} è enabled ma non ha endpoint attivi - considerato disabilitato")
                             return False
                     
@@ -1112,25 +1112,25 @@ class SimpleWebGUI:
         
         # API
         if api_enabled:
-            status_parts.append(f"API: {api_interval_minutes} min")
+            status_parts.append(f"API: {api_mins} min")
         else:
             status_parts.append("API: DISABILITATO")
         
         # Web
         if web_enabled:
-            status_parts.append(f"Web: {web_interval_minutes} min")
+            status_parts.append(f"Web: {web_mins} min")
         else:
             status_parts.append("Web: DISABILITATO")
         
         # Realtime
         if modbus_enabled:
-            status_parts.append(f"Realtime: {realtime_interval_seconds} sec")
+            status_parts.append(f"Realtime: {realtime_secs} sec")
         else:
             status_parts.append("Realtime: DISABILITATO")
         
         # GME
         if gme_enabled:
-            status_parts.append(f"GME: {gme_interval_minutes} min")
+            status_parts.append(f"GME: {gme_mins} min")
         else:
             status_parts.append("GME: DISABILITATO")
         

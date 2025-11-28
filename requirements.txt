@@ -17,24 +17,14 @@ solaredge-modbus>=0.8.0
 # Environment Variables
 python-dotenv>=1.0.0
 
-# Date/Time utilities
-python-dateutil>=2.8.0
-
 # Async file operations
 aiofiles>=22.1.0
-
-# Optional: Web interface dependencies
-jinja2>=3.1.0
-aiohttp-jinja2>=1.5.0
 
 # Timezone support
 pytz>=2023.3
 
 # Terminal colors (cross-platform)
 colorama>=0.4.6
-
-# Cross-platform process management (for Docker fixes)
-psutil>=5.9.0
 
 # HTTP requests (fallback sync)
 requests>=2.28.0
