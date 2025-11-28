@@ -41,7 +41,6 @@ def run_realtime_flow(log: Logger, cache: CacheManager, config: Dict[str, Any]) 
         if filtered_points:
             with InfluxWriter() as writer:
                 writer.write_points(filtered_points, measurement_type="realtime")
-                log.info("✅ Pipeline realtime completata con successo")
         else:
             log.warning("Nessun punto valido da scrivere")
             log.info("[FLOW:REALTIME:STOP]")

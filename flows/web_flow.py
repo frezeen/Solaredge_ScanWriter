@@ -79,7 +79,6 @@ def run_web_flow(
                 if influx_points:
                     writer.write_points(influx_points, measurement_type="web")
                     total_points_written += len(influx_points)
-                    log.info(color.dim(f"   ✅ Scritti {len(influx_points)} punti per {date}"))
                 else:
                     log.warning(color.warning(f"   ⚠️ Nessun punto generato per {date}"))
             
@@ -98,10 +97,8 @@ def run_web_flow(
         log.info("[FLOW:WEB:STOP]")
         raise
     
-    # Log finale con statistiche
-    if total_points_written > 0:
-        log.info(color.success(f"✅ Pipeline web completata: {total_points_written} punti scritti per {len(dates_to_process)} giorni"))
-    else:
+    # Log finale con statistiche (solo warning se nessun punto)
+    if total_points_written == 0:
         log.warning(color.warning("⚠️ Nessun punto scritto - verifica configurazione e connettività"))
     
     log.info("[FLOW:WEB:STOP]")
