@@ -1029,7 +1029,15 @@ time /t >> {log_file}
                         if action == 'START':
                             self.flow_stack.append(flow_type)
                         elif action == 'STOP' and self.flow_stack:
+                            # Determina flow PRIMA di fare pop (così STOP va nel flow giusto)
+                            current_flow = self.flow_stack[-1]
                             self.flow_stack.pop()
+                            
+                            # Non mostrare il marker STOP nella GUI (è solo per tracking interno)
+                            return
+                        
+                        # Non mostrare il marker START nella GUI (è solo per tracking interno)
+                        return
                     
                     # Determina flow corrente dallo stack
                     current_flow = self.flow_stack[-1] if self.flow_stack else 'general'
