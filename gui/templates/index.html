@@ -208,39 +208,43 @@ GME_PASSWORD=your_password</pre>
                     <div class="status-card">
                         <h3>📊 Statistiche Loop</h3>
                         <div class="stats-grid-compact" id="statsGrid">
-                            <!-- Riga 1: Info essenziali -->
-                            <div class="stat-item stat-primary">
+                            <!-- Riga 1: Info generali -->
+                            <div class="stat-item-compact">
                                 <span class="stat-label">Stato</span>
-                                <span class="stat-value" id="loopStatus">Caricamento...</span>
+                                <span class="stat-value" id="loopStatus">--</span>
                             </div>
-                            <div class="stat-item stat-primary">
+                            <div class="stat-item-compact">
                                 <span class="stat-label">Uptime</span>
                                 <span class="stat-value" id="loopUptime">--</span>
                             </div>
-                            <div class="stat-item stat-primary">
-                                <span class="stat-label">Ultimo Update</span>
-                                <span class="stat-value" id="lastUpdate">--</span>
+                            <div class="stat-item-compact">
+                                <span class="stat-label">Prossima Run</span>
+                                <span class="stat-value stat-small" id="nextRun">--</span>
+                            </div>
+                            <div class="stat-item-compact">
+                                <span class="stat-label">Totale Runs</span>
+                                <span class="stat-value" id="totalRuns">0</span>
                             </div>
                             
                             <!-- Riga 2: Metriche flow -->
-                            <div class="stat-item">
+                            <div class="stat-item-compact">
                                 <span class="stat-label">💰 GME</span>
-                                <span class="stat-value" id="gmeRuns">0/0/0</span>
-                                <span class="stat-timing" id="gmeTiming">last: -- / next: --</span>
+                                <span class="stat-value stat-small" id="gmeRuns">▶️0 ✅0 ❌0</span>
+                                <span class="stat-timing" id="gmeTiming">next: --</span>
                             </div>
-                            <div class="stat-item">
+                            <div class="stat-item-compact">
                                 <span class="stat-label">🌐 API</span>
-                                <span class="stat-value" id="apiRuns">0/0</span>
-                                <span class="stat-timing" id="apiTiming">last: -- / next: --</span>
+                                <span class="stat-value stat-small" id="apiRuns">▶️0 ✅0 ❌0</span>
+                                <span class="stat-timing" id="apiTiming">next: --</span>
                             </div>
-                            <div class="stat-item">
+                            <div class="stat-item-compact">
                                 <span class="stat-label">🔌 Web</span>
-                                <span class="stat-value" id="webRuns">0/0</span>
-                                <span class="stat-timing" id="webTiming">last: -- / next: --</span>
+                                <span class="stat-value stat-small" id="webRuns">▶️0 ✅0 ❌0</span>
+                                <span class="stat-timing" id="webTiming">next: --</span>
                             </div>
-                            <div class="stat-item">
+                            <div class="stat-item-compact">
                                 <span class="stat-label">⚡ Realtime</span>
-                                <span class="stat-value" id="realtimeRuns">0</span>
+                                <span class="stat-value stat-small" id="realtimeRuns">▶️0 ✅0 ❌0</span>
                                 <span class="stat-timing" id="realtimeTiming">ogni 5s</span>
                             </div>
                         </div>
