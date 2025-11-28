@@ -385,7 +385,7 @@ secondo le tue esigenze. Tutti i 22 endpoint API sono disponibili per analisi pe
 **URL**: `http://localhost:8092` o IP della macchina
 
 
-La GUI offre 5 sezioni:
+La GUI offre 6 sezioni:
 
 1. **Device Web Scraping** - Gestisci device rilevati (Optimizer, Meter, Weather)
    ![WEB Endpoints](screenshoot/web%20endpoints.png)
@@ -393,9 +393,12 @@ La GUI offre 5 sezioni:
    ![API Endpoints](screenshoot/api%20endpoints.png)
 3. **Modbus Realtime** - Gestisci telemetria in tempo reale  
    ![Modbus Endpoints](screenshoot/modbus%20endpoints.png)
-4. **Loop Monitor** - Start/Stop loop, statistiche, log live
+4. **GME Prezzi** - Abilita raccolta prezzi PUN mercato elettrico italiano
+   ![GME Prezzi](screenshoot/gme%20prezzi.png)
+5. **Loop Monitor** - Start/Stop loop, statistiche, log live
    ![Loop Monitor](screenshoot/loop%20monitor.png)
-5. **Config Editor** - Editor per modificare manualmente tutti i file di configurazione con syntax highlighting
+6. **Config Editor** - Editor per modificare manualmente tutti i file di configurazione con syntax highlighting
+   ![Config Editor](screenshoot/config%20editor.png)
 
 ### Modalità Command Line
 
