@@ -806,13 +806,13 @@ class SolarDashboard {
             .join(' ');
     }, (dataAttrs) => JSON.stringify(dataAttrs));
 
-    // Memoized stats formatting (pure function)
+    // Memoized stats formatting (pure function) - formato verticale
     formatStats = this.memoize((stat) => {
-        if (!stat) return '▶️0 ✅0 ❌0';
+        if (!stat) return '▶️ 0\n✅ 0\n❌ 0';
         const exec = stat.executed || 0;
         const succ = stat.success || 0;
         const fail = stat.failed || 0;
-        return `▶️${exec} ✅${succ} ❌${fail}`;
+        return `▶️ ${exec}\n✅ ${succ}\n❌ ${fail}`;
     }, (stat) => JSON.stringify(stat));
 
     updateDeviceUI(id, data) {
@@ -995,29 +995,29 @@ class SolarDashboard {
                 if (el) el.textContent = value;
             });
 
-            // Update timing (solo next, più compatto)
+            // Update timing (senza "next:", solo orario)
             if (stats.api_next_run) {
                 const el = document.getElementById('apiTiming');
-                if (el) el.textContent = `next: ${stats.api_next_run}`;
+                if (el) el.textContent = stats.api_next_run;
             }
 
             if (stats.web_next_run) {
                 const el = document.getElementById('webTiming');
-                if (el) el.textContent = `next: ${stats.web_next_run}`;
+                if (el) el.textContent = stats.web_next_run;
             }
 
             if (stats.gme_next_run) {
                 const el = document.getElementById('gmeTiming');
-                if (el) el.textContent = `next: ${stats.gme_next_run}`;
+                if (el) el.textContent = stats.gme_next_run;
             }
             
-            // Realtime next (calcola prossima esecuzione basata su 5s)
+            // Realtime next (calcola prossima esecuzione basata su 5s, senza "next:")
             const realtimeTimingEl = document.getElementById('realtimeTiming');
             if (realtimeTimingEl) {
                 const now = new Date();
                 const nextRealtime = new Date(now.getTime() + 5000);
                 const nextStr = nextRealtime.toLocaleTimeString('it-IT', {hour: '2-digit', minute: '2-digit', second: '2-digit'});
-                realtimeTimingEl.textContent = `next: ${nextStr}`;
+                realtimeTimingEl.textContent = nextStr;
             }
         }
 
