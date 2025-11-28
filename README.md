@@ -47,6 +47,13 @@ Raccogli, analizza e visualizza i dati del tuo impianto fotovoltaico con dashboa
 - 🔧 **Stato Operativo**: Modalità funzionamento, allarmi, controlli di sicurezza
 - 📊 **Metriche Performance**: Efficienza conversione, fattore di potenza, THD
 
+**Prezzi Energia GME (Giornaliero)**
+
+- 💰 **PUN Orario**: Prezzi mercato elettrico italiano (MGP - Day-Ahead Market)
+- 📊 **Medie Mensili**: Calcolo automatico media progressiva per analisi costi
+- 🔄 **Storico Completo**: Download prezzi storici per calcoli ROI accurati
+- 📈 **Integrazione Grafana**: Query pre-configurate per analisi finanziarie
+
 ### 🧠 Elaborazione Intelligente e Affidabile
 
 **Pipeline Modulare Robusta**
@@ -72,13 +79,15 @@ Raccogli, analizza e visualizza i dati del tuo impianto fotovoltaico con dashboa
 - 🗜️ **Compressione Avanzata**: Riduzione spazio disco fino al 95%
 - 🔄 **Retention Policy**: Gestione automatica lifecycle dati (alta risoluzione → aggregati)
 - 🔍 **Query Potenti**: Flux query language per analisi complesse
+- 💾 **Bucket Dedicati**: Separazione logica dati (Solaredge, Realtime, GME)
 
 **Dashboard Grafana Pre-Configurate**
 
-- 📈 **Metriche Chiave**: Produzione, consumo, autoconsumo, bilancio energetico
-- 💰 **Calcoli Economici**: ROI, risparmio SSP, costi energia, payback period
+- � ***Metriche Chiave**: Produzione, consumo, autoconsumo, bilancio energetico
+- 💰 **Analisi Finanziarie**: Costo energia con/senza FV, rimborsi immissione, risparmio totale
+- � **Praezzi PUN**: Visualizzazione prezzi mercato elettrico italiano in tempo reale
 - 🌍 **Impatto Ambientale**: CO2 evitata, equivalente combustibili fossili
-- 📊 **Analisi Storiche**: Trend mensili, heatmap giornaliere, confronti annuali
+- � **Ainalisi Storiche**: Trend mensili, heatmap giornaliere, confronti annuali
 - ⚡ **Monitoraggio Realtime**: Potenza istantanea, stato inverter, allarmi
 - 🔧 **Diagnostica Optimizer**: Performance individuali pannelli, identificazione guasti
 
@@ -90,6 +99,7 @@ Raccogli, analizza e visualizza i dati del tuo impianto fotovoltaico con dashboa
 - 📝 **Editor Configurazione**: Syntax highlighting per modifiche YAML in tempo reale
 - 📊 **Statistiche Live**: Contatori richieste, errori, performance cache
 - 🔧 **Gestione Device**: Abilitazione/disabilitazione singoli endpoint e sensori
+- 🔄 **Sistema Update Integrato**: Controllo e applicazione aggiornamenti con un click
 
 **Automazione 24/7 Completa**
 
@@ -163,11 +173,15 @@ Il sistema è orchestrato tramite **Flows** (situati in `flows/`), che coordinan
 - **InfluxDB**: 2.x
 - **Grafana**: 10.x+
 
-### Credenziali SolarEdge
+### Credenziali SolarEdge e GME
 
+**SolarEdge:**
 - **API Key**: Ottienila dal portale o dal supporto SolarEdge
 - **Site ID**: ID del tuo impianto
 - **Username/Password**: Credenziali portale web
+
+**GME (Opzionale - per prezzi energia):**
+- **Username/Password**: Credenziali API GME (richiedi su mercatoelettrico.org)
 
 ### ⚠️ Requisito Web Scraping
 
@@ -246,13 +260,18 @@ SOLAREDGE_API_KEY=your_api_key
 # Modbus Realtime (OPZIONALE - solo se hai l'inverter in rete)
 REALTIME_MODBUS_HOST=192.168.1.100  # IP del tuo inverter
 REALTIME_MODBUS_PORT=1502
+
+# GME Prezzi Energia (OPZIONALE - per analisi costi)
+GME_USERNAME=your_gme_username
+GME_PASSWORD=your_gme_password
 ```
 
 **Note**:
 
 - ✅ **Con install.sh**: Il token InfluxDB è già configurato automaticamente
 - ⚙️ **Modbus**: Configura IP/porta solo se vuoi telemetria realtime dall'inverter
-- 🔧 **Abilitare/Disabilitare Modbus**: Usa la GUI (`http://localhost:8092` o IP della macchina) → Modbus Realtime → Toggle
+- � **GMiE**: Configura credenziali solo se vuoi analisi costi con prezzi PUN reali
+- 🔧 **Abilitare/Disabilitare**: Usa la GUI (`http://localhost:8092`) per toggle Modbus/GME
 - 🔧 **Altri parametri**: Già preconfigurati con valori ottimali
 
 #### 2. Genera Configurazione Device
@@ -374,6 +393,7 @@ La GUI offre 5 sezioni:
 python main.py --api        # Solo API
 python main.py --web        # Solo web scraping
 python main.py --realtime   # Solo Modbus
+python main.py --gme        # Solo prezzi GME
 python main.py --scan       # Aggiorna config device
 
 # Download storico
@@ -414,7 +434,8 @@ L'installer configura automaticamente:
 - 📈 Produzione totale (giornaliera, mensile, annuale, lifetime)
 - 🏠 Consumo e autoconsumo
 - ⚡ Prelievo e immissione rete
-- 💰 Calcoli economici SSP
+- 💰 **Analisi Finanziarie GME**: Costo energia con/senza FV, rimborsi immissione, risparmio totale
+- 💵 **Prezzi PUN**: Prezzo medio mensile e storico mercato elettrico italiano
 - 🌍 Emissioni CO2 evitate
 - 📊 Produzione mensile storica, heatmap giornaliera
 - ⚡ Potenza optimizer in tempo reale
@@ -425,6 +446,7 @@ L'installer configura automaticamente:
 - `docs/api_endpoints_reference.md`: Tutti gli endpoint API con esempi query
 - `docs/web_endpoints_reference.md`: Struttura dati web scraping
 - `docs/realtime_endpoints_reference.md`: Registri Modbus e telemetria
+- `docs/gme_api_reference.md`: API GME, schema InfluxDB, query Grafana per analisi finanziarie
 - `docs/retention_policy_setup.md`: Configurazione retention InfluxDB
 
 ## 🔧 Troubleshooting
@@ -465,21 +487,19 @@ rm cookies/web_cookies.json
 
 ### Aggiornamenti
 
-**Aggiornamento standard (raccomandato)**:
+**Metodo 1: GUI Web (Raccomandato)**
+
+Accedi alla GUI (`http://localhost:8092` o IP della macchina):
+1. Clicca sull'icona 🔄 in alto a destra
+2. Controlla aggiornamenti disponibili
+3. Clicca "Aggiorna Ora" per applicare
+4. Il sistema si riavvierà automaticamente
+
+**Metodo 2: Command Line**
 
 ```bash
 cd /opt/Solaredge_ScanWriter
 ./update.sh
-```
-
-**Comandi avanzati**:
-
-```bash
-# Solo controllo aggiornamenti (senza applicare)
-python3 scripts/smart_update.py --check-only
-
-# Aggiornamento forzato
-python3 scripts/smart_update.py --force
 ```
 
 **Lo script `update.sh`**:
