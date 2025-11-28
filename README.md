@@ -2,8 +2,8 @@
 
 **Sistema completo di monitoraggio per impianti fotovoltaici SolarEdge**
 
-Raccogli, analizza e visualizza i dati del tuo impianto fotovoltaico con dashboard Grafana 
-professionali. Gestione semplice tramite interfaccia web, nessuna configurazione manuale richiesta.
+Raccogli, analizza e visualizza i dati del tuo impianto fotovoltaico con dashboard Grafana professionali. 
+Gestione semplice tramite interfaccia web, nessuna configurazione manuale richiesta.
 
 ![Python](https://img.shields.io/badge/Python-3.11+-blue.svg)
 ![License](https://img.shields.io/badge/License-MIT-green.svg)
@@ -160,9 +160,9 @@ professionali. Gestione semplice tramite interfaccia web, nessuna configurazione
 └─────────────────────────────────────────────────────────────┘
 ```
 
-Il sistema è orchestrato tramite **Flows** (situati in `flows/`), che coordinano le operazioni 
-di raccolta, parsing e scrittura per ogni sorgente dati (API, Web, Realtime). `main.py` agisce 
-da entry point per avviare i vari flow.
+Il sistema è orchestrato tramite **Flows** (situati in `flows/`), che coordinano le operazioni di raccolta, 
+parsing e scrittura per ogni sorgente dati (API, Web, Realtime). `main.py` agisce da entry point per avviare 
+i vari flow.
 
 ## 📦 Requisiti
 
@@ -187,8 +187,8 @@ da entry point per avviare i vari flow.
 
 ### ⚠️ Requisito Web Scraping
 
-Per raccogliere dati tramite web scraping (optimizer, inverter, meter, sensori meteo), devi avere 
-**abilitata la visualizzazione Charts** nel portale SolarEdge.
+Per raccogliere dati tramite web scraping (optimizer, inverter, meter, sensori meteo), devi avere **abilitata 
+la visualizzazione Charts** nel portale SolarEdge.
 
 **Come abilitare**:
 
@@ -197,8 +197,8 @@ Per raccogliere dati tramite web scraping (optimizer, inverter, meter, sensori m
 3. Una volta abilitata, potrai visualizzare i grafici dettagliati di tutti i device nel portale web
 4. Solo a quel punto il web scraping potrà raccogliere questi dati
 
-**Nota**: Senza Charts abilitato, il web scraping non funzionerà per nessun device. 
-Puoi comunque usare API e Modbus per raccogliere dati.
+**Nota**: Senza Charts abilitato, il web scraping non funzionerà per nessun device. Puoi comunque usare API 
+e Modbus per raccogliere dati.
 
 ## 🚀 Installazione
 
@@ -291,8 +291,8 @@ Questo comando:
 - 📝 Rileva automaticamente tutti i device (inverter, optimizer, meter, sensori)
 - 💾 Genera il file `config/sources/web_endpoints.yaml`
 
-**⚠️ Importante**: Se non hai Charts abilitato, lo scan creerà un file yaml vuoto ma valido. 
-Potrai comunque usare API e Modbus.
+**⚠️ Importante**: Se non hai Charts abilitato, lo scan creerà un file yaml vuoto ma valido. Potrai comunque 
+usare API e Modbus.
 
 #### 3. Avvia Servizio
 
@@ -300,9 +300,8 @@ Potrai comunque usare API e Modbus.
 sudo systemctl enable --now solaredge-scanwriter
 ```
 
-Questo avvia GUI Dashboard (`http://localhost:8092` o IP della macchina), loop di raccolta dati 
-e scrittura su InfluxDB. Dalla GUI è possibile modificare manualmente tutti i file di 
-configurazione tramite il Config Editor.
+Questo avvia GUI Dashboard (`http://localhost:8092` o IP della macchina), loop di raccolta dati e scrittura 
+su InfluxDB. Dalla GUI è possibile modificare manualmente tutti i file di configurazione tramite il Config Editor.
 
 #### 4. Accedi a Grafana
 
@@ -370,9 +369,8 @@ La configurazione di default è ottimizzata per la dashboard Grafana inclusa:
 
 ### Personalizzazione
 
-Accedi alla GUI (`http://localhost:8092` o IP della macchina) per abilitare/disabilitare endpoint 
-aggiuntivi secondo le tue esigenze. Tutti i 22 endpoint API sono disponibili per analisi 
-personalizzate.
+Accedi alla GUI (`http://localhost:8092` o IP della macchina) per abilitare/disabilitare endpoint aggiuntivi 
+secondo le tue esigenze. Tutti i 22 endpoint API sono disponibili per analisi personalizzate.
 
 **Quando personalizzare**:
 
@@ -525,9 +523,8 @@ cd /opt/Solaredge_ScanWriter
 - ✅ **Importa automaticamente dashboard Grafana aggiornata**
 
 **⚠️ Importante - Dashboard Personalizzate**:
-Se hai creato dashboard personalizzate in Grafana, salvale con un **nome diverso** da "SolarEdge". 
-Lo script `update.sh` sovrascrive automaticamente la dashboard "SolarEdge" con la versione 
-aggiornata dal repository.
+Se hai creato dashboard personalizzate in Grafana, salvale con un **nome diverso** da "SolarEdge". Lo script 
+`update.sh` sovrascrive automaticamente la dashboard "SolarEdge" con la versione aggiornata dal repository.
 
 **Esempio**:
 
