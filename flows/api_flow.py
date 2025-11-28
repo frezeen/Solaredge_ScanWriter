@@ -21,6 +21,7 @@ def run_api_flow(
         start_date: Data inizio per history mode (formato YYYY-MM-DD)
         end_date: Data fine per history mode (formato YYYY-MM-DD)
     """
+    log.info("[FLOW:API:START]")
     log.info(color.bold("🚀 Avvio flusso API"))
     
     # Inizializza scheduler
@@ -40,12 +41,15 @@ def run_api_flow(
                 raw_data = collector.collect()
         except KeyboardInterrupt:
             log.info("🛑 Interruzione utente durante raccolta dati API")
+            log.info("[FLOW:API:STOP]")
             raise  # Propaga l'interruzione
         except ImportError as e:
             log.error(f"❌ Modulo API mancante: {e}. Verifica installazione dipendenze")
+            log.info("[FLOW:API:STOP]")
             raise
         except ConnectionError as e:
             log.error(f"❌ Errore connessione API SolarEdge: {e}. Verifica rete e credenziali")
+            log.info("[FLOW:API:STOP]")
             raise
         
         log.info(color.dim(f"   Raccolti dati da {len(raw_data)} endpoint"))
@@ -76,4 +80,5 @@ def run_api_flow(
         else:
             log.warning(color.warning("   Nessun punto da scrivere"))
     
+    log.info("[FLOW:API:STOP]")
     return 0

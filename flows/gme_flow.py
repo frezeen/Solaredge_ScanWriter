@@ -22,6 +22,7 @@ def run_gme_flow(
         start_date: Data inizio (formato YYYY-MM-DD)
         end_date: Data fine (formato YYYY-MM-DD)
     """
+    log.info("[FLOW:GME:START]")
     log.info(color.bold("🚀 Avvio flusso GME (Mercato Elettrico Italiano)"))
     
     # Se non specificate date, usa ieri (D+1 availability)
@@ -98,10 +99,12 @@ def run_gme_flow(
 
     except Exception as e:
         log.error(f"❌ Errore flusso GME: {e}")
+        log.info("[FLOW:GME:STOP]")
         raise
     finally:
         collector.close()
     
+    log.info("[FLOW:GME:STOP]")
     return 0
 
 def run_gme_month_flow(
