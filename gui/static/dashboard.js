@@ -1154,14 +1154,15 @@ function switchLogTab(flow) {
     const filterName = dashboard ? dashboard.getFilterName(flow) : (FILTER_NAMES[flow] || flow);
     setTextContent($('#logsFilter'), `Filtro: ${filterName}`);
 
-    // Use cached data if available and fresh (O(1) filtering)
-    if (isCacheFresh() && logCache.logs.length > 0) {
+    // Always show cached data immediately if available (even if not fresh)
+    // This prevents the "Nessun log disponibile" flash when switching tabs
+    if (logCache.logs.length > 0) {
         const filteredLogs = getFilteredLogsFromCache(flow);
         renderFilteredLogs(filteredLogs, filteredLogs.length, null);
-    } else {
-        // Otherwise fetch from server
-        loadFilteredLogs();
     }
+    
+    // Then fetch fresh data from server (will update the display when ready)
+    loadFilteredLogs();
 
     if (!logUpdateInterval) {
         logUpdateInterval = setInterval(loadFilteredLogs, 3000);
