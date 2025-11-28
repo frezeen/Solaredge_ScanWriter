@@ -21,6 +21,8 @@ except ImportError:
 
 class InfluxWriter:
     """Writer InfluxDB pulito - solo scrittura, nessuna elaborazione"""
+    
+    _initialized_once = False  # Flag di classe per log inizializzazione
 
     def __init__(self):
         """Inizializza InfluxWriter con bucket unificato."""
@@ -67,14 +69,17 @@ class InfluxWriter:
             )
             self._write_api = self._client.write_api(write_options=write_options)
             
-            self._log.info(
-                f"✅ InfluxWriter inizializzato - "
-                f"URL: {self._influx_config.url}, "
-                f"Org: {self._influx_config.org}, "
-                f"Bucket principale: {self._influx_config.bucket}, "
-                f"Bucket realtime: {self._influx_config.bucket_realtime}, "
-                f"Bucket GME: {self._influx_config.bucket_gme}"
-            )
+            # Log inizializzazione solo la prima volta (evita spam nei flow)
+            if not InfluxWriter._initialized_once:
+                self._log.info(
+                    f"✅ InfluxWriter inizializzato - "
+                    f"URL: {self._influx_config.url}, "
+                    f"Org: {self._influx_config.org}, "
+                    f"Bucket principale: {self._influx_config.bucket}, "
+                    f"Bucket realtime: {self._influx_config.bucket_realtime}, "
+                    f"Bucket GME: {self._influx_config.bucket_gme}"
+                )
+                InfluxWriter._initialized_once = True
             
         except Exception as e:
             raise RuntimeError(f"InfluxWriter: errore inizializzazione - {e}")
@@ -212,14 +217,10 @@ class InfluxWriter:
         
         try:
             # Scrivi su ogni bucket
-            total_written = 0
-            bucket_names = []
             for bucket, bucket_points in points_by_bucket.items():
                 self._write_api.write(bucket=bucket, org=self._influx_config.org, record=bucket_points)
-                total_written += len(bucket_points)
-                bucket_names.append(bucket)
                 
-                # Extract measurement for logging context
+                # Extract measurement type for detailed logging
                 meas_type = "unknown"
                 if bucket_points and hasattr(bucket_points[0], '_name'):
                     meas_type = bucket_points[0]._name
@@ -228,12 +229,10 @@ class InfluxWriter:
                 elif measurement_type:
                     meas_type = measurement_type
                 
+                # Log dettagliato con tipo di measurement
                 self._log.info(f"✅ Scritti {len(bucket_points)} punti su bucket {bucket} [Type: {meas_type}]")
             
             self._write_api.flush()
-            # Include bucket names in summary message for better log classification
-            bucket_list = ', '.join(bucket_names)
-            self._log.info(f"✅ Totale scritti {total_written} punti su bucket: {bucket_list}")
             
         except Exception as e:
             self._log.error(f"Errore scrittura InfluxDB: {e}")
