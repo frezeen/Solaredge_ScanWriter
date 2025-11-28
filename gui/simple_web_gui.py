@@ -868,18 +868,29 @@ class SimpleWebGUI:
             if platform.system() == 'Windows':
                 # Su Windows, usa PowerShell o cmd
                 cmd = ['powershell', '-NoProfile', '-Command', 'bash update.sh']
+                # Su Windows, passa 'y' come input per confermare
+                input_data = 'y\n'
             else:
                 # Su Linux/Mac, usa bash direttamente
                 cmd = ['bash', 'update.sh']
+                # Passa 'y' come input per confermare
+                input_data = 'y\n'
             
-            # Esegui lo script in background
+            # Esegui lo script con input automatico
             result = subprocess.run(
                 cmd,
                 cwd=os.getcwd(),
+                input=input_data,
                 capture_output=True,
                 text=True,
                 timeout=300  # 5 minuti di timeout
             )
+            
+            # Log output dello script
+            if result.stdout:
+                self.logger.info(f"[GUI] Update output:\n{result.stdout}")
+            if result.stderr:
+                self.logger.warning(f"[GUI] Update stderr:\n{result.stderr}")
             
             if result.returncode == 0:
                 self.logger.info("[GUI] ✅ Aggiornamento completato con successo")
@@ -892,12 +903,13 @@ class SimpleWebGUI:
                 })
             else:
                 error_msg = result.stderr or result.stdout or 'Errore sconosciuto'
-                self.logger.error(f"[GUI] ❌ Errore durante l'aggiornamento: {error_msg}")
+                self.logger.error(f"[GUI] ❌ Errore durante l'aggiornamento (exit code {result.returncode}): {error_msg}")
                 
                 return web.json_response({
                     'status': 'error',
                     'message': 'Errore durante l\'esecuzione dell\'aggiornamento',
-                    'error': error_msg
+                    'error': error_msg,
+                    'exit_code': result.returncode
                 }, status=500)
                 
         except subprocess.TimeoutExpired:
@@ -907,7 +919,7 @@ class SimpleWebGUI:
                 'message': 'Timeout durante l\'aggiornamento (>5 minuti)'
             }, status=500)
         except Exception as e:
-            self.logger.error(f"[GUI] ❌ Errore esecuzione update: {e}")
+            self.logger.error(f"[GUI] ❌ Errore esecuzione update: {e}", exc_info=True)
             return self.error_handler.handle_api_error(e, "running update", "Error running update")
 
     async def handle_get_update_status(self, request):
