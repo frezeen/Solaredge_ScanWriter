@@ -868,29 +868,69 @@ class SimpleWebGUI:
             # L'input 'y\n' conferma automaticamente il prompt di update.sh
             
             try:
-                # Usa systemd-run per eseguire l'update come servizio temporaneo
-                # Questo garantisce che continui anche quando il servizio principale si ferma
+                import platform
                 log_file = os.path.join(os.getcwd(), 'logs', 'update_gui.log')
                 
-                result = subprocess.run(
-                    [
-                        'systemd-run',
-                        '--unit=solaredge-update',
-                        '--description=SolarEdge Update from GUI',
-                        f'--working-directory={os.getcwd()}',
-                        'bash', '-c',
-                        f'./update.sh > {log_file} 2>&1'
-                    ],
-                    capture_output=True,
-                    text=True,
-                    timeout=5
-                )
-                
-                if result.returncode == 0:
-                    self.logger.info(f"[GUI] ✅ Update avviato come servizio systemd - Log: {log_file}")
+                if platform.system() == 'Windows':
+                    # Windows: usa Task Scheduler per eseguire update in background
+                    script_content = f"""
+@echo off
+cd /d {os.getcwd()}
+echo === Update avviato da GUI === > {log_file}
+date /t >> {log_file}
+time /t >> {log_file}
+powershell -NoProfile -Command "bash update.sh" >> {log_file} 2>&1
+echo === Update completato === >> {log_file}
+date /t >> {log_file}
+time /t >> {log_file}
+"""
+                    script_path = os.path.join(os.getcwd(), '.update_gui.bat')
+                    with open(script_path, 'w') as f:
+                        f.write(script_content)
+                    
+                    # Esegui con Task Scheduler
+                    result = subprocess.run(
+                        [
+                            'schtasks', '/Create',
+                            '/TN', 'SolarEdgeUpdate',
+                            '/TR', script_path,
+                            '/SC', 'ONCE',
+                            '/ST', '00:00',
+                            '/F'
+                        ],
+                        capture_output=True,
+                        text=True,
+                        timeout=5
+                    )
+                    
+                    if result.returncode == 0:
+                        # Esegui subito il task
+                        subprocess.run(['schtasks', '/Run', '/TN', 'SolarEdgeUpdate'], timeout=5)
+                        self.logger.info(f"[GUI] ✅ Update avviato con Task Scheduler - Log: {log_file}")
+                    else:
+                        raise Exception(f"Task Scheduler failed: {result.stderr}")
+                        
                 else:
-                    self.logger.error(f"[GUI] ❌ Errore systemd-run: {result.stderr}")
-                    raise Exception(f"systemd-run failed: {result.stderr}")
+                    # Linux: usa systemd-run
+                    result = subprocess.run(
+                        [
+                            'systemd-run',
+                            '--unit=solaredge-update',
+                            '--description=SolarEdge Update from GUI',
+                            f'--working-directory={os.getcwd()}',
+                            'bash', '-c',
+                            f'./update.sh > {log_file} 2>&1'
+                        ],
+                        capture_output=True,
+                        text=True,
+                        timeout=5
+                    )
+                    
+                    if result.returncode == 0:
+                        self.logger.info(f"[GUI] ✅ Update avviato come servizio systemd - Log: {log_file}")
+                    else:
+                        self.logger.error(f"[GUI] ❌ Errore systemd-run: {result.stderr}")
+                        raise Exception(f"systemd-run failed: {result.stderr}")
                 
                 return web.json_response({
                     'status': 'success',
