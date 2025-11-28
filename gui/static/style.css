@@ -83,6 +83,13 @@ body {
 .header-stats {
     display: flex;
     gap: 2rem;
+    align-items: center;
+}
+
+.header-updates {
+    display: flex;
+    gap: 0.75rem;
+    align-items: center;
 }
 
 .header-stats .stat-item {
