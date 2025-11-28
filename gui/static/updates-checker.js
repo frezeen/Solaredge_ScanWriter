@@ -12,6 +12,16 @@ class UpdateChecker {
     init() {
         this.createUpdatesBanner();
         this.startAutoCheck();
+        
+        // Controlla se c'è stato un aggiornamento
+        if (localStorage.getItem('updateInProgress') === 'true') {
+            localStorage.removeItem('updateInProgress');
+            setTimeout(() => {
+                alert('✅ Aggiornamento completato con successo!\n\nIl sistema è stato aggiornato e riavviato.');
+                this.notify('✅ Sistema aggiornato con successo!', 'success');
+            }, 1000);
+        }
+        
         // Controlla subito al caricamento
         this.checkForUpdates();
     }
@@ -139,6 +149,9 @@ class UpdateChecker {
                 this.hideUpdatesBanner();
                 this.notify('✅ Aggiornamento avviato! Attendi la riconnessione...', 'success');
                 
+                // Salva flag per mostrare messaggio dopo riconnessione
+                localStorage.setItem('updateInProgress', 'true');
+                
                 // Attendi 30 secondi e prova a riconnettersi
                 setTimeout(() => {
                     this.waitForReconnection();
@@ -172,13 +185,8 @@ class UpdateChecker {
                 
                 if (response.ok) {
                     console.log('✅ Riconnesso!');
-                    this.notify('✅ Sistema aggiornato con successo! Ricaricamento...', 'success');
-                    
-                    // Mostra alert con conferma
-                    setTimeout(() => {
-                        alert('✅ Aggiornamento completato con successo!\n\nIl sistema è stato aggiornato e riavviato.');
-                        location.reload();
-                    }, 500);
+                    // Ricarica la pagina - il messaggio verrà mostrato dopo
+                    location.reload();
                     return;
                 }
             } catch (error) {
