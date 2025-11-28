@@ -12,6 +12,7 @@ class UpdateChecker {
     init() {
         this.createUpdatesBanner();
         this.startAutoCheck();
+        this.checkUpdateCompleted();
         // Controlla subito al caricamento
         this.checkForUpdates();
     }
@@ -176,7 +177,9 @@ class UpdateChecker {
                 
                 if (response.ok) {
                     console.log('✅ Riconnesso!');
-                    // Ricarica la pagina - il messaggio verrà mostrato dopo
+                    // Salva flag per mostrare messaggio dopo reload
+                    sessionStorage.setItem('updateCompleted', 'true');
+                    // Ricarica la pagina
                     location.reload();
                     return;
                 }
@@ -196,6 +199,15 @@ class UpdateChecker {
         };
         
         tryReconnect();
+    }
+    
+    checkUpdateCompleted() {
+        // Controlla se l'update è stato completato (dopo reload)
+        if (sessionStorage.getItem('updateCompleted') === 'true') {
+            sessionStorage.removeItem('updateCompleted');
+            this.notify('✅ Aggiornamento completato con successo!', 'success');
+            console.log('✅ Aggiornamento completato con successo!');
+        }
     }
     
     notify(message, type = 'info') {
