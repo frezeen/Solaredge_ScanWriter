@@ -1027,7 +1027,7 @@
             "fixedColor": "dark-red",
             "mode": "fixed"
           },
-          "decimals": 2,
+          "decimals": 3,
           "mappings": [],
           "thresholds": {
             "mode": "absolute",
@@ -1054,13 +1054,13 @@
         "colorMode": "background",
         "graphMode": "none",
         "justifyMode": "center",
-        "orientation": "horizontal",
+        "orientation": "auto",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
           "calcs": [
             "last"
           ],
-          "fields": "/^_value$/",
+          "fields": "/.*/",
           "limit": 2,
           "values": false
         },
@@ -1076,7 +1076,7 @@
             "type": "influxdb",
             "uid": "ff27vpmruzxtsc"
           },
-          "query": "import \"timezone\"\r\nimport \"date\"\r\nimport \"array\"\r\n\r\noption location = timezone.location(name: \"Europe/Rome\")\r\n\r\nstart = date.truncate(t: now(), unit: 1d)\r\n\r\n// Prezzo da variabile Grafana (oppure hardcoded)\r\nprezzo_kwh = float(v: \"${price:raw}\")  // Grafana variable\r\n// prezzo_kwh = 0.25  // oppure hardcoded\r\n\r\nbase = from(bucket: \"Solaredge_Realtime\")\r\n  |> range(start: start)\r\n  |> filter(fn: (r) =>\r\n    r._measurement == \"realtime\" and\r\n    r._field == \"Meter\" and\r\n    r.endpoint == \"Import Energy Active\" and\r\n    r.unit == \"Wh\"\r\n  )\r\n\r\ndata_first = base\r\n  |> filter(fn: (r) => exists r._value and r._value > 0.0)\r\n  |> sort(columns: [\"_time\"], desc: false)\r\n  |> limit(n: 1)\r\n\r\nfirst_record = data_first |> findRecord(fn: (key) => true, idx: 0)\r\n\r\ndata_last = base |> last()\r\nlast_record = data_last |> findRecord(fn: (key) => true, idx: 0)\r\n\r\nprelievo_wh = last_record._value - first_record._value\r\nprelievo_finale = if prelievo_wh < 0.0 then 0.0 else prelievo_wh\r\ncosto_eur = (prelievo_finale / 1000.0) * prezzo_kwh\r\n\r\narray.from(rows: [\r\n  {\r\n    _time: last_record._time,\r\n    _field: \"prelievo_oggi_wh\",\r\n    _value: prelievo_finale\r\n  },\r\n  {\r\n    _time: last_record._time,\r\n    _field: \"costo_prelievo_oggi\",\r\n    _value: costo_eur\r\n  }\r\n])",
+          "query": "import \"timezone\"\r\nimport \"date\"\r\nimport \"array\"\r\n\r\noption location = timezone.location(name: \"Europe/Rome\")\r\n\r\nstart = date.truncate(t: now(), unit: 1d)\r\nmonth_start = date.truncate(t: now(), unit: 1mo)\r\n\r\n// Recupera prezzo PUN\r\nprezzo_pun = from(bucket: \"GME\")\r\n  |> range(start: month_start)\r\n  |> filter(fn: (r) => r._measurement == \"gme_monthly_avg\" and r._field == \"pun_kwh_avg\")\r\n  |> last()\r\n  |> findRecord(fn: (key) => true, idx: 0)\r\n\r\n// Calcolo prelievo\r\nbase = from(bucket: \"Solaredge_Realtime\")\r\n  |> range(start: start)\r\n  |> filter(fn: (r) => r._measurement == \"realtime\" and r._field == \"Meter\" and r.endpoint == \"Import Energy Active\" and r.unit == \"Wh\")\r\n\r\nfirst = base |> filter(fn: (r) => exists r._value and r._value > 0.0) |> sort(columns: [\"_time\"]) |> limit(n: 1) |> findRecord(fn: (key) => true, idx: 0)\r\nlast = base |> last() |> findRecord(fn: (key) => true, idx: 0)\r\n\r\nprelievo = if (last._value - first._value) < 0.0 then 0.0 else (last._value - first._value)\r\ncosto = (prelievo / 1000.0) * prezzo_pun._value\r\n\r\narray.from(rows: [{PUN: prezzo_pun._value, Costo: costo}])\r\n",
           "refId": "Costo Prelievo"
         }
       ],
@@ -1689,7 +1689,7 @@
             "fixedColor": "light-yellow",
             "mode": "thresholds"
           },
-          "decimals": 2,
+          "decimals": 3,
           "mappings": [],
           "thresholds": {
             "mode": "absolute",
@@ -1716,13 +1716,13 @@
         "colorMode": "background",
         "graphMode": "none",
         "justifyMode": "center",
-        "orientation": "horizontal",
+        "orientation": "auto",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
           "calcs": [
             "last"
           ],
-          "fields": "/^_value$/",
+          "fields": "/.*/",
           "limit": 1,
           "values": false
         },
@@ -1738,7 +1738,7 @@
             "type": "influxdb",
             "uid": "ff27vpmruzxtsc"
           },
-          "query": "import \"timezone\"\r\nimport \"date\"\r\nimport \"array\"\r\n\r\noption location = timezone.location(name: \"Europe/Rome\")\r\n\r\nstart = date.truncate(t: now(), unit: 1d)\r\nstop  = date.add(d: 1d, to: start)\r\n\r\n// Prezzo da variabile Grafana (oppure hardcoded)\r\nprezzo_kwh = float(v: \"${price:raw}\")  // Grafana variable\r\n// prezzo_kwh = 0.25  // oppure hardcoded\r\n\r\n// Produzione giornaliera (ultimo - primo)\r\ndata_prod = from(bucket: \"Solaredge_Realtime\")\r\n  |> range(start: start, stop: stop)\r\n  |> filter(fn: (r) =>\r\n      r._measurement == \"realtime\" and\r\n      r._field == \"Inverter\" and\r\n      r.endpoint == \"Energy Total\" and\r\n      r.unit == \"Wh\"\r\n  )\r\n\r\nfirst_prod = data_prod |> first() |> findRecord(fn: (key) => true, idx: 0)\r\nlast_prod = data_prod |> last() |> findRecord(fn: (key) => true, idx: 0)\r\nprod_value = last_prod._value - first_prod._value\r\n\r\n// Export giornaliero (ultimo - primo)\r\ndata_exp = from(bucket: \"Solaredge_Realtime\")\r\n  |> range(start: start, stop: stop)\r\n  |> filter(fn: (r) =>\r\n      r._measurement == \"realtime\" and\r\n      r._field == \"Meter\" and\r\n      r.endpoint == \"Export Energy Active\" and\r\n      r.unit == \"Wh\"\r\n  )\r\n\r\nfirst_exp = data_exp |> first() |> findRecord(fn: (key) => true, idx: 0)\r\nlast_exp = data_exp |> last() |> findRecord(fn: (key) => true, idx: 0)\r\nexp_value = last_exp._value - first_exp._value\r\n\r\n// Autoconsumo (Wh) = Produzione - Export, clamp ≥ 0\r\nautoconsumo_wh = prod_value - exp_value\r\nautoconsumo_finale = if autoconsumo_wh < 0.0 then 0.0 else autoconsumo_wh\r\n\r\n// Risparmio (EUR) = (Wh / 1000) * prezzo_kWh\r\nrisparmio_eur = (autoconsumo_finale / 1000.0) * prezzo_kwh\r\n\r\n// Output con tutte le colonne uguali\r\narray.from(rows: [\r\n  {\r\n    _time: now(),\r\n    _field: \"autoconsumo_oggi_wh\",\r\n    _value: autoconsumo_finale\r\n  },\r\n  {\r\n    _time: now(),\r\n    _field: \"risparmio_autoconsumo_oggi\",\r\n    _value: risparmio_eur\r\n  }\r\n])",
+          "query": "import \"timezone\"\r\nimport \"date\"\r\nimport \"array\"\r\n\r\noption location = timezone.location(name: \"Europe/Rome\")\r\n\r\nstart = date.truncate(t: now(), unit: 1d)\r\nstop = date.add(d: 1d, to: start)\r\nmonth_start = date.truncate(t: now(), unit: 1mo)\r\n\r\n// Recupera prezzo PUN medio mensile (già pre-calcolato)\r\nprezzo_pun = from(bucket: \"GME\")\r\n  |> range(start: month_start)\r\n  |> filter(fn: (r) => r._measurement == \"gme_monthly_avg\" and r._field == \"pun_kwh_avg\")\r\n  |> last()\r\n  |> findRecord(fn: (key) => true, idx: 0)\r\n\r\n// Produzione giornaliera\r\ndata_prod = from(bucket: \"Solaredge_Realtime\")\r\n  |> range(start: start, stop: stop)\r\n  |> filter(fn: (r) => r._measurement == \"realtime\" and r._field == \"Inverter\" and r.endpoint == \"Energy Total\" and r.unit == \"Wh\")\r\n\r\nfirst_prod = data_prod |> first() |> findRecord(fn: (key) => true, idx: 0)\r\nlast_prod = data_prod |> last() |> findRecord(fn: (key) => true, idx: 0)\r\nprod_value = last_prod._value - first_prod._value\r\n\r\n// Export giornaliero\r\ndata_exp = from(bucket: \"Solaredge_Realtime\")\r\n  |> range(start: start, stop: stop)\r\n  |> filter(fn: (r) => r._measurement == \"realtime\" and r._field == \"Meter\" and r.endpoint == \"Export Energy Active\" and r.unit == \"Wh\")\r\n\r\nfirst_exp = data_exp |> first() |> findRecord(fn: (key) => true, idx: 0)\r\nlast_exp = data_exp |> last() |> findRecord(fn: (key) => true, idx: 0)\r\nexp_value = last_exp._value - first_exp._value\r\n\r\n// Autoconsumo e risparmio\r\nautoconsumo = if (prod_value - exp_value) < 0.0 then 0.0 else (prod_value - exp_value)\r\nrisparmio = (autoconsumo / 1000.0) * prezzo_pun._value\r\n\r\narray.from(rows: [{PUN: prezzo_pun._value, Risparmio: risparmio}])\r\n",
           "refId": "Risparmio Autoconsumo"
         }
       ],
@@ -5191,7 +5191,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "F"
+              "options": "Costo Prelievo Con Fotovoltaico"
             },
             "properties": [
               {
@@ -5206,13 +5206,28 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "G"
+              "options": "Rimborsi Immissione"
             },
             "properties": [
               {
                 "id": "color",
                 "value": {
-                  "fixedColor": "dark-green",
+                  "fixedColor": "blue",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Guadagno Netto"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "green",
                   "mode": "fixed"
                 }
               }
@@ -5237,12 +5252,12 @@
           "calcs": [
             "lastNotNull"
           ],
-          "fields": "",
+          "fields": "/.*/",
           "values": false
         },
         "showPercentChange": false,
         "text": {},
-        "textMode": "auto",
+        "textMode": "value_and_name",
         "wideLayout": true
       },
       "pluginVersion": "12.3.0",
@@ -5252,93 +5267,41 @@
             "type": "influxdb",
             "uid": "ff27vpmruzxtsc"
           },
-          "hide": true,
-          "query": "from(bucket: \"Solaredge\")\n  |> range(start: 0, stop: now())\n  |> filter(fn: (r) => r._measurement == \"api\" and r._field == \"Meter\" and r.endpoint == \"site_energy_details\" and r.metric == \"Production\")\n  |> filter(fn: (r) => exists r._value)\n  |> group()\n  |> sum()\n  |> map(fn: (r) => ({ r with _value: r._value / 1000.0 }))\n",
-          "refId": "A"
+          "hide": false,
+          "query": "import \"timezone\"\r\nimport \"date\"\r\nimport \"join\"\r\n\r\noption location = timezone.location(name: \"Europe/Rome\")\r\n\r\n// 1. Consumo mensile\r\nconsumo = from(bucket: \"Solaredge\")\r\n  |> range(start: 0)\r\n  |> filter(fn: (r) => r._measurement == \"api\" and r._field == \"Meter\" and r.endpoint == \"site_energy_details\" and r.metric == \"Consumption\")\r\n  |> aggregateWindow(every: 1mo, fn: sum, createEmpty: false)\r\n  |> group()\r\n  |> map(fn: (r) => ({_time: r._time, year: string(v: date.year(t: r._time)), month: string(v: date.month(t: r._time)), consumo_wh: r._value}))\r\n\r\n// 2. PUN mensile\r\npun = from(bucket: \"GME\")\r\n  |> range(start: 0)\r\n  |> filter(fn: (r) => r._measurement == \"gme_monthly_avg\" and r._field == \"pun_kwh_avg\")\r\n  |> group()\r\n  |> map(fn: (r) => ({_time: r._time, year: r.year, month: string(v: date.month(t: r._time)), pun: r._value}))\r\n\r\n// 3. Join, calcola costo e somma totale\r\njoin.inner(\r\n  left: consumo,\r\n  right: pun,\r\n  on: (l, r) => l.year == r.year and l.month == r.month,\r\n  as: (l, r) => ({\r\n    _time: l._time,\r\n    \"Costo Senza Fotovoltaico\": (l.consumo_wh / 1000.0) * r.pun\r\n  })\r\n)\r\n  |> sum(column: \"Costo Senza Fotovoltaico\")\r\n",
+          "refId": "Costo Senza Fotovoltaico"
         },
         {
           "datasource": {
             "type": "influxdb",
             "uid": "ff27vpmruzxtsc"
           },
-          "hide": true,
-          "query": "from(bucket: \"Solaredge\")\n  |> range(start: 0, stop: now())\n  |> filter(fn: (r) => r._measurement == \"api\" and r._field == \"Meter\" and r.endpoint == \"site_energy_details\" and r.metric == \"Purchased\")\n  |> filter(fn: (r) => exists r._value)\n  |> group()\n  |> sum()\n  |> map(fn: (r) => ({ r with _value: r._value / 1000.0 }))\n",
-          "refId": "B"
+          "hide": false,
+          "query": "import \"timezone\"\r\nimport \"date\"\r\nimport \"join\"\r\n\r\noption location = timezone.location(name: \"Europe/Rome\")\r\n\r\n// 1. Prelievo mensile (energia acquistata dalla rete)\r\nprelievo = from(bucket: \"Solaredge\")\r\n  |> range(start: 0)\r\n  |> filter(fn: (r) => r._measurement == \"api\" and r._field == \"Meter\" and r.endpoint == \"site_energy_details\" and r.metric == \"Purchased\")\r\n  |> aggregateWindow(every: 1mo, fn: sum, createEmpty: false)\r\n  |> group()\r\n  |> map(fn: (r) => ({_time: r._time, year: string(v: date.year(t: r._time)), month: string(v: date.month(t: r._time)), prelievo_wh: r._value}))\r\n\r\n// 2. PUN mensile\r\npun = from(bucket: \"GME\")\r\n  |> range(start: 0)\r\n  |> filter(fn: (r) => r._measurement == \"gme_monthly_avg\" and r._field == \"pun_kwh_avg\")\r\n  |> group()\r\n  |> map(fn: (r) => ({_time: r._time, year: r.year, month: string(v: date.month(t: r._time)), pun: r._value}))\r\n\r\n// 3. Join, calcola costo e somma totale\r\njoin.inner(\r\n  left: prelievo,\r\n  right: pun,\r\n  on: (l, r) => l.year == r.year and l.month == r.month,\r\n  as: (l, r) => ({\r\n    _time: l._time,\r\n    \"Costo Prelievo Con Fotovoltaico\": (l.prelievo_wh / 1000.0) * r.pun\r\n  })\r\n)\r\n  |> sum(column: \"Costo Prelievo Con Fotovoltaico\")\r\n",
+          "refId": "Costo Con Fotovoltaico"
         },
         {
           "datasource": {
             "type": "influxdb",
             "uid": "ff27vpmruzxtsc"
           },
-          "hide": true,
-          "query": "from(bucket: \"Solaredge\")\n  |> range(start: 0, stop: now())\n  |> filter(fn: (r) => r._measurement == \"api\" and r._field == \"Meter\" and r.endpoint == \"site_energy_details\" and r.metric == \"FeedIn\")\n  |> filter(fn: (r) => exists r._value)\n  |> group()\n  |> sum()\n  |> map(fn: (r) => ({ r with _value: r._value / 1000.0 }))\n",
-          "refId": "C"
-        },
-        {
-          "datasource": {
-            "type": "__expr__",
-            "uid": "__expr__"
-          },
-          "expression": "$A + $B - $C",
-          "hide": true,
-          "refId": "D",
-          "type": "math"
-        },
-        {
-          "datasource": {
-            "type": "__expr__",
-            "uid": "__expr__"
-          },
-          "expression": "$D * ${price}",
           "hide": false,
-          "refId": "E",
-          "type": "math"
+          "query": "import \"timezone\"\r\nimport \"date\"\r\nimport \"join\"\r\n\r\noption location = timezone.location(name: \"Europe/Rome\")\r\n\r\n// 1. Immissione mensile (energia venduta alla rete)\r\nimmissione = from(bucket: \"Solaredge\")\r\n  |> range(start: 0)\r\n  |> filter(fn: (r) => r._measurement == \"api\" and r._field == \"Meter\" and r.endpoint == \"site_energy_details\" and r.metric == \"FeedIn\")\r\n  |> aggregateWindow(every: 1mo, fn: sum, createEmpty: false)\r\n  |> group()\r\n  |> map(fn: (r) => ({_time: r._time, year: string(v: date.year(t: r._time)), month: string(v: date.month(t: r._time)), immissione_wh: r._value}))\r\n\r\n// 2. PUN mensile\r\npun = from(bucket: \"GME\")\r\n  |> range(start: 0)\r\n  |> filter(fn: (r) => r._measurement == \"gme_monthly_avg\" and r._field == \"pun_kwh_avg\")\r\n  |> group()\r\n  |> map(fn: (r) => ({_time: r._time, year: r.year, month: string(v: date.month(t: r._time)), pun: r._value}))\r\n\r\n// 3. Join, calcola rimborso e somma totale\r\njoin.inner(\r\n  left: immissione,\r\n  right: pun,\r\n  on: (l, r) => l.year == r.year and l.month == r.month,\r\n  as: (l, r) => ({\r\n    _time: l._time,\r\n    \"Rimborsi Immissione\": (l.immissione_wh / 1000.0) * r.pun\r\n  })\r\n)\r\n  |> sum(column: \"Rimborsi Immissione\")\r\n",
+          "refId": "Rimborsi Immissione"
         },
         {
           "datasource": {
+            "name": "Expression",
             "type": "__expr__",
             "uid": "__expr__"
           },
-          "expression": "($D * ${price}) - ($B * ${pricescambiato}) - (($C - $B) * ${priceimmissione})",
+          "expression": "${Costo Senza Fotovoltaico} - ${Costo Con Fotovoltaico} + ${Rimborsi Immissione}",
           "hide": false,
-          "refId": "F",
-          "type": "math"
-        },
-        {
-          "datasource": {
-            "type": "__expr__",
-            "uid": "__expr__"
-          },
-          "expression": "$E - $F",
-          "hide": false,
-          "refId": "G",
+          "refId": "Guadagno Netto",
           "type": "math"
         }
       ],
       "title": "Riepilogo SSP - Vita Impianto",
-      "transformations": [
-        {
-          "id": "renameByRegex",
-          "options": {
-            "regex": "E",
-            "renamePattern": "Spesa Senza FV"
-          }
-        },
-        {
-          "id": "renameByRegex",
-          "options": {
-            "regex": "F",
-            "renamePattern": "Spesa Con FV"
-          }
-        },
-        {
-          "id": "renameByRegex",
-          "options": {
-            "regex": "G",
-            "renamePattern": "Risparmio Netto"
-          }
-        }
-      ],
       "transparent": true,
       "type": "stat"
     }
@@ -5348,65 +5311,7 @@
   "schemaVersion": 42,
   "tags": [],
   "templating": {
-    "list": [
-      {
-        "current": {
-          "text": "0.20",
-          "value": "0.20"
-        },
-        "description": "€ / KWh",
-        "includeAll": false,
-        "label": "Prezzo Energia Fornitore",
-        "name": "price",
-        "options": [
-          {
-            "selected": true,
-            "text": "0.20",
-            "value": "0.20"
-          }
-        ],
-        "query": "0.20",
-        "type": "custom"
-      },
-      {
-        "current": {
-          "text": "0.20",
-          "value": "0.20"
-        },
-        "description": "€ / KWh",
-        "includeAll": false,
-        "label": "Prezzo Energia Scambiata ",
-        "name": "pricescambiato",
-        "options": [
-          {
-            "selected": true,
-            "text": "0.20",
-            "value": "0.20"
-          }
-        ],
-        "query": "0.20",
-        "type": "custom"
-      },
-      {
-        "current": {
-          "text": "0.10",
-          "value": "0.10"
-        },
-        "description": "€ / KWh",
-        "includeAll": false,
-        "label": "Prezzo Energia Immessa",
-        "name": "priceimmissione",
-        "options": [
-          {
-            "selected": true,
-            "text": "0.10",
-            "value": "0.10"
-          }
-        ],
-        "query": "0.10",
-        "type": "custom"
-      }
-    ]
+    "list": []
   },
   "time": {
     "from": "now/d",
@@ -5416,6 +5321,6 @@
   "timezone": "",
   "title": "Solaredge 3.0",
   "uid": "afb91a6f-d8f7-43ae-8a98-67eab1bb4baa",
-  "version": 331,
+  "version": 388,
   "weekStart": "monday"
 }
