@@ -9,6 +9,7 @@ from utils.color_logger import color
 
 def run_realtime_flow(log: Logger, cache: CacheManager, config: Dict[str, Any]) -> int:
     """Pipeline realtime: collector → parser → filtro → writer (coerente con altri flussi)"""
+    log.info("[FLOW:REALTIME:START]")
     log.info(color.bold("🚀 Avvio flusso realtime"))
     
     try:
@@ -43,8 +44,10 @@ def run_realtime_flow(log: Logger, cache: CacheManager, config: Dict[str, Any]) 
                 log.info("✅ Pipeline realtime completata con successo")
         else:
             log.warning("Nessun punto valido da scrivere")
+            log.info("[FLOW:REALTIME:STOP]")
             return 1
         
+        log.info("[FLOW:REALTIME:STOP]")
         return 0
         
     except KeyboardInterrupt:
@@ -54,8 +57,10 @@ def run_realtime_flow(log: Logger, cache: CacheManager, config: Dict[str, Any]) 
         # Modbus disabilitato nella configurazione - non è un errore
         if "disabilitato nella configurazione" in str(e):
             log.info("ℹ️ Modbus disabilitato nella configurazione, skip realtime")
+            log.info("[FLOW:REALTIME:STOP]")
             return 0  # Ritorna successo, non errore
         log.error(f"❌ Errore valore pipeline realtime: {e}")
+        log.info("[FLOW:REALTIME:STOP]")
         raise
     except ImportError as e:
         log.error(f"❌ Modulo realtime mancante: {e}. Verifica installazione pymodbus")
