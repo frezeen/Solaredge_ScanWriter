@@ -350,6 +350,12 @@ body {
     font-weight: 700;
     color: var(--text-primary);
     line-height: 1.2;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    flex: 1;
 }
 
 .stat-item-compact .stat-value.stat-small {
