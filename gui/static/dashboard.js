@@ -806,14 +806,22 @@ class SolarDashboard {
             .join(' ');
     }, (dataAttrs) => JSON.stringify(dataAttrs));
 
-    // Memoized stats formatting (pure function) - formato verticale
+    // Memoized stats formatting (pure function) - formato verticale con allineamento
     formatStats = this.memoize((stat) => {
-        if (!stat) return '▶️ 0\n✅ 0\n❌ 0';
+        if (!stat) {
+            return this.createStatHTML('▶️', 0, '✅', 0, '❌', 0);
+        }
         const exec = stat.executed || 0;
         const succ = stat.success || 0;
         const fail = stat.failed || 0;
-        return `▶️ ${exec}\n✅ ${succ}\n❌ ${fail}`;
+        return this.createStatHTML('▶️', exec, '✅', succ, '❌', fail);
     }, (stat) => JSON.stringify(stat));
+    
+    createStatHTML(icon1, val1, icon2, val2, icon3, val3) {
+        return `<span style="display:flex;justify-content:space-between;width:100%"><span>${icon1}</span><span>${val1}</span></span>` +
+               `<span style="display:flex;justify-content:space-between;width:100%"><span>${icon2}</span><span>${val2}</span></span>` +
+               `<span style="display:flex;justify-content:space-between;width:100%"><span>${icon3}</span><span>${val3}</span></span>`;
+    }
 
     updateDeviceUI(id, data) {
         const card = $(`[data-device-id="${id}"]`);
@@ -992,7 +1000,14 @@ class SolarDashboard {
 
             Object.entries(elements).forEach(([id, value]) => {
                 const el = document.getElementById(id);
-                if (el) el.textContent = value;
+                if (el) {
+                    // Per le stats dei flow, usa innerHTML per supportare HTML
+                    if (['apiRuns', 'webRuns', 'realtimeRuns', 'gmeRuns'].includes(id)) {
+                        el.innerHTML = value;
+                    } else {
+                        el.textContent = value;
+                    }
+                }
             });
 
             // Update timing (senza "next:", solo orario)
