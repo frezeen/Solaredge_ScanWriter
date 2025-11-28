@@ -49,6 +49,10 @@
                 <span class="nav-icon">⚡</span>
                 Modbus Realtime
             </button>
+            <button class="nav-btn" data-section="gme">
+                <span class="nav-icon">💰</span>
+                GME Prezzi
+            </button>
             <button class="nav-btn active" data-section="loop">
                 <span class="nav-icon">🔄</span>
                 Loop Monitor
@@ -137,6 +141,58 @@
                 
                 <div class="modbus-grid" id="modbusGrid">
                     <!-- Modbus devices will be loaded here -->
+                </div>
+            </section>
+
+            <!-- GME SECTION -->
+            <section class="content-section" id="gme-section">
+                <div class="section-header">
+                    <h2>💰 GME Prezzi Energia</h2>
+                    <p>Abilita raccolta prezzi PUN dal mercato elettrico italiano</p>
+                </div>
+                
+                <div class="gme-card">
+                    <div class="gme-header">
+                        <div class="gme-info">
+                            <h3>📊 Gestore Mercati Energetici</h3>
+                            <p>Scarica prezzi PUN orari per analisi costi e ROI fotovoltaico</p>
+                        </div>
+                        <label class="toggle-switch" data-toggle-type="gme">
+                            <input type="checkbox" id="gmeToggle">
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                    
+                    <div class="gme-details">
+                        <div class="gme-feature">
+                            <span class="feature-icon">💵</span>
+                            <div>
+                                <strong>Prezzi PUN Orari</strong>
+                                <p>Prezzi mercato MGP (Day-Ahead Market)</p>
+                            </div>
+                        </div>
+                        <div class="gme-feature">
+                            <span class="feature-icon">📈</span>
+                            <div>
+                                <strong>Medie Mensili</strong>
+                                <p>Calcolo automatico media progressiva</p>
+                            </div>
+                        </div>
+                        <div class="gme-feature">
+                            <span class="feature-icon">💰</span>
+                            <div>
+                                <strong>Analisi Finanziarie</strong>
+                                <p>Costo con/senza FV, rimborsi, risparmio</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="gme-config">
+                        <p><strong>Configurazione:</strong> Imposta credenziali GME in <code>.env</code></p>
+                        <pre>GME_USERNAME=your_username
+GME_PASSWORD=your_password</pre>
+                        <p class="gme-note">ℹ️ Richiedi credenziali su <a href="https://www.mercatoelettrico.org" target="_blank">mercatoelettrico.org</a></p>
+                    </div>
                 </div>
             </section>
 

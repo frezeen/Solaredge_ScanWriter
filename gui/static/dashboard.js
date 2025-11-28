@@ -196,6 +196,9 @@ class SolarDashboard {
                 case 'modbus-metric':
                     this.toggleModbusMetric(deviceId, metricName, checked);
                     break;
+                case 'gme':
+                    this.toggleGME();
+                    break;
             }
         };
 
@@ -239,6 +242,9 @@ class SolarDashboard {
             ]);
 
             Object.assign(this.state, { devices, endpoints, modbus, config });
+            
+            // Load GME toggle state
+            this.loadGMEState();
             this._invalidateOptimizerCache();
 
             const editor = $('#yamlEditor');
@@ -1341,3 +1347,43 @@ document.addEventListener('DOMContentLoaded', () => {
     dashboard = new SolarDashboard();
     switchLogTab('all');
 });
+
+    // GME Methods
+    loadGMEState() {
+        const gmeToggle = $('#gmeToggle');
+        if (gmeToggle && this.state.config && this.state.config.gme) {
+            gmeToggle.checked = this.state.config.gme.enabled || false;
+        }
+    }
+
+    async toggleGME() {
+        const gmeToggle = $('#gmeToggle');
+        if (!gmeToggle) return;
+
+        try {
+            const response = await this.apiCall('POST', '/api/gme/toggle');
+            
+            if (response.status === 'success') {
+                gmeToggle.checked = response.enabled;
+                this.notify(`GME ${response.enabled ? 'abilitato' : 'disabilitato'}`, 'success');
+                
+                // Update config state
+                if (!this.state.config.gme) {
+                    this.state.config.gme = {};
+                }
+                this.state.config.gme.enabled = response.enabled;
+                
+                // Invalidate config cache
+                this.invalidateCache('config');
+            } else {
+                this.notify('Errore toggle GME', 'error');
+                // Revert toggle
+                gmeToggle.checked = !gmeToggle.checked;
+            }
+        } catch (error) {
+            console.error('Error toggling GME:', error);
+            this.notify('Errore toggle GME', 'error');
+            // Revert toggle
+            gmeToggle.checked = !gmeToggle.checked;
+        }
+    }
