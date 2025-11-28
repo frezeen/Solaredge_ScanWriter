@@ -868,16 +868,27 @@ class SimpleWebGUI:
             # L'input 'y\n' conferma automaticamente il prompt di update.sh
             
             try:
-                # Usa nohup con setsid per creare un processo completamente indipendente
-                # Reindirizza output a file di log per debug
+                # Crea script temporaneo che esegue l'update
                 log_file = os.path.join(os.getcwd(), 'logs', 'update_gui.log')
                 
-                # Crea script temporaneo che esegue l'update
                 script_content = f"""#!/bin/bash
 cd {os.getcwd()}
 echo "=== Update avviato da GUI ===" >> {log_file}
 date >> {log_file}
-echo 'y' | ./update.sh >> {log_file} 2>&1
+
+# Usa expect per rispondere automaticamente al prompt, oppure yes come fallback
+if command -v expect &> /dev/null; then
+    expect << 'EOF' >> {log_file} 2>&1
+spawn ./update.sh
+expect "Vuoi continuare?"
+send "y\\r"
+expect eof
+EOF
+else
+    # Fallback: usa yes per rispondere automaticamente
+    yes y | ./update.sh >> {log_file} 2>&1
+fi
+
 echo "=== Update completato ===" >> {log_file}
 date >> {log_file}
 """
@@ -887,15 +898,14 @@ date >> {log_file}
                     f.write(script_content)
                 os.chmod(script_path, 0o755)
                 
-                # Esegui lo script in background con nohup e setsid
+                # Esegui lo script in background
                 subprocess.Popen(
-                    ['setsid', 'nohup', 'bash', script_path],
+                    ['bash', script_path],
                     stdout=subprocess.DEVNULL,
                     stderr=subprocess.DEVNULL,
                     stdin=subprocess.DEVNULL,
                     cwd=os.getcwd(),
-                    start_new_session=True,
-                    preexec_fn=os.setpgrp if hasattr(os, 'setpgrp') else None
+                    start_new_session=True
                 )
                 
                 self.logger.info(f"[GUI] ✅ Update avviato in background - Log: {log_file}")
