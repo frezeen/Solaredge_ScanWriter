@@ -13,9 +13,20 @@
     <script>
         if (localStorage.getItem('updateInProgress') === 'true') {
             localStorage.removeItem('updateInProgress');
-            // Mostra appena possibile
+            // Mostra notifica non appena il DOM è pronto
             window.addEventListener('DOMContentLoaded', function() {
-                alert('✅ Aggiornamento completato con successo!\\n\\nIl sistema è stato aggiornato e riavviato.');
+                // Crea notifica visibile
+                var banner = document.createElement('div');
+                banner.style.cssText = 'position:fixed;top:20px;left:50%;transform:translateX(-50%);background:#10b981;color:white;padding:20px 40px;border-radius:12px;box-shadow:0 10px 40px rgba(0,0,0,0.3);z-index:10000;font-size:18px;font-weight:600;text-align:center;';
+                banner.innerHTML = '✅ Aggiornamento completato con successo!<br><small style="font-size:14px;opacity:0.9;">Il sistema è stato aggiornato e riavviato</small>';
+                document.body.appendChild(banner);
+                
+                // Rimuovi dopo 5 secondi
+                setTimeout(function() {
+                    banner.style.transition = 'opacity 0.5s';
+                    banner.style.opacity = '0';
+                    setTimeout(function() { banner.remove(); }, 500);
+                }, 5000);
             });
         }
     </script>
