@@ -320,12 +320,12 @@ body {
 }
 
 .stat-item-compact {
-    padding: 0.65rem 0.85rem;
+    padding: 0.8rem 1rem;
     background: var(--bg-secondary);
     border: 1px solid var(--border);
     border-radius: var(--radius);
     transition: all 0.2s ease;
-    min-height: 70px;
+    min-height: 85px;
     display: flex;
     flex-direction: column;
     justify-content: flex-start;
@@ -337,35 +337,35 @@ body {
 }
 
 .stat-item-compact .stat-label {
-    font-size: 0.75rem;
+    font-size: 0.85rem;
     font-weight: 600;
     color: var(--text-muted);
-    margin-bottom: 0.3rem;
+    margin-bottom: 0.35rem;
     text-transform: uppercase;
     letter-spacing: 0.5px;
 }
 
 .stat-item-compact .stat-value {
-    font-size: 1.1rem;
+    font-size: 1.3rem;
     font-weight: 700;
     color: var(--text-primary);
     line-height: 1.2;
 }
 
 .stat-item-compact .stat-value.stat-small {
-    font-size: 0.95rem;
+    font-size: 1.1rem;
 }
 
 .stat-item-compact .stat-value.stat-list {
-    font-size: 0.7rem;
+    font-size: 0.8rem;
     line-height: 1.5;
     white-space: pre-line;
 }
 
 .stat-item-compact .stat-timing {
-    font-size: 0.7rem;
+    font-size: 0.8rem;
     color: var(--text-muted);
-    margin-top: 0.2rem;
+    margin-top: 0.25rem;
 }
 
 .stat-item-compact.stat-spacer {
