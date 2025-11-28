@@ -25,15 +25,7 @@ class UpdateChecker {
             <div class="updates-banner-content">
                 <div class="updates-message">
                     <span class="updates-icon">📦</span>
-                    <span class="updates-text">Aggiornamenti disponibili!</span>
-                </div>
-                <div class="updates-actions">
-                    <button class="btn btn-secondary btn-sm" onclick="updateChecker.checkForUpdates()">
-                        🔄 Controlla
-                    </button>
-                    <button class="btn btn-success btn-sm" onclick="updateChecker.runUpdate()">
-                        ⬆️ Aggiorna
-                    </button>
+                    <span class="updates-text" id="updatesBannerText">Aggiornamenti disponibili!</span>
                 </div>
             </div>
         `;
@@ -86,7 +78,7 @@ class UpdateChecker {
             this.restartService();
         } else if (updates_available) {
             console.log(`📦 Aggiornamenti disponibili: ${remote_commits} commit`);
-            this.showUpdatesBanner();
+            this.showUpdatesBanner(remote_commits);
             this.notify(`${message}`, 'info');
         } else {
             console.log('✅ Sei già aggiornato');
@@ -95,8 +87,14 @@ class UpdateChecker {
         }
     }
     
-    showUpdatesBanner() {
+    showUpdatesBanner(commits = 0) {
         if (this.updatesBanner) {
+            // Aggiorna il testo con il numero di commit
+            const textElement = this.updatesBanner.querySelector('#updatesBannerText');
+            if (textElement) {
+                const commitText = commits === 1 ? '1 commit' : `${commits} commit`;
+                textElement.textContent = `Aggiornamenti disponibili: ${commitText}`;
+            }
             this.updatesBanner.classList.remove('hidden');
         }
     }
