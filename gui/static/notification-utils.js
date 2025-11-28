@@ -17,42 +17,76 @@ const NOTIFICATION_DURATIONS = {
     'warning': 5000
 };
 
+// Container for stacked notifications
+let notificationContainer = null;
+
+/**
+ * Get or create notification container
+ */
+function getNotificationContainer() {
+    if (!notificationContainer) {
+        notificationContainer = document.createElement('div');
+        Object.assign(notificationContainer.style, {
+            position: 'fixed',
+            top: '20px',
+            right: '20px',
+            zIndex: '1000',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '10px',
+            pointerEvents: 'none'
+        });
+        document.body.appendChild(notificationContainer);
+    }
+    return notificationContainer;
+}
+
 /**
  * Show a notification toast message
  * @param {string} message - Message to display
  * @param {string} type - Notification type: 'success', 'error', 'info', 'warning'
  */
 function notify(message, type = 'info') {
+    const container = getNotificationContainer();
     const el = document.createElement('div');
     
     // Apply styles
     Object.assign(el.style, {
-        position: 'fixed',
-        top: '20px',
-        right: '20px',
         background: NOTIFICATION_COLORS[type] || NOTIFICATION_COLORS.info,
         color: 'white',
         padding: '1rem 1.5rem',
         borderRadius: '8px',
         boxShadow: 'var(--shadow-lg)',
-        zIndex: '1000',
         fontWeight: '500',
-        transform: 'translateX(100%)',
-        transition: 'transform 0.3s ease',
-        maxWidth: '400px'
+        transform: 'translateX(calc(100% + 20px))',
+        transition: 'transform 0.3s ease, opacity 0.3s ease',
+        maxWidth: '400px',
+        pointerEvents: 'auto',
+        opacity: '0'
     });
 
     el.textContent = message;
-    document.body.appendChild(el);
+    container.appendChild(el);
 
     // Animate in
-    setTimeout(() => el.style.transform = 'translateX(0)', 100);
+    setTimeout(() => {
+        el.style.transform = 'translateX(0)';
+        el.style.opacity = '1';
+    }, 100);
     
     // Animate out and remove
     const duration = NOTIFICATION_DURATIONS[type] || NOTIFICATION_DURATIONS.info;
     setTimeout(() => {
-        el.style.transform = 'translateX(100%)';
-        setTimeout(() => el.remove(), 300);
+        el.style.transform = 'translateX(calc(100% + 20px))';
+        el.style.opacity = '0';
+        setTimeout(() => {
+            el.remove();
+            // Remove container if empty
+            if (container.children.length === 0) {
+                container.remove();
+                notificationContainer = null;
+            }
+        }, 300);
     }, duration);
 }
 
