@@ -353,7 +353,9 @@ body {
 }
 
 .stat-item-compact .stat-value.stat-small {
-    font-size: 1.1rem;
+    font-size: 0.9rem;
+    line-height: 1.6;
+    white-space: pre-line;
 }
 
 .stat-item-compact .stat-value.stat-list {
