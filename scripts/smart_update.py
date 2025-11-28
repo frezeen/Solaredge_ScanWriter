@@ -675,6 +675,25 @@ except Exception as e:
             
         return True
     
+    def _finalize_update_no_restart(self) -> bool:
+        """Finalizza l'aggiornamento senza riavviare il servizio"""
+        # Aggiorna pacchetti di sistema
+        self.update_system_packages()
+        
+        # Aggiorna dipendenze Python
+        if not self.update_dependencies():
+            self.log("Dependency update failed", "WARNING")
+            
+        # Valida configurazione
+        if not self.validate_configuration():
+            self.log("Configuration validation failed", "ERROR")
+            return False
+        
+        # Importa dashboard Grafana
+        self.import_grafana_dashboard()
+        
+        return True
+    
     def _finalize_update(self, service_name: Optional[str], service_was_running: bool) -> bool:
         """Finalizza l'aggiornamento: dipendenze, validazione e riavvio servizi"""
         # 7. Aggiorna pacchetti di sistema
@@ -844,7 +863,7 @@ except Exception as e:
         if self.update_metrics['errors_encountered']:
             self.log(f"Errors encountered: {len(self.update_metrics['errors_encountered'])}", "WARNING")
     
-    def run_update(self, force: bool = False) -> bool:
+    def run_update(self, force: bool = False, no_service_restart: bool = False) -> bool:
         """Esegue l'aggiornamento completo con metriche"""
         self.update_metrics['start_time'] = datetime.now()
         try:
@@ -857,9 +876,15 @@ except Exception as e:
             if not self._execute_update_steps():
                 return False
                 
-            # Finalizzazione
-            if not self._finalize_update(service_name, service_was_running):
-                return False
+            # Finalizzazione (salta riavvio servizio se richiesto)
+            if no_service_restart:
+                # Esegui solo aggiornamento dipendenze e validazione, salta riavvio
+                if not self._finalize_update_no_restart():
+                    return False
+                self.log("Update completed - service restart skipped (manual restart required)", "SUCCESS")
+            else:
+                if not self._finalize_update(service_name, service_was_running):
+                    return False
                 
             # Log completamento
             self.update_metrics['end_time'] = datetime.now()
@@ -883,6 +908,7 @@ async def main_async() -> int:
     parser = argparse.ArgumentParser(description="Smart Update System for SolarEdge Data Collector")
     parser.add_argument("--force", action="store_true", help="Force update even if no changes detected")
     parser.add_argument("--check-only", action="store_true", help="Only check for updates, don't apply")
+    parser.add_argument("--no-service-restart", action="store_true", help="Skip service restart after update")
     
     args = parser.parse_args()
     
@@ -906,7 +932,7 @@ async def main_async() -> int:
                 print("No updates available")
                 return 1
         else:
-            success = updater.run_update(force=args.force)
+            success = updater.run_update(force=args.force, no_service_restart=args.no_service_restart)
             return 0 if success else 1
             
     except KeyboardInterrupt:
@@ -930,6 +956,7 @@ def main() -> None:
         parser = argparse.ArgumentParser(description="Smart Update System for SolarEdge Data Collector")
         parser.add_argument("--force", action="store_true", help="Force update even if no changes detected")
         parser.add_argument("--check-only", action="store_true", help="Only check for updates, don't apply")
+        parser.add_argument("--no-service-restart", action="store_true", help="Skip service restart after update")
         
         args = parser.parse_args()
         
@@ -944,7 +971,7 @@ def main() -> None:
                 print("No updates available")
                 sys.exit(1)
         else:
-            success = updater.run_update(force=args.force)
+            success = updater.run_update(force=args.force, no_service_restart=args.no_service_restart)
             sys.exit(0 if success else 1)
 
 
