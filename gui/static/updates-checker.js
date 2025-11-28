@@ -142,10 +142,10 @@ class UpdateChecker {
                 // Salva flag per mostrare messaggio dopo riconnessione
                 localStorage.setItem('updateInProgress', 'true');
                 
-                // Attendi 30 secondi e prova a riconnettersi
+                // Attendi 5 secondi e prova a riconnettersi
                 setTimeout(() => {
                     this.waitForReconnection();
-                }, 30000);
+                }, 5000);
                 
             } else {
                 console.error('❌ Errore:', data.message);
