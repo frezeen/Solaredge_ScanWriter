@@ -853,6 +853,7 @@ class SimpleWebGUI:
         try:
             import subprocess
             import os
+            import platform
             
             update_script = Path('update.sh')
             if not update_script.exists():
@@ -863,9 +864,17 @@ class SimpleWebGUI:
             
             self.logger.info("[GUI] 🚀 Avvio aggiornamento tramite update.sh...")
             
+            # Determina il comando in base al sistema operativo
+            if platform.system() == 'Windows':
+                # Su Windows, usa PowerShell o cmd
+                cmd = ['powershell', '-NoProfile', '-Command', 'bash update.sh']
+            else:
+                # Su Linux/Mac, usa bash direttamente
+                cmd = ['bash', 'update.sh']
+            
             # Esegui lo script in background
             result = subprocess.run(
-                ['bash', 'update.sh'],
+                cmd,
                 cwd=os.getcwd(),
                 capture_output=True,
                 text=True,
@@ -882,12 +891,13 @@ class SimpleWebGUI:
                     'output': result.stdout
                 })
             else:
-                self.logger.error(f"[GUI] ❌ Errore durante l'aggiornamento: {result.stderr}")
+                error_msg = result.stderr or result.stdout or 'Errore sconosciuto'
+                self.logger.error(f"[GUI] ❌ Errore durante l'aggiornamento: {error_msg}")
                 
                 return web.json_response({
                     'status': 'error',
                     'message': 'Errore durante l\'esecuzione dell\'aggiornamento',
-                    'error': result.stderr
+                    'error': error_msg
                 }, status=500)
                 
         except subprocess.TimeoutExpired:
@@ -897,6 +907,7 @@ class SimpleWebGUI:
                 'message': 'Timeout durante l\'aggiornamento (>5 minuti)'
             }, status=500)
         except Exception as e:
+            self.logger.error(f"[GUI] ❌ Errore esecuzione update: {e}")
             return self.error_handler.handle_api_error(e, "running update", "Error running update")
 
     async def handle_get_update_status(self, request):
