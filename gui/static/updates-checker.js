@@ -172,10 +172,13 @@ class UpdateChecker {
                 
                 if (response.ok) {
                     console.log('✅ Riconnesso!');
-                    this.notify('✅ Servizio riavviato! Ricaricamento...', 'success');
+                    this.notify('✅ Sistema aggiornato con successo! Ricaricamento...', 'success');
+                    
+                    // Mostra alert con conferma
                     setTimeout(() => {
+                        alert('✅ Aggiornamento completato con successo!\n\nIl sistema è stato aggiornato e riavviato.');
                         location.reload();
-                    }, 1000);
+                    }, 500);
                     return;
                 }
             } catch (error) {

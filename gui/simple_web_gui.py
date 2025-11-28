@@ -868,47 +868,29 @@ class SimpleWebGUI:
             # L'input 'y\n' conferma automaticamente il prompt di update.sh
             
             try:
-                # Crea script temporaneo che esegue l'update
+                # Usa systemd-run per eseguire l'update come servizio temporaneo
+                # Questo garantisce che continui anche quando il servizio principale si ferma
                 log_file = os.path.join(os.getcwd(), 'logs', 'update_gui.log')
                 
-                script_content = f"""#!/bin/bash
-cd {os.getcwd()}
-echo "=== Update avviato da GUI ===" >> {log_file}
-date >> {log_file}
-
-# Usa expect per rispondere automaticamente al prompt, oppure yes come fallback
-if command -v expect &> /dev/null; then
-    expect << 'EOF' >> {log_file} 2>&1
-spawn ./update.sh
-expect "Vuoi continuare?"
-send "y\\r"
-expect eof
-EOF
-else
-    # Fallback: usa yes per rispondere automaticamente
-    yes y | ./update.sh >> {log_file} 2>&1
-fi
-
-echo "=== Update completato ===" >> {log_file}
-date >> {log_file}
-"""
-                
-                script_path = os.path.join(os.getcwd(), '.update_gui.sh')
-                with open(script_path, 'w') as f:
-                    f.write(script_content)
-                os.chmod(script_path, 0o755)
-                
-                # Esegui lo script in background
-                subprocess.Popen(
-                    ['bash', script_path],
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
-                    stdin=subprocess.DEVNULL,
-                    cwd=os.getcwd(),
-                    start_new_session=True
+                result = subprocess.run(
+                    [
+                        'systemd-run',
+                        '--unit=solaredge-update',
+                        '--description=SolarEdge Update from GUI',
+                        f'--working-directory={os.getcwd()}',
+                        'bash', '-c',
+                        f'./update.sh > {log_file} 2>&1'
+                    ],
+                    capture_output=True,
+                    text=True,
+                    timeout=5
                 )
                 
-                self.logger.info(f"[GUI] ✅ Update avviato in background - Log: {log_file}")
+                if result.returncode == 0:
+                    self.logger.info(f"[GUI] ✅ Update avviato come servizio systemd - Log: {log_file}")
+                else:
+                    self.logger.error(f"[GUI] ❌ Errore systemd-run: {result.stderr}")
+                    raise Exception(f"systemd-run failed: {result.stderr}")
                 
                 return web.json_response({
                     'status': 'success',
