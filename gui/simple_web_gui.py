@@ -868,38 +868,37 @@ class SimpleWebGUI:
             # L'input 'y\n' conferma automaticamente il prompt di update.sh
             
             try:
-                # Prova con 'at' (migliore soluzione)
-                result = subprocess.run(
-                    ['which', 'at'],
-                    capture_output=True,
-                    timeout=5
+                # Usa nohup con setsid per creare un processo completamente indipendente
+                # Reindirizza output a file di log per debug
+                log_file = os.path.join(os.getcwd(), 'logs', 'update_gui.log')
+                
+                # Crea script temporaneo che esegue l'update
+                script_content = f"""#!/bin/bash
+cd {os.getcwd()}
+echo "=== Update avviato da GUI ===" >> {log_file}
+date >> {log_file}
+echo 'y' | ./update.sh >> {log_file} 2>&1
+echo "=== Update completato ===" >> {log_file}
+date >> {log_file}
+"""
+                
+                script_path = os.path.join(os.getcwd(), '.update_gui.sh')
+                with open(script_path, 'w') as f:
+                    f.write(script_content)
+                os.chmod(script_path, 0o755)
+                
+                # Esegui lo script in background con nohup e setsid
+                subprocess.Popen(
+                    ['setsid', 'nohup', 'bash', script_path],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    stdin=subprocess.DEVNULL,
+                    cwd=os.getcwd(),
+                    start_new_session=True,
+                    preexec_fn=os.setpgrp if hasattr(os, 'setpgrp') else None
                 )
                 
-                if result.returncode == 0:
-                    # 'at' è disponibile - usa questo metodo
-                    cmd = f"cd {os.getcwd()} && echo 'y' | ./update.sh"
-                    subprocess.Popen(
-                        ['at', 'now'],
-                        stdin=subprocess.PIPE,
-                        stdout=subprocess.PIPE,
-                        stderr=subprocess.PIPE,
-                        text=True
-                    ).communicate(input=cmd, timeout=5)
-                    
-                    self.logger.info("[GUI] ✅ Update schedulato con 'at now'")
-                    
-                else:
-                    # Fallback: usa nohup
-                    subprocess.Popen(
-                        ['nohup', 'bash', '-c', f"echo 'y' | ./update.sh"],
-                        cwd=os.getcwd(),
-                        stdout=subprocess.DEVNULL,
-                        stderr=subprocess.DEVNULL,
-                        stdin=subprocess.DEVNULL,
-                        start_new_session=True
-                    )
-                    
-                    self.logger.info("[GUI] ✅ Update avviato con 'nohup'")
+                self.logger.info(f"[GUI] ✅ Update avviato in background - Log: {log_file}")
                 
                 return web.json_response({
                     'status': 'success',
