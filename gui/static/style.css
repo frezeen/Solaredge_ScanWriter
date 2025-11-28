@@ -328,7 +328,7 @@ body {
     min-height: 70px;
     display: flex;
     flex-direction: column;
-    justify-content: center;
+    justify-content: flex-start;
 }
 
 .stat-item-compact:hover {
