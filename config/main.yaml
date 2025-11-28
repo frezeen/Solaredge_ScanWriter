@@ -1,65 +1,69 @@
+# Main configuration file
+# Sources are loaded from separate files in config/sources/
+# This keeps the main configuration file clean and manageable
+
 global:
-  api_request_timeout: 20
-  batch_request_timeout: 60
-  filter_debug: false
-  site_id: 2489781
-  timeout_seconds: 30
-  timezone: Europe/Rome
-  web_request_timeout: 40
-gme:
-  bucket: GME
-  download_timeout_seconds: 30
-  enabled: true
-  password: i@1YD2&oKzE5O$
-  retry_attempts: 3
-  retry_delay_seconds: 2
-  username: carlosorrentino1187
+  site_id: ${SOLAREDGE_SITE_ID}
+  timeout_seconds: ${GLOBAL_TIMEOUT_SECONDS}
+  timezone: ${TIMEZONE}
+  web_request_timeout: ${GLOBAL_WEB_REQUEST_TIMEOUT}
+  api_request_timeout: ${GLOBAL_API_REQUEST_TIMEOUT}
+  batch_request_timeout: ${GLOBAL_BATCH_REQUEST_TIMEOUT}
+  filter_debug: ${FILTER_DEBUG}
 influxdb:
-  batch_size: 500
-  bucket: Solaredge
-  dry_file: logs/influx_dry_points.jsonl
-  dry_mode: false
-  flush_interval_ms: 1000
-  jitter_interval_ms: 100
-  max_retries: 5
-  org: fotovoltaico
-  retry_interval_ms: 1000
-  token: zBQgP9MEp69ktsCZt9OYaEM-tLLA3cXNg89l7uDz3vdlwA6Myw2zuSjwg0RVuyUsTLN-iPWV44pgBAzMDypqxg==
-  url: http://192.168.2.124:8086
+  url: ${INFLUXDB_URL}
+  org: ${INFLUXDB_ORG}
+  bucket: ${INFLUXDB_BUCKET}
+  token: ${INFLUXDB_TOKEN}
+  dry_mode: ${INFLUX_DRY_MODE}
+  dry_file: ${INFLUX_DRY_FILE}
+  batch_size: ${INFLUX_BATCH_SIZE}
+  flush_interval_ms: ${INFLUX_FLUSH_INTERVAL_MS}
+  jitter_interval_ms: ${INFLUX_JITTER_INTERVAL_MS}
+  retry_interval_ms: ${INFLUX_RETRY_INTERVAL_MS}
+  max_retries: ${INFLUX_MAX_RETRIES}
 logging:
-  file_logging: true
-  level: INFO
-  log_directory: logs
+  file_logging: ${LOG_FILE_LOGGING}
+  level: ${LOG_LEVEL}
+  log_directory: ${LOG_DIRECTORY}
 scheduler:
-  api_delay_seconds: 1
-  gme_delay_seconds: 30
-  realtime_delay_seconds: 0
-  skip_delay_on_cache_hit: true
-  web_delay_seconds: 2
+  api_delay_seconds: ${SCHEDULER_API_DELAY_SECONDS}
+  web_delay_seconds: ${SCHEDULER_WEB_DELAY_SECONDS}
+  realtime_delay_seconds: ${SCHEDULER_REALTIME_DELAY_SECONDS}
+  gme_delay_seconds: ${SCHEDULER_GME_DELAY_SECONDS}
+  skip_delay_on_cache_hit: ${SCHEDULER_SKIP_DELAY_ON_CACHE_HIT}
 solaredge:
   api:
-    api_key: 7A8N7SVAH0V8ATRNDU1EHFA22YY5H2T9
-    base_url: https://monitoringapi.solaredge.com
-    rate_limit_seconds: 1
-    retry_attempts: 3
-    retry_delay_seconds: 2
-    site_id: 2489781
-    timeout_seconds: 30
-  modbus:
-    enabled: true
-    host: 192.168.2.59
-    port: 1502
-    retries: 3
-    timeout: 1
-    unit: 1
+    api_key: ${SOLAREDGE_API_KEY}
+    base_url: ${SOLAREDGE_API_BASE_URL}
+    rate_limit_seconds: ${API_RATE_LIMIT_SECONDS}
+    retry_attempts: ${API_RETRY_ATTEMPTS}
+    retry_delay_seconds: ${API_RETRY_DELAY_SECONDS}
+    site_id: ${SOLAREDGE_SITE_ID}
+    timeout_seconds: ${API_TIMEOUT_SECONDS}
   web:
-    base_url: https://monitoring.solaredge.com
-    cookie_file: cookies/web_cookies.json
-    login_url: https://monitoring.solaredge.com/solaredge-apigw/api/login
-    password: Claudiatvb1403!
-    session_timeout_seconds: 3600
-    username: carlo.sorrentino2@libero.it
-sources: {}
+    base_url: ${SOLAREDGE_WEB_BASE_URL}
+    cookie_file: ${SOLAREDGE_COOKIE_FILE}
+    login_url: ${SOLAREDGE_LOGIN_URL}
+    password: ${SOLAREDGE_PASSWORD}
+    session_timeout_seconds: ${SOLAREDGE_SESSION_TIMEOUT_SECONDS}
+    username: ${SOLAREDGE_USERNAME}
+  modbus:
+    host: ${REALTIME_MODBUS_HOST}
+    port: ${REALTIME_MODBUS_PORT}
+    unit: ${REALTIME_MODBUS_UNIT}
+    timeout: ${REALTIME_MODBUS_TIMEOUT}
+    retries: ${MODBUS_RETRIES}
+    enabled: ${MODBUS_ENABLED}
+gme:
+  enabled: ${GME_ENABLED}
+  username: ${GME_USERNAME}
+  password: ${GME_PASSWORD}
+  download_timeout_seconds: ${GME_DOWNLOAD_TIMEOUT_SECONDS}
+  retry_attempts: ${GME_RETRY_ATTEMPTS}
+  retry_delay_seconds: ${GME_RETRY_DELAY_SECONDS}
+  bucket: ${INFLUXDB_BUCKET_GME}
 workflow:
   name: main
   version: 1.0
+sources: {}
