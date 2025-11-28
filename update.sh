@@ -67,16 +67,6 @@ else
     exit 0
 fi
 
-# Chiedi conferma all'utente
-echo ""
-log_warning "Questo aggiornerà il sistema preservando le configurazioni locali."
-read -p "Vuoi continuare? (y/N): " -n 1 -r
-echo
-if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-    log_info "Aggiornamento annullato dall'utente"
-    exit 0
-fi
-
 # Esegui aggiornamento intelligente
 log_info "Avvio aggiornamento..."
 echo ""
