@@ -211,7 +211,17 @@ class InfluxWriter:
                 self._write_api.write(bucket=bucket, org=self._influx_config.org, record=bucket_points)
                 total_written += len(bucket_points)
                 bucket_names.append(bucket)
-                self._log.info(f"✅ Scritti {len(bucket_points)} punti su bucket {bucket}")
+                
+                # Extract measurement for logging context
+                meas_type = "unknown"
+                if bucket_points and hasattr(bucket_points[0], '_name'):
+                    meas_type = bucket_points[0]._name
+                elif bucket_points and isinstance(bucket_points[0], dict):
+                    meas_type = bucket_points[0].get('measurement', 'unknown')
+                elif measurement_type:
+                    meas_type = measurement_type
+                
+                self._log.info(f"✅ Scritti {len(bucket_points)} punti su bucket {bucket} [Type: {meas_type}]")
             
             self._write_api.flush()
             # Include bucket names in summary message for better log classification

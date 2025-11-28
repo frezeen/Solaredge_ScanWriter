@@ -64,7 +64,7 @@ def run_api_flow(
         
         # Log per verificare se i punti vengono generati anche da cache
         if influx_points:
-            log.info(color.dim(f"   🔄 Processando {len(influx_points)} punti (da API o cache) per scrittura DB"))
+            log.info(color.dim(f"   🔄 Processando {len(influx_points)} InfluxDB Points da API (o cache) per scrittura DB"))
         else:
             log.warning(color.warning("   ⚠️ Nessun punto generato dal parser - possibile problema con dati da cache"))
         
