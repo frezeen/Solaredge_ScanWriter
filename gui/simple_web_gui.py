@@ -875,99 +875,51 @@ class SimpleWebGUI:
             return self.error_handler.handle_api_error(e, "running update", "Error running update")
     
     async def _run_update_background(self):
-        """Esegue l'aggiornamento in background senza riavviare il servizio (soft update)"""
+        """Esegue l'aggiornamento completo usando smart_update.py"""
         try:
             import subprocess
             import os
             
-            self.logger.info("[GUI] 🔄 Esecuzione soft update (git pull senza riavvio)...")
+            self.logger.info("[GUI] 🔄 Esecuzione aggiornamento completo con smart_update.py...")
             
-            # Soft update: solo git pull senza fermare/riavviare il servizio
-            # Questo permette alla GUI di rimanere online durante l'update
+            # Usa smart_update.py che gestisce:
+            # - Backup configurazioni
+            # - Git pull/reset
+            # - Ripristino configurazioni
+            # - Fix permessi (incluso update.sh)
+            # - Aggiornamento dipendenze
+            # - Validazione
             
-            # 1. Git stash (salva modifiche locali)
-            try:
-                result = await asyncio.get_event_loop().run_in_executor(
-                    None,
-                    lambda: subprocess.run(
-                        ['git', 'stash', 'push', '-m', f'Auto-stash GUI update {datetime.now()}'],
-                        cwd=os.getcwd(),
-                        capture_output=True,
-                        text=True,
-                        timeout=30
-                    )
-                )
-                self.logger.info("[GUI] Git stash completato")
-            except Exception as e:
-                self.logger.warning(f"[GUI] Git stash warning: {e}")
-            
-            # 2. Git pull
             result = await asyncio.get_event_loop().run_in_executor(
                 None,
                 lambda: subprocess.run(
-                    ['git', 'pull', 'origin', 'main'],
+                    ['python3', 'scripts/smart_update.py', '--no-service-restart'],
                     cwd=os.getcwd(),
                     capture_output=True,
                     text=True,
-                    timeout=120
+                    timeout=300  # 5 minuti
                 )
             )
             
+            # Log output completo
+            if result.stdout:
+                self.logger.info(f"[GUI] Update output:\n{result.stdout}")
+            if result.stderr:
+                self.logger.warning(f"[GUI] Update stderr:\n{result.stderr}")
+            
             if result.returncode == 0:
-                self.logger.info("[GUI] ✅ Git pull completato con successo")
-                self.logger.info(f"[GUI] Output: {result.stdout}")
-                
-                # 3. Aggiorna dipendenze Python (se necessario)
-                try:
-                    pip_result = await asyncio.get_event_loop().run_in_executor(
-                        None,
-                        lambda: subprocess.run(
-                            ['python3', '-m', 'pip', 'install', '-r', 'requirements.txt', 
-                             '--upgrade-strategy', 'only-if-needed', '--break-system-packages'],
-                            cwd=os.getcwd(),
-                            capture_output=True,
-                            text=True,
-                            timeout=180
-                        )
-                    )
-                    if pip_result.returncode == 0:
-                        self.logger.info("[GUI] ✅ Dipendenze Python aggiornate")
-                    else:
-                        self.logger.warning(f"[GUI] ⚠️ Dipendenze Python: {pip_result.stderr}")
-                except Exception as e:
-                    self.logger.warning(f"[GUI] ⚠️ Errore aggiornamento dipendenze: {e}")
-                
+                self.logger.info("[GUI] ✅ Aggiornamento completato con successo")
                 self.state_manager.updates_available = False
                 self.state_manager.restart_required = True
-                self.logger.info("[GUI] ✅ Soft update completato - Riavvio richiesto per applicare le modifiche")
                 
             else:
                 error_msg = result.stderr or result.stdout or 'Errore sconosciuto'
-                self.logger.error(f"[GUI] ❌ Git pull fallito (exit code {result.returncode}): {error_msg}")
-                
-                # Prova git reset come fallback
-                self.logger.info("[GUI] Tentativo git reset...")
-                reset_result = await asyncio.get_event_loop().run_in_executor(
-                    None,
-                    lambda: subprocess.run(
-                        ['git', 'reset', '--hard', 'origin/main'],
-                        cwd=os.getcwd(),
-                        capture_output=True,
-                        text=True,
-                        timeout=60
-                    )
-                )
-                
-                if reset_result.returncode == 0:
-                    self.logger.info("[GUI] ✅ Git reset completato con successo")
-                    self.state_manager.updates_available = False
-                else:
-                    self.logger.error(f"[GUI] ❌ Git reset fallito: {reset_result.stderr}")
+                self.logger.error(f"[GUI] ❌ Aggiornamento fallito (exit code {result.returncode}): {error_msg}")
                 
         except subprocess.TimeoutExpired:
-            self.logger.error("[GUI] ❌ Timeout durante l'aggiornamento")
+            self.logger.error("[GUI] ❌ Timeout durante l'aggiornamento (>5 minuti)")
         except Exception as e:
-            self.logger.error(f"[GUI] ❌ Errore esecuzione update in background: {e}", exc_info=True)
+            self.logger.error(f"[GUI] ❌ Errore esecuzione update: {e}", exc_info=True)
 
     async def handle_get_update_status(self, request):
         """Restituisce lo stato attuale degli aggiornamenti"""
