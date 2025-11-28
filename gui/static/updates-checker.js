@@ -156,8 +156,11 @@ class UpdateChecker {
     }
     
     async waitForReconnection() {
-        console.log('🔄 Tentativo di riconnessione...');
-        this.notify('🔄 Riconnessione in corso...', 'info');
+        console.log('🔄 Attesa 5 secondi prima di tentare la riconnessione...');
+        this.notify('🔄 Riconnessione in corso (attesa 5 sec)...', 'info');
+        
+        // Attendi 5 secondi prima di iniziare i tentativi
+        await new Promise(resolve => setTimeout(resolve, 5000));
         
         let attempts = 0;
         const maxAttempts = 120; // 120 tentativi = 2 minuti

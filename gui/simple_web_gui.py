@@ -535,6 +535,7 @@ class SimpleWebGUI:
         self.app.router.add_post('/api/devices/metrics/toggle', self.handle_toggle_device_metric)
         self.app.router.add_post('/api/modbus/devices/toggle', self.handle_toggle_modbus_device)
         self.app.router.add_post('/api/modbus/devices/metrics/toggle', self.handle_toggle_modbus_metric)
+        self.app.router.add_post('/api/gme/toggle', self.handle_toggle_gme)
         
         self.app.router.add_post('/api/log', self.handle_log)
         
@@ -776,6 +777,34 @@ class SimpleWebGUI:
                 
         except Exception as e:
             return self.error_handler.handle_api_error(e, "toggling modbus device metric", "Error toggling modbus metric")
+
+    async def handle_toggle_gme(self, request):
+        """Toggle GME flow enabled/disabled state"""
+        try:
+            await self.load_config()
+            
+            # Toggle GME enabled state
+            current_state = self.config.get('gme', {}).get('enabled', False)
+            new_state = not current_state
+            
+            if 'gme' not in self.config:
+                self.config['gme'] = {}
+            
+            self.config['gme']['enabled'] = new_state
+            
+            # Save config
+            await self.save_config()
+            
+            self.logger.info(f"[GUI] GME {'abilitato' if new_state else 'disabilitato'}")
+            
+            return web.json_response({
+                'status': 'success',
+                'message': f'GME {"abilitato" if new_state else "disabilitato"}',
+                'enabled': new_state
+            })
+            
+        except Exception as e:
+            return self.error_handler.handle_api_error(e, "toggling GME", "Error toggling GME")
 
     async def handle_check_updates(self, request):
         """Controlla se ci sono nuovi aggiornamenti disponibili"""
