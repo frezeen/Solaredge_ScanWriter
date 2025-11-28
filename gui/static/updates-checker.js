@@ -108,11 +108,25 @@ class UpdateChecker {
     }
     
     async runUpdate() {
-        if (!confirm('Sei sicuro di voler eseguire l\'aggiornamento?\n\nIl servizio verrà riavviato automaticamente.')) {
-            return;
-        }
-        
         try {
+            // Prima controlla se ci sono aggiornamenti
+            this.notify('🔍 Controllo aggiornamenti...', 'info');
+            
+            const checkResponse = await fetch('/api/updates/check');
+            const checkData = await checkResponse.json();
+            
+            if (checkData.status === 'success' && !checkData.updates_available) {
+                console.log('✅ Nessun aggiornamento disponibile');
+                this.notify('✅ Sei già aggiornato, nessun aggiornamento da applicare', 'success');
+                this.hideUpdatesBanner();
+                return;
+            }
+            
+            // Ci sono aggiornamenti, chiedi conferma
+            if (!confirm('Sei sicuro di voler eseguire l\'aggiornamento?\n\nIl servizio verrà riavviato automaticamente.')) {
+                return;
+            }
+            
             this.notify('⏳ Aggiornamento in corso...', 'info');
             
             const response = await fetch('/api/updates/run', {
