@@ -961,6 +961,10 @@ class SimpleWebGUI:
                 self.ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
                 self.current_flow = None
                 
+                # Deduplicazione: cache di messaggi recenti per evitare duplicati
+                from collections import deque
+                self.recent_messages = deque(maxlen=100)  # Ultimi 100 messaggi
+                
                 # Load bucket names from environment variables for dynamic detection
                 import os
                 self.bucket_realtime = os.getenv('INFLUXDB_BUCKET_REALTIME', 'Solaredge_Realtime').lower()
@@ -969,6 +973,13 @@ class SimpleWebGUI:
             def emit(self, record):
                 try:
                     message = self.ansi_escape.sub('', record.getMessage())
+                    
+                    # Deduplicazione: salta se il messaggio è stato loggato di recente
+                    message_key = (record.name, message, record.levelname)
+                    if message_key in self.recent_messages:
+                        return  # Skip duplicate
+                    self.recent_messages.append(message_key)
+                    
                     flow_type = self._detect_flow_type(record.name, message)
                     
                     self._update_current_flow(message)
@@ -1095,6 +1106,11 @@ class SimpleWebGUI:
                 if flow:
                     return flow
                 
+                # Guard clause: Check system keywords FIRST (before flow-specific checks)
+                # This ensures system messages like "InfluxWriter inizializzato" go to Sistema
+                if self._is_system_message(message_lower):
+                    return 'general'
+                
                 # Guard clause: Check main logger context
                 if logger_lower == 'main':
                     flow = self._check_main_logger_context(message_lower)
@@ -1105,10 +1121,6 @@ class SimpleWebGUI:
                 if ('storage' in logger_lower or 'influx' in logger_lower) and \
                    ('solaredge_realtime' in message_lower or 'realtime' in message_lower):
                     return 'realtime'
-                
-                # Guard clause: Check system keywords
-                if self._is_system_message(message_lower):
-                    return 'general'
                 
                 # Default fallback
                 return 'general'
