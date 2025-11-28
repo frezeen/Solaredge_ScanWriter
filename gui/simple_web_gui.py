@@ -239,7 +239,7 @@ class SimpleWebGUI:
     async def handle_favicon(self, request):
         """Serve a favicon.ico if present, otherwise return a no‑content response."""
         from pathlib import Path
-        favicon_path = Path('gui/static/favicon.ico')
+        favicon_path = Path('gui/static/favicon.png')
         if favicon_path.is_file():
             return web.FileResponse(path=favicon_path)
         # No favicon file – return an empty 204 response to silence the error
