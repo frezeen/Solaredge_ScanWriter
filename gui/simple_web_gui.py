@@ -849,12 +849,8 @@ class SimpleWebGUI:
             return self.error_handler.handle_api_error(e, "checking updates", "Error checking for updates")
 
     async def handle_run_update(self, request):
-        """Esegue lo script update.sh"""
+        """Esegue lo script update.sh in background"""
         try:
-            import subprocess
-            import os
-            import platform
-            
             update_script = Path('update.sh')
             if not update_script.exists():
                 return web.json_response({
@@ -862,28 +858,49 @@ class SimpleWebGUI:
                     'message': 'Script update.sh non trovato'
                 }, status=404)
             
-            self.logger.info("[GUI] 🚀 Avvio aggiornamento tramite update.sh...")
+            self.logger.info("[GUI] 🚀 Avvio aggiornamento in background...")
+            
+            # Lancia l'update in background (non blocca la risposta HTTP)
+            asyncio.create_task(self._run_update_background())
+            
+            # Restituisci subito una risposta di successo
+            return web.json_response({
+                'status': 'success',
+                'message': 'Aggiornamento avviato in background. La GUI rimane online durante l\'aggiornamento.'
+            })
+                
+        except Exception as e:
+            self.logger.error(f"[GUI] ❌ Errore avvio update: {e}", exc_info=True)
+            return self.error_handler.handle_api_error(e, "running update", "Error running update")
+    
+    async def _run_update_background(self):
+        """Esegue l'aggiornamento in background senza bloccare il server"""
+        try:
+            import subprocess
+            import os
+            import platform
+            
+            self.logger.info("[GUI] 🔄 Esecuzione aggiornamento in background...")
             
             # Determina il comando in base al sistema operativo
             if platform.system() == 'Windows':
-                # Su Windows, usa PowerShell o cmd
                 cmd = ['powershell', '-NoProfile', '-Command', 'bash update.sh']
-                # Su Windows, passa 'y' come input per confermare
                 input_data = 'y\n'
             else:
-                # Su Linux/Mac, usa bash direttamente
                 cmd = ['bash', 'update.sh']
-                # Passa 'y' come input per confermare
                 input_data = 'y\n'
             
-            # Esegui lo script con input automatico
-            result = subprocess.run(
-                cmd,
-                cwd=os.getcwd(),
-                input=input_data,
-                capture_output=True,
-                text=True,
-                timeout=300  # 5 minuti di timeout
+            # Esegui lo script in background
+            result = await asyncio.get_event_loop().run_in_executor(
+                None,
+                lambda: subprocess.run(
+                    cmd,
+                    cwd=os.getcwd(),
+                    input=input_data,
+                    capture_output=True,
+                    text=True,
+                    timeout=300
+                )
             )
             
             # Log output dello script
@@ -895,32 +912,14 @@ class SimpleWebGUI:
             if result.returncode == 0:
                 self.logger.info("[GUI] ✅ Aggiornamento completato con successo")
                 self.state_manager.updates_available = False
-                
-                return web.json_response({
-                    'status': 'success',
-                    'message': 'Aggiornamento completato con successo',
-                    'output': result.stdout
-                })
             else:
                 error_msg = result.stderr or result.stdout or 'Errore sconosciuto'
                 self.logger.error(f"[GUI] ❌ Errore durante l'aggiornamento (exit code {result.returncode}): {error_msg}")
                 
-                return web.json_response({
-                    'status': 'error',
-                    'message': 'Errore durante l\'esecuzione dell\'aggiornamento',
-                    'error': error_msg,
-                    'exit_code': result.returncode
-                }, status=500)
-                
         except subprocess.TimeoutExpired:
-            self.logger.error("[GUI] ❌ Timeout durante l'aggiornamento")
-            return web.json_response({
-                'status': 'error',
-                'message': 'Timeout durante l\'aggiornamento (>5 minuti)'
-            }, status=500)
+            self.logger.error("[GUI] ❌ Timeout durante l'aggiornamento (>5 minuti)")
         except Exception as e:
-            self.logger.error(f"[GUI] ❌ Errore esecuzione update: {e}", exc_info=True)
-            return self.error_handler.handle_api_error(e, "running update", "Error running update")
+            self.logger.error(f"[GUI] ❌ Errore esecuzione update in background: {e}", exc_info=True)
 
     async def handle_get_update_status(self, request):
         """Restituisce lo stato attuale degli aggiornamenti"""
