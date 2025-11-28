@@ -954,19 +954,23 @@ class SimpleWebGUI:
                     ('gme', ['flusso gme', 'mercato elettrico', 'pun', 'prezzo energia',
                            'elaborazione data', 'download dati gme', 'influxdb points gme',
                            'media mensile', 'punti orari', 'autenticazione gme',
-                           'collector.collector_gme', 'parser.gme', 'raccolta gme']),
+                           'collector.collector_gme', 'parser.gme', 'raccolta gme',
+                           '[type: gme_prices]', '[type: gme_monthly_avg]']),
                     # API
                     ('api', ['api flow', 'collector_api', 'api_parser', 'flusso api', 
                            'endpoint', 'raccolta api', 'raccolti dati da', 'endpoint equipment',
-                           'endpoint site', 'parser api', 'influxdb points da api', '[api_ufficiali]']),
+                           'endpoint site', 'parser api', 'influxdb points da api', '[api_ufficiali]',
+                           '[type: api]']),
                     # Web
                     ('web', ['web flow', 'collector_web', 'web_parser', 'flusso web', 
                            'web scraping', 'raccolta web', 'raccogliendo dati web',
-                           'parser web', 'influxdb points da web', 'dispositivo', 'measurements', '[web]']),
+                           'parser web', 'influxdb points da web', 'dispositivo', 'measurements', '[web]',
+                           '[type: web]']),
                     # Realtime - more specific keywords to avoid false positives
                     ('realtime', ['flusso realtime', 'modbus', 'collector_realtime', 'parser_realtime', 
                                 'raccolta realtime', 'metriche abilitate', 'parsing raw completato',
-                                'punti strutturati', 'pipeline realtime', '[realtime]'])
+                                'punti strutturati', 'pipeline realtime', '[realtime]',
+                                '[type: realtime]'])
                 ]
                 for flow, keywords in keyword_sets:
                     if any(kw in message_lower for kw in keywords):
