@@ -806,8 +806,6 @@ class SolarDashboard {
         return `${stat.executed || 0}/${stat.success || 0}/${stat.failed || 0}`;
     }, (stat) => JSON.stringify(stat));
 
-    // Removed - now using animateElement from dom-utils.js
-
     updateDeviceUI(id, data) {
         const card = $(`[data-device-id="${id}"]`);
         if (!card) return;
