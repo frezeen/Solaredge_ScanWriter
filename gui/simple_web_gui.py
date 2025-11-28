@@ -236,6 +236,15 @@ class SimpleWebGUI:
         except Exception as e:
             return self.error_handler.handle_api_error(e, "serving static file", "Error loading static file")
 
+    async def handle_favicon(self, request):
+        """Serve a favicon.ico if present, otherwise return a no‑content response."""
+        from pathlib import Path
+        favicon_path = Path('gui/static/favicon.ico')
+        if favicon_path.is_file():
+            return web.FileResponse(path=favicon_path)
+        # No favicon file – return an empty 204 response to silence the error
+        return web.Response(status=204)
+
     async def handle_ping(self, request):
         """Endpoint di ping per verificare connessione"""
         return web.json_response({
@@ -481,6 +490,7 @@ class SimpleWebGUI:
         # Routes
         self.app.router.add_get('/', self.handle_index)
         self.app.router.add_get('/static/{filename}', self.handle_static)
+        self.app.router.add_get('/favicon.ico', self.handle_favicon)
         self.app.router.add_get('/api/ping', self.handle_ping)
         self.app.router.add_get('/api/config', self.handle_get_config)
         self.app.router.add_get('/api/config/yaml', self.handle_get_yaml_file)
@@ -858,6 +868,13 @@ class SimpleWebGUI:
                     # Check for GME bucket (exact match from .env)
                     if self.bucket_gme in message_lower:
                         return 'gme'
+                
+                # Guard clause: Check for CACHE SAVED messages
+                if 'cache saved' in message_lower:
+                    import re
+                    m = re.search(r'\[(\w+)\]', message_lower)
+                    if m and m.group(1) in ('gme', 'api', 'web', 'realtime'):
+                        return m.group(1)
                 
                 # Guard clause: Check for realtime-specific parser messages
                 # "Parsing raw completato: X punti" is unique to realtime parser
