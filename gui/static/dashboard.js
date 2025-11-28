@@ -977,13 +977,8 @@ class SolarDashboard {
                             (stats.realtime_stats?.executed || 0) + 
                             (stats.gme_stats?.executed || 0);
             
-            // Trova prossima run (la più vicina tra API/Web/GME)
-            const nextRuns = [
-                stats.api_next_run,
-                stats.web_next_run, 
-                stats.gme_next_run
-            ].filter(r => r && r !== '--');
-            const nextRun = nextRuns.length > 0 ? nextRuns[0] : '--';
+            // Scheduling info (intervalli configurati)
+            const scheduling = 'API/Web: 15m | RT: 5s | GME: 24h';
             
             const elements = {
                 'loopUptime': stats.uptime_formatted || '--',
@@ -992,7 +987,7 @@ class SolarDashboard {
                 'realtimeRuns': this.formatStats(stats.realtime_stats),
                 'gmeRuns': this.formatStats(stats.gme_stats),
                 'totalRuns': totalRuns,
-                'nextRun': nextRun
+                'loopScheduling': scheduling
             };
 
             Object.entries(elements).forEach(([id, value]) => {
@@ -1014,6 +1009,15 @@ class SolarDashboard {
             if (stats.gme_next_run) {
                 const el = document.getElementById('gmeTiming');
                 if (el) el.textContent = `next: ${stats.gme_next_run}`;
+            }
+            
+            // Realtime next (calcola prossima esecuzione basata su 5s)
+            const realtimeTimingEl = document.getElementById('realtimeTiming');
+            if (realtimeTimingEl) {
+                const now = new Date();
+                const nextRealtime = new Date(now.getTime() + 5000);
+                const nextStr = nextRealtime.toLocaleTimeString('it-IT', {hour: '2-digit', minute: '2-digit', second: '2-digit'});
+                realtimeTimingEl.textContent = `next: ${nextStr}`;
             }
         }
 
