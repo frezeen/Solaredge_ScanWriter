@@ -67,7 +67,14 @@ class InfluxWriter:
             )
             self._write_api = self._client.write_api(write_options=write_options)
             
-            self._log.info(f"InfluxWriter inizializzato: {self._influx_config.url}, bucket={self._influx_config.bucket}")
+            self._log.info(
+                f"✅ InfluxWriter inizializzato - "
+                f"URL: {self._influx_config.url}, "
+                f"Org: {self._influx_config.org}, "
+                f"Bucket principale: {self._influx_config.bucket}, "
+                f"Bucket realtime: {self._influx_config.bucket_realtime}, "
+                f"Bucket GME: {self._influx_config.bucket_gme}"
+            )
             
         except Exception as e:
             raise RuntimeError(f"InfluxWriter: errore inizializzazione - {e}")
