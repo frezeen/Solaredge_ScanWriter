@@ -76,7 +76,6 @@ def run_api_flow(
         if influx_points:
             with InfluxWriter() as writer:
                 writer.write_points(influx_points, measurement_type="api")
-                log.info(color.success("✅ Pipeline API completata con successo"))
         else:
             log.warning(color.warning("   Nessun punto da scrivere"))
     
