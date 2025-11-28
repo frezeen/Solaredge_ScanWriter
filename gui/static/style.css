@@ -343,6 +343,8 @@ body {
     margin-bottom: 0.35rem;
     text-transform: uppercase;
     letter-spacing: 0.5px;
+    text-align: center;
+    width: 100%;
 }
 
 .stat-item-compact .stat-value {
