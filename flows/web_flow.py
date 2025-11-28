@@ -25,6 +25,7 @@ def run_web_flow(
     Se start_date/end_date sono fornite, raccoglie dati giorno per giorno.
     Altrimenti raccoglie solo i dati di oggi.
     """
+    log.info("[FLOW:WEB:START]")
     log.info(color.bold("🚀 Avvio flusso web"))
     
     # Inizializza scheduler usando config ricevuto come parametro
@@ -86,12 +87,15 @@ def run_web_flow(
         log.info(color.warning("🛑 Interruzione utente durante raccolta web"))
         if total_points_written > 0:
             log.info(color.info(f"📊 Punti scritti prima dell'interruzione: {total_points_written}"))
+        log.info("[FLOW:WEB:STOP]")
         raise  # Propaga l'interruzione
     except ImportError as e:
         log.error(color.error(f"❌ Modulo web scraping mancante: {e}. Verifica installazione"))
+        log.info("[FLOW:WEB:STOP]")
         raise
     except ConnectionError as e:
         log.error(color.error(f"❌ Errore connessione web SolarEdge: {e}. Verifica rete e login"))
+        log.info("[FLOW:WEB:STOP]")
         raise
     
     # Log finale con statistiche
@@ -100,4 +104,5 @@ def run_web_flow(
     else:
         log.warning(color.warning("⚠️ Nessun punto scritto - verifica configurazione e connettività"))
     
+    log.info("[FLOW:WEB:STOP]")
     return 0

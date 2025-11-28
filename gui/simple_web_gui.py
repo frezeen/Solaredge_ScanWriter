@@ -1014,276 +1014,34 @@ time /t >> {log_file}
                 super().__init__()
                 self.gui = gui_instance
                 self.ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
-                self.current_flow = None
-                
-                # Load bucket names from environment variables for dynamic detection
-                import os
-                self.bucket_realtime = os.getenv('INFLUXDB_BUCKET_REALTIME', 'Solaredge_Realtime').lower()
-                self.bucket_gme = os.getenv('INFLUXDB_BUCKET_GME', 'GME').lower()
+                self.flow_stack = []  # Stack per tracking flow annidati
                 
             def emit(self, record):
                 try:
                     message = self.ansi_escape.sub('', record.getMessage())
-                    flow_type = self._detect_flow_type(record.name, message)
                     
-                    self._update_current_flow(message)
-                    flow_type = self._apply_flow_context(flow_type, message)
+                    # Parse flow markers [FLOW:TYPE:ACTION]
+                    if '[FLOW:' in message:
+                        parts = message.split('[FLOW:')[1].split(']')[0].split(':')
+                        flow_type = parts[0].lower()
+                        action = parts[1]
+                        
+                        if action == 'START':
+                            self.flow_stack.append(flow_type)
+                        elif action == 'STOP' and self.flow_stack:
+                            self.flow_stack.pop()
                     
-                    # Force ERROR and CRITICAL messages to 'general' (Sistema tab)
-                    # to ensure all errors are visible in the Sistema tab
-                    if record.levelname in ('ERROR', 'CRITICAL'):
-                        # Check if it's a flow-specific error that should stay in its flow
-                        # Otherwise, send to general/sistema
-                        flow_errors = ['pipeline', 'flusso', 'flow', 'raccolta']
-                        if not any(kw in message.lower() for kw in flow_errors):
-                            flow_type = 'general'
+                    # Determina flow corrente dallo stack
+                    current_flow = self.flow_stack[-1] if self.flow_stack else 'general'
                     
                     self.gui.state_manager.add_log_entry(
                         level=record.levelname,
                         message=message,
-                        flow_type=flow_type,
+                        flow_type=current_flow,
                         timestamp=datetime.now()
                     )
                 except Exception:
                     pass
-            
-            def _update_current_flow(self, message):
-                """Update current flow based on pipeline markers"""
-                message_lower = message.lower()
-                # Check for flow start markers (highest priority)
-                if '🚀 avvio flusso' in message_lower or 'avvio flusso' in message_lower:
-                    for flow in ['gme', 'api', 'web', 'realtime']:  # GME first for specificity
-                        if flow in message_lower:
-                            self.current_flow = flow
-                            return
-                # Check for explicit flow markers in brackets
-                elif '[api]' in message_lower or 'flusso api' in message_lower:
-                    self.current_flow = 'api'
-                elif '[web]' in message_lower or 'flusso web' in message_lower:
-                    self.current_flow = 'web'
-                elif '[realtime]' in message_lower or 'flusso realtime' in message_lower:
-                    self.current_flow = 'realtime'
-                elif '[gme]' in message_lower or 'flusso gme' in message_lower:
-                    self.current_flow = 'gme'
-                # Reset flow context on completion messages
-                elif 'pipeline' in message_lower and 'completata' in message_lower:
-                    self.current_flow = None
-                elif any(marker in message_lower for marker in [
-                    'raccolta gme completata',
-                    'raccolta realtime completata',
-                    'raccolta api completata',
-                    'raccolta web completata'
-                ]):
-                    self.current_flow = None
-            
-            def _apply_flow_context(self, flow_type, message):
-                """Apply current flow context to general messages using guard clauses"""
-                # Guard clause: Only apply context to general messages with current flow
-                if flow_type != 'general' or not self.current_flow:
-                    return flow_type
-                
-                message_lower = message.lower()
-                
-                # Guard clause: Don't apply GME context to realtime-specific messages
-                if self.current_flow == 'gme':
-                    realtime_indicators = ['realtime', 'modbus', 'inverter', 'meter', 
-                                          'punti strutturati', 'parsing raw']
-                    if any(ind in message_lower for ind in realtime_indicators):
-                        return 'realtime'
-                
-                # Guard clause: Don't apply realtime context to GME-specific messages
-                if self.current_flow == 'realtime':
-                    gme_indicators = ['gme', 'punti orari', 'media mensile', 'mercato elettrico']
-                    if any(ind in message_lower for ind in gme_indicators):
-                        return 'gme'
-                
-                # Guard clause: Check if message contains flow keywords
-                flow_keywords = ['collector', 'parser', 'filtro', 'scritti', 
-                               'punti', 'bucket', 'influxwriter', 'cache hit', 'cache miss']
-                if any(kw in message_lower for kw in flow_keywords):
-                    return self.current_flow
-                
-                return flow_type
-            
-            def _detect_flow_type(self, logger_name, message):
-                """Detect flow type from logger name and message using guard clauses"""
-                message_lower = message.lower()
-                logger_lower = logger_name.lower()
-                
-                # Guard clause: Check bucket names first (most specific)
-                # Use actual bucket names from environment variables
-                if 'bucket' in message_lower:
-                    # Check for realtime bucket (exact match from .env)
-                    if self.bucket_realtime in message_lower:
-                        return 'realtime'
-                    # Check for GME bucket (exact match from .env)
-                    if self.bucket_gme in message_lower:
-                        return 'gme'
-                
-                # Guard clause: Check for CACHE SAVED messages
-                if 'cache saved' in message_lower:
-                    import re
-                    m = re.search(r'\[(\w+)\]', message_lower)
-                    if m and m.group(1) in ('gme', 'api', 'web', 'realtime'):
-                        return m.group(1)
-                
-                # Guard clause: Check for realtime-specific parser messages
-                # "Parsing raw completato: X punti" is unique to realtime parser
-                if 'parsing raw completato' in message_lower:
-                    return 'realtime'
-                
-                # Guard clause: Check for realtime flow-specific messages
-                if any(kw in message_lower for kw in ['punti strutturati', 'pipeline realtime completata', 
-                                                       'collector: dati raw raccolti', 'filtro: validati']):
-                    return 'realtime'
-                
-                # Guard clause: Check GME flow markers (before generic keyword checks)
-                if self._is_gme_flow(message_lower):
-                    return 'gme'
-                
-                # Guard clause: Check for GME-specific messages
-                if any(kw in message_lower for kw in ['punti orari', 'media mensile', 'elaborazione data']):
-                    return 'gme'
-                
-                # Guard clause: Check pipeline markers
-                flow = self._check_pipeline_markers(message_lower)
-                if flow:
-                    return flow
-                
-                # Guard clause: Check logger name
-                flow = self._check_logger_name(logger_lower)
-                if flow:
-                    return flow
-                
-                # Guard clause: Check message keywords
-                flow = self._check_message_keywords(message_lower)
-                if flow:
-                    return flow
-                
-                # Guard clause: Check system keywords FIRST (before flow-specific checks)
-                # This ensures system messages like "InfluxWriter inizializzato" go to Sistema
-                if self._is_system_message(message_lower):
-                    return 'general'
-                
-                # Guard clause: Check main logger context
-                if logger_lower == 'main':
-                    flow = self._check_main_logger_context(message_lower)
-                    if flow:
-                        return flow
-                
-                # Guard clause: Check storage/influx logs for realtime
-                if ('storage' in logger_lower or 'influx' in logger_lower) and \
-                   ('solaredge_realtime' in message_lower or 'realtime' in message_lower):
-                    return 'realtime'
-                
-                # Default fallback
-                return 'general'
-            
-            def _is_gme_flow(self, message_lower):
-                """Check if message is GME flow"""
-                return 'gme' in message_lower and any(
-                    kw in message_lower for kw in ['raccolta', 'esecuzione', 'completata']
-                )
-            
-            def _check_pipeline_markers(self, message_lower):
-                """Check for pipeline start/end markers"""
-                markers = {
-                    'api': ['avvio flusso api', 'pipeline api completata'],
-                    'web': ['avvio flusso web', 'pipeline web completata'],
-                    'realtime': ['avvio flusso realtime', 'pipeline realtime completata'],
-                    'gme': ['avvio flusso gme', 'pipeline gme completata']
-                }
-                for flow, patterns in markers.items():
-                    if any(p in message_lower for p in patterns):
-                        return flow
-                return None
-            
-            def _check_logger_name(self, logger_lower):
-                """Check logger name for flow identification"""
-                # Check GME first (more specific)
-                if any(p in logger_lower for p in ['collector.collector_gme', 'parser.gme', 'gme_parser']):
-                    return 'gme'
-                # Then check other flows
-                logger_patterns = {
-                    'api': ['collector.collector_api', 'parser.api', 'api_parser'],
-                    'web': ['collector.collector_web', 'parser.web', 'web_parser'],
-                    'realtime': ['collector.collector_realtime', 'parser.parser_realtime', 'parser_realtime', 'modbus']
-                }
-                for flow, patterns in logger_patterns.items():
-                    if any(p in logger_lower for p in patterns):
-                        return flow
-                return None
-            
-            def _check_message_keywords(self, message_lower):
-                """Check message for flow-specific keywords"""
-                # IMPORTANT: Check GME first because it has more specific keywords
-                # and should not be confused with realtime
-                keyword_sets = [
-                    # GME checked first - has specific keywords
-                    ('gme', ['flusso gme', 'mercato elettrico', 'pun', 'prezzo energia',
-                           'elaborazione data', 'download dati gme', 'influxdb points gme',
-                           'media mensile', 'punti orari', 'autenticazione gme',
-                           'collector.collector_gme', 'parser.gme', 'raccolta gme',
-                           '[type: gme_prices]', '[type: gme_monthly_avg]']),
-                    # API
-                    ('api', ['api flow', 'collector_api', 'api_parser', 'flusso api', 
-                           'endpoint', 'raccolta api', 'raccolti dati da', 'endpoint equipment',
-                           'endpoint site', 'parser api', 'influxdb points da api', '[api_ufficiali]',
-                           '[type: api]']),
-                    # Web
-                    ('web', ['web flow', 'collector_web', 'web_parser', 'flusso web', 
-                           'web scraping', 'raccolta web', 'raccogliendo dati web',
-                           'parser web', 'influxdb points da web', 'dispositivo', 'measurements', '[web]',
-                           '[type: web]']),
-                    # Realtime - more specific keywords to avoid false positives
-                    ('realtime', ['flusso realtime', 'modbus', 'collector_realtime', 'parser_realtime', 
-                                'raccolta realtime', 'metriche abilitate', 'parsing raw completato',
-                                'punti strutturati', 'pipeline realtime', '[realtime]',
-                                '[type: realtime]'])
-                ]
-                for flow, keywords in keyword_sets:
-                    if any(kw in message_lower for kw in keywords):
-                        return flow
-                return None
-            
-            def _check_main_logger_context(self, message_lower):
-                """Check main logger messages for flow context using guard clauses"""
-                flow_patterns = ['collector:', 'parser:', 'filtro:', 'storage:', 'writer:',
-                               'pipeline', 'punti', 'bucket', 'scritti', 'generati',
-                               'raccolti', 'raccogliendo', 'processando', 'validati']
-                
-                # Guard clause: Return early if no flow patterns found
-                if not any(p in message_lower for p in flow_patterns):
-                    return None
-                
-                # Guard clause: Check for API keywords
-                if any(w in message_lower for w in ['api', 'endpoint']):
-                    return 'api'
-                
-                # Guard clause: Check for Web keywords
-                if any(w in message_lower for w in ['web', 'scraping', 'dispositivo']):
-                    return 'web'
-                
-                # Guard clause: Check for Realtime keywords
-                if any(w in message_lower for w in ['realtime', 'modbus', 'inverter', 'meter']):
-                    return 'realtime'
-                
-                return None
-            
-            def _is_system_message(self, message_lower):
-                """Check if message is a system message"""
-                system_keywords = [
-                    'scheduler inizializzato', 'intervalli configurati', 
-                    '[gui]', 'gui web', 'server gui', 'loop avviato', 'loop personalizzato',
-                    'config manager', 'variabili d\'ambiente', 'configurazione yaml',
-                    'avvio gui', 'porta 8092', 'dashboard moderna', 'ctrl+c',
-                    'accesso rete locale', 'firewall', 'usa la gui',
-                    'device_id cached', 'influxwriter inizializzato'
-                ]
-                system_prefixes = ['✅ server gui', '🌐 gui disponibile', '📡 accesso rete']
-                
-                return (any(message_lower.startswith(p.lower()) for p in system_prefixes) or
-                       any(kw in message_lower for kw in system_keywords))
         
         return GUILogHandler(self)
 
