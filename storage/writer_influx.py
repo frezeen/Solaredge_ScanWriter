@@ -206,13 +206,17 @@ class InfluxWriter:
         try:
             # Scrivi su ogni bucket
             total_written = 0
+            bucket_names = []
             for bucket, bucket_points in points_by_bucket.items():
                 self._write_api.write(bucket=bucket, org=self._influx_config.org, record=bucket_points)
                 total_written += len(bucket_points)
+                bucket_names.append(bucket)
                 self._log.info(f"✅ Scritti {len(bucket_points)} punti su bucket {bucket}")
             
             self._write_api.flush()
-            self._log.info(f"✅ Totale scritti {total_written} punti su {len(points_by_bucket)} bucket")
+            # Include bucket names in summary message for better log classification
+            bucket_list = ', '.join(bucket_names)
+            self._log.info(f"✅ Totale scritti {total_written} punti su bucket: {bucket_list}")
             
         except Exception as e:
             self._log.error(f"Errore scrittura InfluxDB: {e}")

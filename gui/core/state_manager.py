@@ -25,14 +25,20 @@ class StateManager:
         self.log_buffer = deque(maxlen=max_log_buffer)
         self.max_runs_per_flow = max_runs_per_flow
         
-        # Flow runs tracking (ultime N run per tipo)
+        # Flow runs tracking con limiti personalizzati per flow type
+        # API, Web, GME: 3 run - Realtime: 5 run
         self.flow_runs: Dict[str, deque] = {
-            'api': deque(maxlen=max_runs_per_flow),
-            'web': deque(maxlen=max_runs_per_flow),
-            'realtime': deque(maxlen=max_runs_per_flow),
-            'gme': deque(maxlen=max_runs_per_flow),
-            'general': deque(maxlen=max_runs_per_flow)
+            'api': deque(maxlen=3),
+            'web': deque(maxlen=3),
+            'realtime': deque(maxlen=5),  # Realtime mostra 5 run
+            'gme': deque(maxlen=3)
         }
+        
+        # General logs: non ha run, accumula tutti i messaggi di sistema (no reset)
+        self.general_logs: List[dict] = []
+        
+        # Timestamp per reset automatico del tab "Tutti" ogni ora
+        self.last_all_reset = datetime.now()
         
         # Statistiche loop
         self.loop_stats = {
@@ -106,8 +112,14 @@ class StateManager:
         """Aggiunge log alla struttura delle run per flow type"""
         flow_type = log_entry.get('flow_type', 'general')
         
+        # General: accumula tutti i messaggi senza concetto di run
+        if flow_type == 'general':
+            self.general_logs.append(log_entry)
+            return
+        
+        # Altri flow: gestione run
         if flow_type not in self.flow_runs:
-            flow_type = 'general'
+            return
         
         # Se è un marker di inizio run, crea una nuova run
         if self._is_run_start_marker(log_entry['message']):
@@ -125,44 +137,57 @@ class StateManager:
         Ottiene log filtrati per flow type dalle ultime N run
         
         Args:
-            flow_filter: Filtro flow ('all', 'api', 'web', 'realtime', 'general')
+            flow_filter: Filtro flow ('all', 'api', 'web', 'realtime', 'gme', 'general')
             limit: Numero massimo log da restituire
             
         Returns:
             Lista di log entries
+            
+        Note:
+            - Tab "Tutti" (all): Mostra tutto il log buffer completo, si resetta ogni ora
+            - Tab API, Web, GME: Mostrano ultime 3 run
+            - Tab Realtime: Mostra ultime 5 run
+            - Tab General: Mostra tutti i messaggi di sistema (no reset, no limite run)
         """
         filtered_logs = []
         
         if flow_filter == 'all':
-            # Combina le ultime N run di tutti i flow types
-            for flow_type in ['api', 'web', 'realtime', 'gme', 'general']:
-                for run in self.flow_runs[flow_type]:
-                    filtered_logs.extend(run)
+            # Tab "Tutti": mostra tutto il log buffer completo
+            # Reset automatico ogni ora
+            current_time = datetime.now()
+            time_since_reset = (current_time - self.last_all_reset).total_seconds()
             
-            # Ordina per timestamp
-            def timestamp_to_seconds(ts_str):
-                try:
-                    h, m, s = map(int, ts_str.split(':'))
-                    return h * 3600 + m * 60 + s
-                except:
-                    return 0
+            if time_since_reset >= 3600:  # 3600 secondi = 1 ora
+                self.logger.info("Reset automatico log tab 'Tutti' (1 ora trascorsa)")
+                self.log_buffer.clear()
+                self.last_all_reset = current_time
             
-            filtered_logs.sort(key=lambda log: timestamp_to_seconds(log.get('timestamp', '00:00:00')))
+            # Restituisci tutto il buffer (non limitato alle run)
+            filtered_logs = list(self.log_buffer)
+        elif flow_filter == 'general':
+            # Tab General: tutti i messaggi di sistema (no reset, no limite)
+            filtered_logs = self.general_logs.copy()
         else:
-            # Solo le ultime N run del flow type specifico
+            # Tab specifici (api, web, realtime, gme): solo le ultime N run
             if flow_filter in self.flow_runs:
                 for run in self.flow_runs[flow_filter]:
                     filtered_logs.extend(run)
         
-        # Applica limit (prendi gli ultimi N log)
-        return filtered_logs[-limit:] if len(filtered_logs) > limit else filtered_logs
+        # Applica limit solo se specificato e non è il tab "Tutti"
+        if flow_filter != 'all' and len(filtered_logs) > limit:
+            return filtered_logs[-limit:]
+        
+        return filtered_logs
     
     def clear_logs(self):
-        """Pulisce tutti i log e le run"""
+        """Pulisce tutti i log e le run (tranne general che non si resetta mai)"""
         self.log_buffer.clear()
         for flow_type in self.flow_runs:
             self.flow_runs[flow_type].clear()
-        self.logger.info("Log puliti")
+        # NON pulire general_logs - i messaggi di sistema non si resettano mai
+        # Reset timestamp per il reset automatico del tab "Tutti"
+        self.last_all_reset = datetime.now()
+        self.logger.info("Log puliti (general logs preservati)")
     
     def update_stats(self, flow_type: str, success: bool):
         """

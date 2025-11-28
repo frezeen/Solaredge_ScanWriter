@@ -765,6 +765,11 @@ class SimpleWebGUI:
                 self.ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
                 self.current_flow = None
                 
+                # Load bucket names from environment variables for dynamic detection
+                import os
+                self.bucket_realtime = os.getenv('INFLUXDB_BUCKET_REALTIME', 'Solaredge_Realtime').lower()
+                self.bucket_gme = os.getenv('INFLUXDB_BUCKET_GME', 'GME').lower()
+                
             def emit(self, record):
                 try:
                     message = self.ansi_escape.sub('', record.getMessage())
@@ -772,6 +777,15 @@ class SimpleWebGUI:
                     
                     self._update_current_flow(message)
                     flow_type = self._apply_flow_context(flow_type, message)
+                    
+                    # Force ERROR and CRITICAL messages to 'general' (Sistema tab)
+                    # to ensure all errors are visible in the Sistema tab
+                    if record.levelname in ('ERROR', 'CRITICAL'):
+                        # Check if it's a flow-specific error that should stay in its flow
+                        # Otherwise, send to general/sistema
+                        flow_specific_errors = ['pipeline', 'flusso', 'flow', 'raccolta']
+                        if not any(kw in message.lower() for kw in flow_specific_errors):
+                            flow_type = 'general'
                     
                     self.gui.state_manager.add_log_entry(
                         level=record.levelname,
@@ -786,11 +800,19 @@ class SimpleWebGUI:
                 """Update current flow based on pipeline markers"""
                 message_lower = message.lower()
                 if '🚀 avvio flusso' in message_lower:
-                    for flow in ['api', 'web', 'realtime']:
+                    for flow in ['api', 'web', 'realtime', 'gme']:
                         if flow in message_lower:
                             self.current_flow = flow
                             break
                 elif 'pipeline' in message_lower and 'completata' in message_lower:
+                    self.current_flow = None
+                # Reset flow context on completion messages
+                elif any(marker in message_lower for marker in [
+                    '[gui] ✅ raccolta gme completata',
+                    '[gui] ✅ raccolta realtime completata',
+                    '[gui] ✅ raccolta api completata',
+                    '[gui] ✅ raccolta web completata'
+                ]):
                     self.current_flow = None
             
             def _apply_flow_context(self, flow_type, message):
@@ -799,10 +821,25 @@ class SimpleWebGUI:
                 if flow_type != 'general' or not self.current_flow:
                     return flow_type
                 
+                message_lower = message.lower()
+                
+                # Guard clause: Don't apply GME context to realtime-specific messages
+                if self.current_flow == 'gme':
+                    realtime_indicators = ['realtime', 'modbus', 'inverter', 'meter', 
+                                          'punti strutturati', 'parsing raw']
+                    if any(ind in message_lower for ind in realtime_indicators):
+                        return 'realtime'
+                
+                # Guard clause: Don't apply realtime context to GME-specific messages
+                if self.current_flow == 'realtime':
+                    gme_indicators = ['gme', 'punti orari', 'media mensile', 'mercato elettrico']
+                    if any(ind in message_lower for ind in gme_indicators):
+                        return 'gme'
+                
                 # Guard clause: Check if message contains flow keywords
                 flow_keywords = ['collector', 'parser', 'filtro', 'scritti', 
                                'punti', 'bucket', 'influxwriter', 'cache hit', 'cache miss']
-                if any(kw in message.lower() for kw in flow_keywords):
+                if any(kw in message_lower for kw in flow_keywords):
                     return self.current_flow
                 
                 return flow_type
@@ -812,8 +849,32 @@ class SimpleWebGUI:
                 message_lower = message.lower()
                 logger_lower = logger_name.lower()
                 
-                # Guard clause: Check GME first (highest priority)
+                # Guard clause: Check bucket names first (most specific)
+                # Use actual bucket names from environment variables
+                if 'bucket' in message_lower:
+                    # Check for realtime bucket (exact match from .env)
+                    if self.bucket_realtime in message_lower:
+                        return 'realtime'
+                    # Check for GME bucket (exact match from .env)
+                    if self.bucket_gme in message_lower:
+                        return 'gme'
+                
+                # Guard clause: Check for realtime-specific parser messages
+                # "Parsing raw completato: X punti" is unique to realtime parser
+                if 'parsing raw completato' in message_lower:
+                    return 'realtime'
+                
+                # Guard clause: Check for realtime flow-specific messages
+                if any(kw in message_lower for kw in ['punti strutturati', 'pipeline realtime completata', 
+                                                       'collector: dati raw raccolti', 'filtro: validati']):
+                    return 'realtime'
+                
+                # Guard clause: Check GME flow markers (before generic keyword checks)
                 if self._is_gme_flow(message_lower):
+                    return 'gme'
+                
+                # Guard clause: Check for GME-specific messages
+                if any(kw in message_lower for kw in ['punti orari', 'media mensile', 'elaborazione data']):
                     return 'gme'
                 
                 # Guard clause: Check pipeline markers
@@ -870,10 +931,14 @@ class SimpleWebGUI:
             
             def _check_logger_name(self, logger_lower):
                 """Check logger name for flow identification"""
+                # Check GME first (more specific)
+                if any(p in logger_lower for p in ['collector.collector_gme', 'parser.gme', 'gme_parser']):
+                    return 'gme'
+                # Then check other flows
                 logger_patterns = {
                     'api': ['collector.collector_api', 'parser.api', 'api_parser'],
                     'web': ['collector.collector_web', 'parser.web', 'web_parser'],
-                    'realtime': ['collector.collector_realtime', 'parser.parser_realtime', 'realtime', 'modbus']
+                    'realtime': ['collector.collector_realtime', 'parser.parser_realtime', 'parser_realtime', 'modbus']
                 }
                 for flow, patterns in logger_patterns.items():
                     if any(p in logger_lower for p in patterns):
@@ -882,21 +947,28 @@ class SimpleWebGUI:
             
             def _check_message_keywords(self, message_lower):
                 """Check message for flow-specific keywords"""
-                keyword_sets = {
-                    'api': ['api flow', 'collector_api', 'api_parser', 'flusso api', 
+                # IMPORTANT: Check GME first because it has more specific keywords
+                # and should not be confused with realtime
+                keyword_sets = [
+                    # GME checked first - has specific keywords
+                    ('gme', ['flusso gme', 'mercato elettrico', 'pun', 'prezzo energia',
+                           'elaborazione data', 'download dati gme', 'influxdb points gme',
+                           'media mensile', 'punti orari', 'autenticazione gme',
+                           'collector.collector_gme', 'parser.gme', 'raccolta gme']),
+                    # API
+                    ('api', ['api flow', 'collector_api', 'api_parser', 'flusso api', 
                            'endpoint', 'raccolta api', 'raccolti dati da', 'endpoint equipment',
-                           'endpoint site', 'parser api', 'influxdb points da api', '[api_ufficiali]'],
-                    'web': ['web flow', 'collector_web', 'web_parser', 'flusso web', 
+                           'endpoint site', 'parser api', 'influxdb points da api', '[api_ufficiali]']),
+                    # Web
+                    ('web', ['web flow', 'collector_web', 'web_parser', 'flusso web', 
                            'web scraping', 'raccolta web', 'raccogliendo dati web',
-                           'parser web', 'influxdb points da web', 'dispositivo', 'measurements', '[web]'],
-                    'realtime': ['realtime', 'modbus', 'collector_realtime', 'parser_realtime', 
-                                'flusso realtime', 'raccolta realtime', 'inverter', 'meter',
-                                'metriche abilitate', 'parsing completato', '[realtime]'],
-                    'gme': ['gme', 'mercato elettrico', 'pun', 'prezzo energia',
-                           'elaborazione data', 'download dati gme', 'generati', 'influxdb points gme',
-                           'media mensile', 'bucket gme', 'punti orari', '[gme]']
-                }
-                for flow, keywords in keyword_sets.items():
+                           'parser web', 'influxdb points da web', 'dispositivo', 'measurements', '[web]']),
+                    # Realtime - more specific keywords to avoid false positives
+                    ('realtime', ['flusso realtime', 'modbus', 'collector_realtime', 'parser_realtime', 
+                                'raccolta realtime', 'metriche abilitate', 'parsing raw completato',
+                                'punti strutturati', 'pipeline realtime', '[realtime]'])
+                ]
+                for flow, keywords in keyword_sets:
                     if any(kw in message_lower for kw in keywords):
                         return flow
                 return None
@@ -974,6 +1046,8 @@ class SimpleWebGUI:
         realtime_interval = timedelta(seconds=realtime_interval_seconds)
         gme_interval = timedelta(minutes=gme_interval_minutes)
         last_realtime_run = datetime.min
+        # Initialize GME to trigger immediately on first loop iteration
+        # GME uses cache, so it's safe to run at startup
         last_gme_run = datetime.min
         
         # Controlla quali flow sono abilitati nella configurazione
@@ -1060,6 +1134,10 @@ class SimpleWebGUI:
                 time_until_realtime = (last_realtime_run + realtime_interval - current_time).total_seconds()
                 time_until_gme = (last_gme_run + gme_interval - current_time).total_seconds()
                 
+                # Debug logging per GME (solo se abilitato e vicino all'esecuzione)
+                if gme_enabled and time_until_gme < 60:
+                    self.logger.debug(f"[GME DEBUG] time_until_gme={time_until_gme:.1f}s, last_run={last_gme_run}, interval={gme_interval}")
+                
                 # Esegui API e Web ogni intervallo configurato (solo se almeno uno è abilitato)
                 if (api_enabled or web_enabled) and time_until_api_web <= 0:
                     self.logger.info("[GUI] 🌐 Esecuzione raccolta API/Web...")
@@ -1136,7 +1214,7 @@ class SimpleWebGUI:
                 # Esegui GME solo se abilitato
                 if gme_enabled and time_until_gme <= 0:
                     from main import run_gme_flow
-                    self.logger.info("[GUI] 🔋 Esecuzione raccolta GME...")
+                    self.logger.info(f"[GUI] 🔋 Esecuzione raccolta GME... (last_run: {last_gme_run}, interval: {gme_interval}, time_until: {time_until_gme:.1f}s)")
                     self.state_manager.loop_stats['gme_stats']['executed'] += 1
                     try:
                         await asyncio.get_event_loop().run_in_executor(
@@ -1159,6 +1237,7 @@ class SimpleWebGUI:
                     # Ricalcola tempi dopo l'esecuzione
                     time_until_gme = gme_interval.total_seconds()
                     time_until_api_web = (last_api_web_run + api_web_interval - datetime.now()).total_seconds()
+                    self.logger.debug(f"[GUI] GME completato. Prossima esecuzione tra {time_until_gme/60:.1f} minuti")
                 elif not gme_enabled:
                     # Se GME disabilitato, imposta a un valore alto
                     time_until_gme = 999999
