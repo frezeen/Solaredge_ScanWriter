@@ -207,11 +207,14 @@ GME_PASSWORD=your_password</pre>
                 <div class="loop-status-container" id="loopStatusContainer">
                     <div class="status-card">
                         <h3>📊 Statistiche Loop</h3>
-                        <div class="stats-grid-compact" id="statsGrid">
-                            <!-- Riga 1 -->
+                        <div class="stats-grid-single-row" id="statsGrid">
                             <div class="stat-item-compact">
                                 <span class="stat-label">🔄 Stato</span>
                                 <span class="stat-value" id="loopStatus">--</span>
+                            </div>
+                            <div class="stat-item-compact">
+                                <span class="stat-label">⏱️ Uptime</span>
+                                <span class="stat-value" id="loopUptime">--</span>
                             </div>
                             <div class="stat-item-compact">
                                 <span class="stat-label">💰 GME</span>
@@ -224,16 +227,6 @@ GME_PASSWORD=your_password</pre>
                                 <span class="stat-timing" id="apiTiming">next: --</span>
                             </div>
                             <div class="stat-item-compact">
-                                <span class="stat-label">⏰ Scheduling</span>
-                                <span class="stat-value stat-multiline" id="loopScheduling">--</span>
-                            </div>
-                            
-                            <!-- Riga 2 -->
-                            <div class="stat-item-compact">
-                                <span class="stat-label">⏱️ Uptime</span>
-                                <span class="stat-value" id="loopUptime">--</span>
-                            </div>
-                            <div class="stat-item-compact">
                                 <span class="stat-label">🔌 Web</span>
                                 <span class="stat-value stat-small" id="webRuns">▶️0 ✅0 ❌0</span>
                                 <span class="stat-timing" id="webTiming">next: --</span>
@@ -244,7 +237,11 @@ GME_PASSWORD=your_password</pre>
                                 <span class="stat-timing" id="realtimeTiming">next: --</span>
                             </div>
                             <div class="stat-item-compact">
-                                <span class="stat-label">📊 Totale Runs</span>
+                                <span class="stat-label">⏰ Scheduling</span>
+                                <span class="stat-value stat-xsmall" id="loopScheduling">--</span>
+                            </div>
+                            <div class="stat-item-compact">
+                                <span class="stat-label">📊 Totale</span>
                                 <span class="stat-value" id="totalRuns">0</span>
                             </div>
                         </div>

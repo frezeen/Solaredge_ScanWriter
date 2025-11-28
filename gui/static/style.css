@@ -312,10 +312,10 @@ body {
     gap: 1.5rem;
 }
 
-/* Layout ultra-compatto: 4 colonne x 2 righe */
-.stats-grid-compact {
+/* Layout ultra-compatto: 8 colonne su 1 riga */
+.stats-grid-single-row {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(8, 1fr);
     gap: 0.5rem;
 }
 
@@ -356,10 +356,9 @@ body {
     font-size: 0.85rem;
 }
 
-.stat-item-compact .stat-value.stat-multiline {
+.stat-item-compact .stat-value.stat-xsmall {
     font-size: 0.7rem;
-    line-height: 1.4;
-    white-space: pre-line;
+    line-height: 1.3;
 }
 
 .stat-item-compact .stat-timing {
@@ -720,7 +719,7 @@ h4 {
 }
 
 .logs-content {
-    height: 450px;
+    height: 500px;
     overflow-y: auto;
     padding: 1rem;
     font-family: 'Courier New', monospace;
