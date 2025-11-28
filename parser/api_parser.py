@@ -222,24 +222,31 @@ class SolarEdgeAPIParser:
             meter_type = meter.get('type', 'PRODUCTION')
             values = meter.get('values', [])
             
-            # Per Production e FeedIn, aggiungi sempre un punto a 0 a mezzanotte
+            # Per Production e FeedIn, aggiungi UN SOLO punto a 0 a mezzanotte per giorno
             # Questo garantisce che Grafana possa fare fill() correttamente
-            if meter_type in ['Production', 'FeedIn'] and values:
-                first_item = values[0] if isinstance(values[0], dict) else {}
-                time_str = first_item.get(extraction.get('time_field', 'date'))
-                if time_str:
-                    ts = self._parse_timestamp(time_str)
-                    if ts:
-                        # Crea timestamp a mezzanotte dello stesso giorno
-                        midnight = ts.replace(hour=0, minute=0, second=1, microsecond=0)
-                        unit = extraction.get('unit') or first_item.get('unit') or first_item.get('unitType')
-                        
-                        midnight_dict = self._create_structured_dict(
-                            endpoint_name, category, 0.0,
-                            meter_type=meter_type, unit=unit, ts=midnight
-                        )
-                        if midnight_dict:
-                            structured_dicts.append(midnight_dict)
+            if meter_type in ['Production', 'FeedIn'] and values and endpoint_name == ENERGY_DETAILS:
+                # Raccogli tutti i giorni presenti nei dati
+                days_seen = set()
+                for item in values:
+                    if isinstance(item, dict):
+                        time_str = item.get(extraction.get('time_field', 'date'))
+                        if time_str:
+                            ts = self._parse_timestamp(time_str)
+                            if ts:
+                                day_key = ts.strftime('%Y-%m-%d')
+                                days_seen.add((day_key, ts))
+                
+                # Aggiungi UN punto a mezzanotte per ogni giorno
+                for day_key, sample_ts in days_seen:
+                    midnight = sample_ts.replace(hour=0, minute=0, second=1, microsecond=0)
+                    unit = extraction.get('unit', 'Wh')
+                    
+                    midnight_dict = self._create_structured_dict(
+                        endpoint_name, category, 0.0,
+                        meter_type=meter_type, unit=unit, ts=midnight
+                    )
+                    if midnight_dict:
+                        structured_dicts.append(midnight_dict)
             
             for item in values:
                 if not isinstance(item, dict):
