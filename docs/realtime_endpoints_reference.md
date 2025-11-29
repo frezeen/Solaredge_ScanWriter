@@ -1,126 +1,234 @@
-# Nuovo Reference - Endpoint Realtime
+# Realtime Modbus Endpoints – Technical Reference
 
-## INVERTER ENDPOINTS
+## Overview
 
-| Endpoint | Field Type | Unit | Key Config | Descrizione |
-|----------|------------|------|------------|-------------|
-| `Active Power Limit` | `Inverter` | % | `active_power_limit` | Limite potenza attiva |
-| `Advanced Power Control Enable` | `Inverter` | - | `advanced_power_control_enable` | Controllo potenza avanzato abilitato |
-| `Commit Power Control Settings` | `Inverter` | - | `commit_power_control_settings` | Commit impostazioni controllo potenza |
-| `Common Did` | `Inverter` | - | `common_did` | DID comune SunSpec |
-| `Common Id` | `Inverter` | - | `common_id` | ID comune SunSpec |
-| `Common Length` | `Inverter` | - | `common_length` | Lunghezza comune SunSpec |
-| `Cosphi` | `Inverter` | - | `cosphi` | Coseno phi |
-| `Current` | `Inverter` | A | `current` | Corrente AC totale |
-| `Current Dc` | `Inverter` | A | `current_dc` | Corrente DC |
-| `Device Address` | `Inverter` | - | `device_address` | Indirizzo dispositivo Modbus |
-| `Energy Total` | `Inverter` | Wh | `energy_total` | Energia totale prodotta |
-| `Export Control Limit Mode` | `Inverter` | - | `export_control_limit_mode` | Modalitα limite controllo esportazione |
-| `Export Control Mode` | `Inverter` | - | `export_control_mode` | Modalitα controllo esportazione |
-| `Export Control Site Limit` | `Inverter` | - | `export_control_site_limit` | Limite sito controllo esportazione |
-| `Frequency` | `Inverter` | Hz | `frequency` | Frequenza AC |
-| `L1 Current` | `Inverter` | A | `l1_current` | Corrente fase L1 (trifase/monofase) |
-| `L1 Voltage` | `Inverter` | V | `l1_voltage` | Tensione fase L1 |
-| `L1N Voltage` | `Inverter` | V | `l1n_voltage` | Tensione L1-N |
-| `L2 Current` | `Inverter` | A | `l2_current` | Corrente fase L2 (solo trifase) |
-| `L2 Voltage` | `Inverter` | V | `l2_voltage` | Tensione fase L2 (solo trifase) |
-| `L2N Voltage` | `Inverter` | V | `l2n_voltage` | Tensione L2-N (solo trifase) |
-| `L3 Current` | `Inverter` | A | `l3_current` | Corrente fase L3 (solo trifase) |
-| `L3 Voltage` | `Inverter` | V | `l3_voltage` | Tensione fase L3 (solo trifase) |
-| `L3N Voltage` | `Inverter` | V | `l3n_voltage` | Tensione L3-N (solo trifase) |
-| `Manufacturer` | `Inverter` | - | `manufacturer` | Produttore inverter |
-| `Model` | `Inverter` | - | `model` | Modello inverter |
-| `Power Ac` | `Inverter` | W | `power_ac` | Potenza AC attiva |
-| `Power Apparent` | `Inverter` | VA | `power_apparent` | Potenza apparente |
-| `Power Dc` | `Inverter` | W | `power_dc` | Potenza DC |
-| `Power Factor` | `Inverter` | % | `power_factor` | Fattore di potenza |
-| `Power Reactive` | `Inverter` | VAr | `power_reactive` | Potenza reattiva |
-| `Reactive Power Config` | `Inverter` | - | `reactive_power_config` | Configurazione potenza reattiva |
-| `Reactive Power Response Time` | `Inverter` | ms | `reactive_power_response_time` | Tempo risposta potenza reattiva |
-| `Restore Power Control Default Settings` | `Inverter` | - | `restore_power_control_default_settings` | Ripristina impostazioni controllo potenza default |
-| `Rrcr State` | `Inverter` | - | `rrcr_state` | Stato RRCR (Rapid Rate Change Response) |
-| `Serial` | `Inverter` | - | `serial` | Numero seriale |
-| `Status` | `Inverter` | - | `status` | Stato operativo inverter |
-| `Sunspec Did` | `Inverter` | - | `sunspec_did` | SunSpec Device ID |
-| `Sunspec Length` | `Inverter` | - | `sunspec_length` | Lunghezza blocco SunSpec |
-| `Temperature` | `Inverter` | ░C | `temperature` | Temperatura inverter |
-| `Type` | `Inverter` | - | `type` | Tipo inverter (calcolato da SunSpec DID) |
-| `Vendor Status` | `Inverter` | - | `vendor_status` | Status specifico del produttore |
-| `Version` | `Inverter` | - | `version` | Versione firmware |
-| `Voltage Dc` | `Inverter` | V | `voltage_dc` | Tensione DC |
+This document describes **how the realtime data collection subsystem works** in the SolarEdge ScanWriter project. It focuses on the internal mechanisms, data structures, and processing pipeline that transform raw Modbus TCP registers into InfluxDB points. No usage examples or operational instructions are included – the goal is to provide a clear technical manual for developers.
 
-## METER ENDPOINTS
+---
 
-| Endpoint | Field Type | Unit | Key Config | Descrizione |
-|----------|------------|------|------------|-------------|
-| `Apparent Energy Status` | `Meter` | - | `apparent_energy_status` | Stato energia apparente (N/A se scale invalido) |
-| `Current` | `Meter` | A | `current` | Corrente totale |
-| `Device Address` | `Meter` | - | `device_address` | Indirizzo dispositivo Modbus |
-| `Export Energy Active` | `Meter` | Wh | `export_energy_active` | Energia esportata |
-| `Export Energy Apparent` | `Meter` | VAh | `export_energy_apparent` | Energia apparente esportata (condizionale) |
-| `Export Energy Reactive Q3` | `Meter` | VArh | `export_energy_reactive_q3` | Energia reattiva esportata Q3 |
-| `Export Energy Reactive Q4` | `Meter` | VArh | `export_energy_reactive_q4` | Energia reattiva esportata Q4 |
-| `Frequency` | `Meter` | Hz | `frequency` | Frequenza |
-| `Import Energy Active` | `Meter` | Wh | `import_energy_active` | Energia importata |
-| `Import Energy Apparent` | `Meter` | VAh | `import_energy_apparent` | Energia apparente importata (condizionale) |
-| `Import Energy Reactive Q1` | `Meter` | VArh | `import_energy_reactive_q1` | Energia reattiva importata Q1 |
-| `Import Energy Reactive Q2` | `Meter` | VArh | `import_energy_reactive_q2` | Energia reattiva importata Q2 |
-| `L12 Voltage` | `Meter` | V | `l12_voltage` | Tensione L1-L2 |
-| `L1 Current` | `Meter` | A | `l1_current` | Corrente L1 |
-| `L1 Export Energy Active` | `Meter` | Wh | `l1_export_energy_active` | Energia esportata L1 |
-| `L1 Export Energy Apparent` | `Meter` | VAh | `l1_export_energy_apparent` | Energia apparente esportata L1 (condizionale) |
-| `L1 Export Energy Reactive Q3` | `Meter` | VArh | `l1_export_energy_reactive_q3` | Energia reattiva esportata Q3 L1 |
-| `L1 Export Energy Reactive Q4` | `Meter` | VArh | `l1_export_energy_reactive_q4` | Energia reattiva esportata Q4 L1 |
-| `L1 Import Energy Active` | `Meter` | Wh | `l1_import_energy_active` | Energia importata L1 |
-| `L1 Import Energy Apparent` | `Meter` | VAh | `l1_import_energy_apparent` | Energia apparente importata L1 (condizionale) |
-| `L1 Import Energy Reactive Q1` | `Meter` | VArh | `l1_import_energy_reactive_q1` | Energia reattiva importata Q1 L1 |
-| `L1 Import Energy Reactive Q2` | `Meter` | VArh | `l1_import_energy_reactive_q2` | Energia reattiva importata Q2 L1 |
-| `L1 Power` | `Meter` | W | `l1_power` | Potenza attiva L1 |
-| `L1 Power Apparent` | `Meter` | VA | `l1_power_apparent` | Potenza apparente L1 |
-| `L1 Power Factor` | `Meter` | % | `l1_power_factor` | Fattore di potenza L1 |
-| `L1 Power Reactive` | `Meter` | VAr | `l1_power_reactive` | Potenza reattiva L1 |
-| `L1N Voltage` | `Meter` | V | `l1n_voltage` | Tensione L1-N |
-| `L23 Voltage` | `Meter` | V | `l23_voltage` | Tensione L2-L3 |
-| `L2 Current` | `Meter` | A | `l2_current` | Corrente L2 |
-| `L2 Export Energy Active` | `Meter` | Wh | `l2_export_energy_active` | Energia esportata L2 |
-| `L2 Export Energy Apparent` | `Meter` | VAh | `l2_export_energy_apparent` | Energia apparente esportata L2 (condizionale) |
-| `L2 Export Energy Reactive Q3` | `Meter` | VArh | `l2_export_energy_reactive_q3` | Energia reattiva esportata Q3 L2 |
-| `L2 Export Energy Reactive Q4` | `Meter` | VArh | `l2_export_energy_reactive_q4` | Energia reattiva esportata Q4 L2 |
-| `L2 Import Energy Active` | `Meter` | Wh | `l2_import_energy_active` | Energia importata L2 |
-| `L2 Import Energy Apparent` | `Meter` | VAh | `l2_import_energy_apparent` | Energia apparente importata L2 (condizionale) |
-| `L2 Import Energy Reactive Q1` | `Meter` | VArh | `l2_import_energy_reactive_q1` | Energia reattiva importata Q1 L2 |
-| `L2 Import Energy Reactive Q2` | `Meter` | VArh | `l2_import_energy_reactive_q2` | Energia reattiva importata Q2 L2 |
-| `L2 Power` | `Meter` | W | `l2_power` | Potenza attiva L2 |
-| `L2 Power Apparent` | `Meter` | VA | `l2_power_apparent` | Potenza apparente L2 |
-| `L2 Power Factor` | `Meter` | % | `l2_power_factor` | Fattore di potenza L2 |
-| `L2 Power Reactive` | `Meter` | VAr | `l2_power_reactive` | Potenza reattiva L2 |
-| `L2N Voltage` | `Meter` | V | `l2n_voltage` | Tensione L2-N |
-| `L31 Voltage` | `Meter` | V | `l31_voltage` | Tensione L3-L1 |
-| `L3 Current` | `Meter` | A | `l3_current` | Corrente L3 |
-| `L3 Export Energy Active` | `Meter` | Wh | `l3_export_energy_active` | Energia esportata L3 |
-| `L3 Export Energy Apparent` | `Meter` | VAh | `l3_export_energy_apparent` | Energia apparente esportata L3 (condizionale) |
-| `L3 Export Energy Reactive Q3` | `Meter` | VArh | `l3_export_energy_reactive_q3` | Energia reattiva esportata Q3 L3 |
-| `L3 Export Energy Reactive Q4` | `Meter` | VArh | `l3_export_energy_reactive_q4` | Energia reattiva esportata Q4 L3 |
-| `L3 Import Energy Active` | `Meter` | Wh | `l3_import_energy_active` | Energia importata L3 |
-| `L3 Import Energy Apparent` | `Meter` | VAh | `l3_import_energy_apparent` | Energia apparente importata L3 (condizionale) |
-| `L3 Import Energy Reactive Q1` | `Meter` | VArh | `l3_import_energy_reactive_q1` | Energia reattiva importata Q1 L3 |
-| `L3 Import Energy Reactive Q2` | `Meter` | VArh | `l3_import_energy_reactive_q2` | Energia reattiva importata Q2 L3 |
-| `L3 Power` | `Meter` | W | `l3_power` | Potenza attiva L3 |
-| `L3 Power Apparent` | `Meter` | VA | `l3_power_apparent` | Potenza apparente L3 |
-| `L3 Power Factor` | `Meter` | % | `l3_power_factor` | Fattore di potenza L3 |
-| `L3 Power Reactive` | `Meter` | VAr | `l3_power_reactive` | Potenza reattiva L3 |
-| `L3N Voltage` | `Meter` | V | `l3n_voltage` | Tensione L3-N |
-| `Manufacturer` | `Meter` | - | `manufacturer` | Produttore contatore |
-| `Model` | `Meter` | - | `model` | Modello contatore |
-| `Option` | `Meter` | - | `option` | Opzione contatore (Export+Import) |
-| `Power` | `Meter` | W | `power` | Potenza attiva totale |
-| `Power Apparent` | `Meter` | VA | `power_apparent` | Potenza apparente totale |
-| `Power Factor` | `Meter` | % | `power_factor` | Fattore di potenza totale |
-| `Power Reactive` | `Meter` | VAr | `power_reactive` | Potenza reattiva totale |
-| `Reactive Energy Status` | `Meter` | - | `reactive_energy_status` | Stato energia reattiva (N/A se scale invalido) |
-| `Serial` | `Meter` | - | `serial` | Numero seriale |
-| `Sunspec Did` | `Meter` | - | `sunspec_did` | SunSpec Device ID |
-| `Sunspec Length` | `Meter` | - | `sunspec_length` | Lunghezza blocco SunSpec |
-| `Version` | `Meter` | - | `version` | Versione firmware |
-| `Voltage Ll` | `Meter` | V | `voltage_ll` | Tensione L-L |
-| `Voltage Ln` | `Meter` | V | `voltage_ln` | Tensione L-N |
+## 1. Architecture Overview
+
+```
+Realtime Flow
+└─ collector/collector_realtime.py   →  Modbus TCP read
+   └─ solaredge_modbus (third‑party library) – low‑level register access
+└─ parser/parser_realtime.py        →  Normalisation, scaling, unit handling
+└─ filtro/regole_filtraggio.py      →  Structured point validation
+└─ storage/writer_influx.py          →  InfluxDB point write (measurement = "realtime")
+```
+
+All components are driven by configuration stored in `config/sources/modbus_endpoints.yaml` (accessed via `ConfigManager`).
+
+---
+
+## 2. Configuration (`modbus_endpoints.yaml`)
+
+The YAML file defines three logical device groups:
+
+| Group | Key in YAML | Enabled Flag | Device Type |
+|-------|-------------|--------------|-------------|
+| Inverter | `inverter_realtime` | `enabled: true/false` | `inverter` |
+| Meters   | `meters`            | `enabled: true/false` | `meter` |
+| Batteries| `batteries`        | `enabled: true/false` | `battery` |
+
+Each group contains a `measurements` mapping where individual register fields are described:
+
+```yaml
+measurements:
+  voltage: {enabled: true, unit: V}
+  current: {enabled: true, unit: A}
+  temperature: {enabled: true, unit: C}
+  # ... other registers ...
+```
+
+Only measurements with `enabled: true` are parsed and written to InfluxDB.
+
+---
+
+## 3. Collector – `RealtimeCollector`
+
+### 3.1 Initialization
+* Loads logger (`app_logging.get_logger`).
+* Retrieves the realtime connection config (`host`, `port`, `timeout`, `unit`).
+* Loads the full Modbus endpoint configuration via `ConfigManager.get_modbus_endpoints()`.
+* Verifies that Modbus collection is globally enabled; otherwise raises `ValueError`.
+
+### 3.2 Data Collection (`collect_raw_data`)
+* Wrapped in `timed_operation` context manager to log duration.
+* Calls `_fetch_raw_data(host, port)` which:
+  1. Instantiates `solaredge_modbus.Inverter` with the configured host/port.
+  2. Calls `read_all()` → dictionary of all inverter registers.
+  3. Calls `meters()` and `batteries()` → dictionaries of per‑device objects.
+  4. Builds a **raw data structure**:
+     ```python
+     raw_data = {
+         "inverter": inverter_values,
+         "meters": {},
+         "batteries": {}
+     }
+     ```
+  5. If the corresponding group is enabled in the YAML, iterates over each meter/battery object and stores the result of `read_all()` under its name.
+* Returns the nested raw dictionary.
+
+---
+
+## 4. Parser – `RealtimeParser`
+
+The parser is responsible for **normalising units, applying scaling factors, and converting raw values into InfluxDB `Point` objects**.
+
+### 4.1 Configuration Loading
+* On construction it loads the Modbus endpoint configuration (`self._modbus_endpoints`).
+* Pre‑populates caches for dynamic device IDs:
+  * `inverter` – cached from `c_model` field.
+  * `meters` – cached per meter name from `c_serialnumber` or `c_model`.
+  * `batteries` – cached from `c_model`.
+* Defines a unit normalisation map (`C → °C`, `F → °F`).
+
+### 4.2 Enabled Measurements Helper
+```python
+def _get_enabled_measurements(self, endpoint_config: dict) -> dict:
+    measurements = endpoint_config.get('measurements', {})
+    return {name: cfg for name, cfg in measurements.items() if cfg.get('enabled', False)}
+```
+Only enabled measurements are processed.
+
+### 4.3 Parsing Entry Point (`parse_raw_data`)
+* Validates that `raw_data` is not empty.
+* Delegates to three private methods:
+  * `_parse_inverter_raw`
+  * `_parse_meters_raw`
+  * `_parse_batteries_raw`
+* Aggregates all returned `Point` objects into a single list.
+* Logs the total point count and duration.
+
+### 4.4 Inverter Parsing (`_parse_inverter_raw`)
+* Retrieves the inverter endpoint configuration.
+* Determines the device identifier:
+  * Uses cached `device_id` if present.
+  * Falls back to `c_model` from the raw payload.
+* Iterates over each key/value pair:
+  * Strips the `c_` prefix.
+  * Skips keys not present in the enabled measurement set.
+  * Constructs a **human‑readable endpoint name** by title‑casing the key (`voltage_ac → Voltage Ac`).
+  * Retrieves the scale factor from a sibling key (`{key}_scale`).
+  * Applies special handling for `energy_total` where a scale of `1` indicates a firmware bug – the value is divided by `10`.
+  * Applies generic scaling: `final_value = value * (10 ** scale)` unless `scale == -32768` (invalid), in which case the entry is ignored.
+  * Normalises the unit using the configuration map.
+  * Creates an InfluxDB `Point` with:
+    * Measurement: `realtime`
+    * Tags: `device_id`, `endpoint` (human name), `unit`
+    * Field: `Inverter` (numeric) or `Inverter_Text` (string) depending on the final value type.
+    * Timestamp: `datetime.now(timezone.utc)`.
+* Returns the list of points.
+
+### 4.5 Meters Parsing (`_parse_meters_raw`)
+* Similar flow to inverter parsing but operates per‑meter name.
+* Device ID resolution hierarchy:
+  1. Cached ID for the meter name.
+  2. `c_serialnumber` → `meter_{serial}`
+  3. `c_model`
+* Uses a **special‑scale‑key map** for registers that do not follow the `{key}_scale` convention (e.g., `import_energy_active` → `energy_active_scale`).
+* Applies scaling, unit normalisation, and point creation analogous to the inverter parser, but the field name is `Meter` (numeric) or `Meter_Text`.
+
+### 4.6 Batteries Parsing (`_parse_batteries_raw`)
+* Mirrors the meter parser with device‑type‑specific tags.
+* Device ID derived from cached value or `c_model`.
+* Uses generic `{key}_scale` scaling.
+* Points are created with field name `Battery` or `Battery_Text`.
+
+---
+
+## 5. Filtering – `filter_structured_points`
+
+The realtime flow re‑uses the generic structured‑point filter located in `filtro/regole_filtraggio.py`. It validates:
+* Presence of required tags (`device_id`, `endpoint`).
+* Numeric field values are within reasonable bounds (configured in the filter rules).
+* Discards points that fail validation, logging the reason.
+
+---
+
+## 6. InfluxDB Storage
+
+All realtime points are written to the **`realtime` measurement** in the configured InfluxDB bucket.
+
+### 6.1 Tag Schema
+| Tag | Description |
+|-----|-------------|
+| `device_id` | Cached identifier for the physical device (inverter, meter, battery). |
+| `endpoint`  | Human‑readable name derived from the register key (e.g., `Voltage Ac`). |
+| `unit`      | Normalised unit string (`V`, `A`, `°C`, etc.). |
+
+### 6.2 Field Schema
+* Numeric values are stored under a type‑specific field name (`Inverter`, `Meter`, `Battery`).
+* Non‑numeric values (e.g., status strings) are stored under `<Type>_Text`.
+
+### 6.3 Timestamp
+* Generated at point creation time using `datetime.now(timezone.utc)`. The writer does **not** modify timestamps; they reflect the moment of collection.
+
+---
+
+## 7. Error Handling & Logging
+
+* **Configuration errors** (missing or disabled Modbus) raise `ValueError` during collector initialization.
+* **Connection errors** (TCP timeout, socket failure) propagate as exceptions and are logged by the collector before being re‑raised.
+* **Parsing errors** are caught per‑device group; the parser logs the exception and returns an empty list for that group, allowing the pipeline to continue with other data.
+* **Scaling errors** (invalid scale values) are silently skipped (`continue`).
+* All major steps emit structured log entries with `extra` fields for easy downstream analysis.
+
+---
+
+## 8. Extensibility
+
+To add a new realtime register:
+1. Add the register under the appropriate group in `modbus_endpoints.yaml` with `enabled: true` and a `unit`.
+2. Ensure the Modbus device exposes a `{register}_scale` register (or add an entry to the **special‑scale‑key map** in `parser_realtime.py`).
+3. No code changes are required – the parser automatically discovers enabled measurements and applies scaling.
+
+---
+
+## 9. Technical Appendices
+
+### Appendix A: Hardcoded Scale Mappings
+The parser contains a hardcoded dictionary (`special_scale_keys`) to map registers to their scale factors when they deviate from the standard `{name}_scale` pattern. This is critical for correct value interpretation.
+
+| Register Pattern | Mapped Scale Key |
+|------------------|------------------|
+| `*import_energy_active` | `energy_active_scale` |
+| `*export_energy_active` | `energy_active_scale` |
+| `*import_energy_apparent` | `energy_apparent_scale` |
+| `*export_energy_apparent` | `energy_apparent_scale` |
+| `*import_energy_reactive_*` | `energy_reactive_scale` |
+| `*export_energy_reactive_*` | `energy_reactive_scale` |
+| `*voltage_ln`, `*l*n_voltage` | `voltage_scale` |
+| `*voltage_ll`, `*l*voltage` | `voltage_scale` |
+| `frequency` | `frequency_scale` |
+| `*power` | `power_scale` |
+| `*power_apparent` | `power_apparent_scale` |
+| `*power_reactive` | `power_reactive_scale` |
+| `*power_factor` | `power_factor_scale` |
+| `*current` | `current_scale` |
+
+### Appendix B: Unit Normalization
+The parser normalizes specific unit strings to ensure consistency in InfluxDB.
+
+| Configured Unit | Stored Unit |
+|-----------------|-------------|
+| `C` | `°C` |
+| `F` | `°F` |
+| *All others* | *As configured* |
+
+### Appendix C: Firmware Bug Workarounds
+**Energy Total Scaling Bug**:
+- **Condition**: `endpoint == 'energy_total'` AND `scale == 1`
+- **Action**: Divide value by 10 (instead of multiplying by 10^1)
+- **Reason**: Corrects known firmware reporting error where scale 1 is incorrectly reported for what should be scale -1 or 0.
+
+## 10. Summary of Data Flow
+
+1. **Collector** reads raw registers via Modbus TCP → nested dictionary.
+2. **Parser** loads endpoint config, resolves device IDs, applies scaling (standard + special maps), normalises units, creates InfluxDB `Point` objects.
+3. **Filter** validates points against rule set.
+4. **Writer** writes validated points to InfluxDB measurement `realtime`.
+5. **Logging** records duration and any errors at each stage.
+
+This document provides a complete technical description of the realtime data collection subsystem, suitable for developers needing to understand, extend, or debug the implementation.
