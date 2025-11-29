@@ -49,8 +49,8 @@ class YawlManager:
         device_id_str = str(device_id)
         
         # Determina se il device deve essere abilitato di default
-        # Solo OPTIMIZER e WEATHER sono abilitati, tutto il resto disabled
-        default_enabled = device_type in ['OPTIMIZER', 'WEATHER']
+        # OPTIMIZER, WEATHER e SITE sono abilitati, tutto il resto disabled
+        default_enabled = device_type in ['OPTIMIZER', 'WEATHER', 'SITE']
         
         # Struttura endpoint con ordine preciso dei campi come nel file attuale
         endpoint = {}
@@ -59,6 +59,13 @@ class YawlManager:
         endpoint['device_type'] = device_type
         endpoint['enabled'] = default_enabled  # Solo OPTIMIZER e WEATHER abilitati di default
         endpoint['category'] = device_category  # Aggiungi categoria al device
+        
+        # Aggiungi date_range basato sul device type
+        # OPTIMIZER supporta max 7 giorni, altri dispositivi supportano range mensili
+        if device_type == 'OPTIMIZER':
+            endpoint['date_range'] = '7days'
+        else:
+            endpoint['date_range'] = 'monthly'
         
         # Gestione connessioni per OPTIMIZER e STRING (prima dei measurements)
         if device_type in ['OPTIMIZER', 'STRING']:
@@ -80,8 +87,14 @@ class YawlManager:
         endpoint['measurements'] = {}
         if 'parameters' in item and item['parameters']:
             for param in item['parameters']:
-                # Measurements abilitati solo se il device è abilitato
-                endpoint['measurements'][param] = {'enabled': default_enabled}
+                # Per SITE, abilita solo i measurement che contengono "ENERGY"
+                if device_type == 'SITE':
+                    measurement_enabled = 'ENERGY' in param
+                else:
+                    # Altri device: measurements abilitati solo se il device è abilitato
+                    measurement_enabled = default_enabled
+                
+                endpoint['measurements'][param] = {'enabled': measurement_enabled}
 
         return endpoint_key, endpoint
 
