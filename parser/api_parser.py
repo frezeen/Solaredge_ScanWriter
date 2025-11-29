@@ -181,15 +181,41 @@ class SolarEdgeAPIParser:
             if unit:
                 point.tag("unit", unit)
             
-
-            
             # Fields con categoria
             if 'json_data' in raw_point:
                 # Metadata endpoint
                 raw_json = raw_point["json_data"]
-                if isinstance(raw_json, dict):
-                    raw_json = json.dumps(raw_json)
-                point.field(category, raw_json)
+                
+                # Gestione speciale per site_details: estrai campi individuali
+                if device_type == "site_details" and isinstance(raw_json, dict):
+                    details = raw_json.get("details", {})
+                    location = details.get("location", {})
+                    
+                    # Scrivi campi principali come field separati
+                    if name := details.get("name"):
+                        point.field("name", str(name))
+                    if status := details.get("status"):
+                        point.field("status", str(status))
+                    if peak_power := details.get("peakPower"):
+                        point.field("peakPower", float(peak_power))
+                    if install_date := details.get("installationDate"):
+                        point.field("installationDate", str(install_date))
+                    if site_type := details.get("type"):
+                        point.field("type", str(site_type))
+                    if city := location.get("city"):
+                        point.field("location_city", str(city))
+                    if address := location.get("address"):
+                        point.field("location_address", str(address))
+                    if country := location.get("country"):
+                        point.field("location_country", str(country))
+                    
+                    # Mantieni anche il JSON completo per retrocompatibilità
+                    point.field(category, json.dumps(raw_json))
+                else:
+                    # Altri endpoint: comportamento normale
+                    if isinstance(raw_json, dict):
+                        raw_json = json.dumps(raw_json)
+                    point.field(category, raw_json)
             elif category:
                 # Altri raw points
                 point.field(category, 1.0)
