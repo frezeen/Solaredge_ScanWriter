@@ -34,7 +34,7 @@ Gestione semplice tramite interfaccia web, nessuna configurazione manuale richie
 - 🌍 **Impatto Ambientale**: CO2 evitata, equivalente alberi piantati, benefici sostenibilità
 - 📋 **Inventario Hardware**: Lista completa inverter, contatori, sensori con dettagli tecnici
 
-**Web Scraping Avanzato (Risoluzione 15 minuti)**
+**Web Scraping Avanzato (Smart Range & 15-min)**
 
 - 🔧 **Optimizer Individuali**: Performance di ogni singolo pannello fotovoltaico
 - 🌡️ **Sensori Ambientali**: Irradianza, temperatura ambiente, velocità vento
