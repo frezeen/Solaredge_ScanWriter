@@ -71,6 +71,7 @@ For each item in the tree:
      device_type: {itemType}
      enabled: {true/false}  # Default: true for OPTIMIZER and WEATHER, false for others
      category: "{category}"  # Derived from device_type
+     date_range: "{range}"   # See web_endpoints_reference.md "Supported Date Ranges"
      measurements:
        {MEASUREMENT_NAME}:
          enabled: {true/false}  # Matches device enabled state
@@ -126,14 +127,30 @@ When regenerating `web_endpoints.yaml`:
 |-------------|-----------------|
 | OPTIMIZER | ✅ true |
 | WEATHER | ✅ true |
+| SITE | ✅ true |
 | INVERTER | ❌ false |
 | METER | ❌ false |
-| SITE | ❌ false |
 | STRING | ❌ false |
 
 ### Measurement Level
 
 All measurements inherit the device's enabled state by default.
+
+---
+
+## Smart Range Mode
+
+The system uses a "Smart Range" mode to optimize API requests:
+
+*   **History Mode** (explicit dates):
+    *   **Daily/7days Devices**: Iterates day-by-day to ensure maximum precision and avoid overlaps.
+    *   **Monthly Devices** (e.g. Site): Iterates month-by-month to optimize requests and ensure cache consistency with Loop Mode.
+*   **Loop Mode** (no dates): Uses the `date_range` field defined in `web_endpoints.yaml`:
+    *   `7days`: Requests last 7 days (e.g., for Optimizers).
+    *   `monthly`: Requests from 1st of current month to today (e.g., for Site).
+    *   `daily`: Requests only today.
+
+This ensures high-resolution devices (Optimizers) have a short but detailed history, while aggregated devices (Site) maintain monthly consistency.
 
 ---
 

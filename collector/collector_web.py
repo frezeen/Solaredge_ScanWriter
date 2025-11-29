@@ -8,7 +8,7 @@ import os, re, time, json, hashlib
 import urllib.request, urllib.error
 from pathlib import Path
 import requests
-from datetime import datetime
+from datetime import datetime, timedelta
 from collections import defaultdict
 from app_logging import get_logger
 from cache.cache_manager import CacheManager
@@ -446,15 +446,21 @@ class CollectorWeb(CollectorWebInterface):
     
     def _fetch_batch(self, device_type: str, batch: List[Dict[str, Any]]) -> List:
         """Fetch singolo batch con scheduler timing."""
+        # Estrae date_range dal primo elemento (tutti hanno lo stesso range per tipo)
+        date_range = batch[0].get('date_range', 'daily') if batch else 'daily'
+        
+        # Rimuove date_range dal payload per non rompere l'API
+        clean_batch = [{k: v for k, v in item.items() if k != 'date_range'} for item in batch]
+        
         def _http_call():
             url = f"{self._base_url}/services/charts/site/{self._site_id}/devices-measurements"
-            params = self._get_date_params(getattr(self, '_target_date', None))
+            params = self._get_date_params(getattr(self, '_target_date', None), date_range)
             headers = self._build_headers(json_content=True)
             
             session = self._create_session()
             
             try:
-                resp = session.post(url, params=params, headers=headers, json=batch, timeout=self._global_config.batch_request_timeout)
+                resp = session.post(url, params=params, headers=headers, json=clean_batch, timeout=self._global_config.batch_request_timeout)
                 
                 if resp.status_code != 200:
                     raise RuntimeError(f"HTTP {resp.status_code} for {device_type}")
@@ -504,23 +510,44 @@ class CollectorWeb(CollectorWebInterface):
         
         return session
     
-    def _get_date_params(self, target_date: str = None) -> Dict[str, str]:
+    def _get_date_params(self, target_date: str = None, date_range: str = 'daily') -> Dict[str, str]:
         """Parametri data per oggi o data specifica.
         
         Args:
-            target_date: Data specifica in formato YYYY-MM-DD, se None usa oggi
+            target_date: Data di riferimento (fine range), se None usa oggi
+            date_range: 'daily', '7days', o 'monthly'
         """
+        # Determina data di riferimento (end_date)
         if target_date:
-            return {"start-date": target_date, "end-date": target_date}
+            try:
+                end_dt = datetime.strptime(target_date, "%Y-%m-%d")
+            except ValueError:
+                self._log.error(f"Formato data invalido: {target_date}")
+                end_dt = datetime.now()
+        else:
+            try:
+                from zoneinfo import ZoneInfo
+                tz = os.environ.get('TIMEZONE', os.environ.get('TZ', 'Europe/Rome'))
+                end_dt = datetime.now(ZoneInfo(tz))
+            except Exception:
+                end_dt = datetime.now()
         
-        try:
-            from zoneinfo import ZoneInfo
-            tz = os.environ.get('TIMEZONE', os.environ.get('TZ', 'Europe/Rome'))
-            today = datetime.now(ZoneInfo(tz)).strftime("%Y-%m-%d")
-        except Exception:
-            today = datetime.now().strftime("%Y-%m-%d")
+        end_str = end_dt.strftime("%Y-%m-%d")
         
-        return {"start-date": today, "end-date": today}
+        # Calcola start_date in base al range
+        if date_range == '7days':
+            # Ultimi 7 giorni fino alla data target
+            start_str = (end_dt - timedelta(days=6)).strftime("%Y-%m-%d")
+            return {"start-date": start_str, "end-date": end_str}
+            
+        elif date_range == 'monthly':
+            # Dall'inizio del mese della data target fino alla data target
+            start_str = end_dt.replace(day=1).strftime("%Y-%m-%d")
+            return {"start-date": start_str, "end-date": end_str}
+            
+        else:
+            # Default 'daily': solo il giorno target
+            return {"start-date": end_str, "end-date": end_str}
     
     def _generate_cache_key(self, requests: List[Dict[str, Any]], date: str) -> str:
         """Genera chiave cache."""
@@ -581,7 +608,8 @@ class CollectorWeb(CollectorWebInterface):
         return {
             "device": device,
             "deviceName": config.get('device_name', f'Device {device_id}'),
-            "measurementTypes": metrics
+            "measurementTypes": metrics,
+            "date_range": config.get('date_range', 'daily')
         }
     
     # Alias per compatibilità
