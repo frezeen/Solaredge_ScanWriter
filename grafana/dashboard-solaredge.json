@@ -39,7 +39,7 @@
           "custom": {
             "align": "center",
             "cellOptions": {
-              "type": "auto"
+              "type": "pill"
             },
             "filterable": false,
             "footer": {
@@ -49,6 +49,7 @@
             "wrapHeaderText": false,
             "wrapText": false
           },
+          "fieldMinMax": false,
           "mappings": [],
           "thresholds": {
             "mode": "absolute",
@@ -64,7 +65,344 @@
             ]
           }
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "location_address"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 213
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "location_city"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 103
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Manufacturer"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 105
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Model"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 162
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Serialnumber"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 103
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Version"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 126
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "name"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 119
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "installationDate"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 118
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "primaryModule_manufacturerName"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 255
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "location_country"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 148
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "primaryModule_modelName"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 204
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "accountId"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 80
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "id"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 74
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "location_zip"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 101
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "location_latitude"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 151
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "location_longitude"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 144
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "peakPower"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 88
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Paese"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 73
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Zip Code"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 91
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Stato"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 70
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Latitudine"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 151
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Longitudine"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 144
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Potenza Kw"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 98
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Porduttore Moduli"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 179
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Produttore"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 113
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Modello"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 166
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Potenza Modulo"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 157
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Status"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 128
+              }
+            ]
+          }
+        ]
       },
       "gridPos": {
         "h": 3,
@@ -76,16 +414,104 @@
       "options": {
         "cellHeight": "sm",
         "enablePagination": false,
-        "showHeader": true
+        "showHeader": true,
+        "sortBy": [
+          {
+            "desc": false,
+            "displayName": "Status"
+          }
+        ]
       },
       "pluginVersion": "12.3.0",
       "targets": [
         {
-          "query": "from(bucket: \"Solaredge_Realtime\")\r\n  |> range(start: -1h)\r\n  |> filter(fn: (r) => r._measurement == \"realtime\")\r\n  |> filter(fn: (r) => r._field == \"Inverter_Text\")\r\n  |> filter(fn: (r) => \r\n      r.endpoint == \"Manufacturer\" or \r\n      r.endpoint == \"Model\" or \r\n      r.endpoint == \"Serialnumber\" or \r\n      r.endpoint == \"Version\"\r\n  )\r\n  |> last()\r\n  |> group()\r\n  |> pivot(rowKey: [], columnKey: [\"endpoint\"], valueColumn: \"_value\")\r\n  |> drop(columns: [\"_start\", \"_stop\", \"_measurement\", \"_field\", \"device_id\", \"unit\"])",
+          "query": "// Query inverter da Realtime\r\ninverter = from(bucket: \"Solaredge_Realtime\")\r\n  |> range(start: -1h)\r\n  |> filter(fn: (r) => r._measurement == \"realtime\" and r._field == \"Inverter_Text\")\r\n  |> filter(fn: (r) => r.endpoint == \"Manufacturer\" or r.endpoint == \"Model\" or r.endpoint == \"Serialnumber\" or r.endpoint == \"Version\")\r\n  |> last()\r\n  |> group()\r\n  |> pivot(rowKey: [], columnKey: [\"endpoint\"], valueColumn: \"_value\")\r\n  |> drop(columns: [\"_start\", \"_stop\", \"_measurement\", \"_field\", \"device_id\", \"unit\"])\r\n  |> map(fn: (r) => ({r with _join: \"1\"}))\r\n\r\n// Query site_details - tutti i campi tramite tag metric\r\nsite = from(bucket: \"Solaredge\")\r\n  |> range(start: -7d)\r\n  |> filter(fn: (r) => r._measurement == \"api\" and r.endpoint == \"site_details\" and r._field == \"Info\")\r\n  |> last()\r\n  |> group()\r\n  |> pivot(rowKey: [], columnKey: [\"metric\"], valueColumn: \"_value\")\r\n  |> drop(columns: [\"_start\", \"_stop\", \"_measurement\", \"endpoint\", \"unit\", \"_field\"])\r\n  |> map(fn: (r) => ({r with _join: \"1\"}))\r\n\r\n// Join in una sola riga\r\njoin(\r\n  tables: {i: inverter, s: site},\r\n  on: [\"_join\"]\r\n)\r\n  |> drop(columns: [\"_join\", \"_time_i\", \"_time_s\"])\r\n",
           "refId": "A"
         }
       ],
       "title": "",
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "accountId": true,
+              "alertQuantity": true,
+              "highestImpact": true,
+              "id": true,
+              "lastUpdateTime": true,
+              "location_countryCode": true,
+              "location_latitude": false,
+              "location_longitude": false,
+              "location_timeZone": true,
+              "location_zip": false,
+              "peakPower": false,
+              "primaryModule_manufacturerName": false,
+              "primaryModule_maximumPower": true,
+              "primaryModule_temperatureCoef": true,
+              "status": false,
+              "type": false,
+              "uris_DATA_PERIOD": true,
+              "uris_DETAILS": true,
+              "uris_OVERVIEW": true
+            },
+            "includeByName": {},
+            "indexByName": {
+              "Manufacturer": 0,
+              "Model": 1,
+              "Serialnumber": 2,
+              "Version": 3,
+              "accountId": 4,
+              "alertQuantity": 5,
+              "highestImpact": 6,
+              "id": 7,
+              "installationDate": 9,
+              "lastUpdateTime": 10,
+              "location_address": 11,
+              "location_city": 12,
+              "location_country": 14,
+              "location_countryCode": 15,
+              "location_latitude": 16,
+              "location_longitude": 17,
+              "location_timeZone": 18,
+              "location_zip": 13,
+              "name": 8,
+              "peakPower": 19,
+              "primaryModule_manufacturerName": 20,
+              "primaryModule_maximumPower": 21,
+              "primaryModule_modelName": 22,
+              "primaryModule_temperatureCoef": 23,
+              "status": 24,
+              "type": 25,
+              "uris_DATA_PERIOD": 26,
+              "uris_DETAILS": 27,
+              "uris_OVERVIEW": 28
+            },
+            "renameByName": {
+              "Manufacturer": "Produttore",
+              "Model": "Modello",
+              "Serialnumber": "Seriale",
+              "Version": "Firmware",
+              "accountId": "",
+              "id": "",
+              "installationDate": "Data Avvio",
+              "lastUpdateTime": "",
+              "location_address": "Indirizzo",
+              "location_city": "Paese",
+              "location_country": "Stato",
+              "location_latitude": "Latitudine",
+              "location_longitude": "Longitudine",
+              "location_zip": "Zip Code",
+              "name": "Proprietario",
+              "peakPower": "Potenza Kw",
+              "primaryModule_manufacturerName": "Porduttore Moduli",
+              "primaryModule_modelName": "Potenza Modulo",
+              "status": "Status",
+              "type": "Tipo"
+            }
+          }
+        }
+      ],
       "transparent": true,
       "type": "table"
     },
@@ -5316,6 +5742,6 @@
   "timezone": "",
   "title": "Solaredge 3.0",
   "uid": "afb91a6f-d8f7-43ae-8a98-67eab1bb4baa",
-  "version": 422,
+  "version": 437,
   "weekStart": "monday"
 }
