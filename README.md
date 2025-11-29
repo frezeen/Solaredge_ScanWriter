@@ -473,10 +473,14 @@ L'installer configura automaticamente:
 
 ## 📚 Documentazione
 
-- `docs/api_endpoints_reference.md`: Tutti gli endpoint API con esempi query
-- `docs/web_endpoints_reference.md`: Struttura dati web scraping
-- `docs/realtime_endpoints_reference.md`: Registri Modbus e telemetria
-- `docs/gme_api_reference.md`: API GME, schema InfluxDB, query Grafana per analisi finanziarie
+### Manuali Tecnici di Riferimento
+
+- `docs/api_endpoints_reference.md`: Come funziona il sistema di storage dati API (InfluxDB, cache, timestamp)
+- `docs/web_endpoints_reference.md`: Come funziona il sistema di storage dati web (categorie, device ID, range supportati)
+- `docs/web_scan_reference.md`: Come funziona il sistema di scansione e generazione configurazione web
+- `docs/realtime_endpoints_reference.md`: Come funziona il sistema Modbus realtime (registri, scaling, normalizzazione)
+- `docs/gme_api_reference.md`: Come funziona l'integrazione GME (autenticazione, parsing, storage)
+- `docs/gui_core_reference.md`: Come funzionano i componenti core della GUI (ConfigHandler, StateManager, Toggle, Middleware)
 - `docs/retention_policy_setup.md`: Configurazione retention InfluxDB
 
 ## 🔧 Troubleshooting
