@@ -1,715 +1,655 @@
-# SolarEdge API Endpoints - Riferimento Completo per Query Grafana
+# API Data Storage - Technical Reference
 
-## Panoramica
+## Purpose
 
-Questo documento analizza tutti gli endpoint API ufficiali SolarEdge abilitati nel nostro sistema per la costruzione di query Grafana precise. Tutte le informazioni sono basate sulla documentazione ufficiale SolarEdge API.
-
-## Struttura Dati InfluxDB
-
-**Bucket Name**: Il nome del bucket InfluxDB è configurato nel file `.env` alla voce `INFLUXDB_BUCKET` (default: `Solaredge`). Usare questo valore in tutte le query Flux.
-
-### Measurement: `api`
-
-- **Field Types** (basati su categoria endpoint):
-  - `Inverter` (float): Dati inverter - produzione energia/potenza, telemetria equipment
-  - `Meter` (float): Dati meter - energia/potenza dettagliata per produzione, consumo, import/export
-  - `Flusso` (string): Power flow - JSON con flussi energetici correnti
-  - `Info` (string): Metadati - JSON con informazioni sito, equipment, sensori
-
-### Tags Comuni
-
-- `endpoint`: Nome endpoint API
-- `metric`: Tipo di meter o metrica specifica
-- `unit`: Unità di misura
-
-### Note Importanti
-
-- **Unità salvate**: Valori nelle unità originali API (Wh per energie, W per potenze)
-- **Valori per intervallo**: Energy/Power details sono valori per intervallo temporale, NON contatori crescenti
-- **Conversioni**: Per kWh, dividere Wh per 1000
+This document describes **how the SolarEdge API data storage system works** technically in InfluxDB. It does NOT describe how to query it or what to do with it, but rather the technical implementation of data collection, parsing, and storage.
 
 ---
 
-## ENDPOINT METER (Energie e Potenze Dettagliate)
+## InfluxDB Storage Structure
 
-### site_energy_details
+### Measurement Name
+All API data is stored in a single measurement: **`api`**
 
-**URL**: `/site/{siteId}/energyDetails`  
-**Descrizione**: Misurazioni energia dettagliate da meters (produzione, consumo, autoconsumo, export, import)  
-**Category**: `Meter`  
-**Unit**: `Wh`  
-**Risoluzione**: Configurabile (QUARTER_OF_AN_HOUR, HOUR, DAY, WEEK, MONTH, YEAR)  
-**Limitazioni API**:
+### Data Point Structure
 
-- 1 anno max con risoluzione DAY
-- 1 mese max con risoluzione QUARTER_OF_AN_HOUR o HOUR
-- Nessun limite per WEEK, MONTH, YEAR
+Each data point written to InfluxDB has:
 
-**IMPORTANTE**: I valori sono energia per intervallo temporale, NON contatori crescenti.
+**Tags** (indexed, used for filtering):
+- `endpoint`: The API endpoint name (e.g., "site_energy_details", "equipment_data")
+- `metric`: The meter type or specific metric (e.g., "Production", "temperature", "L1Data_acCurrent")
+- `unit`: The unit of measurement (e.g., "W", "Wh", "V", "A", "°C") - optional
 
-**Meters disponibili** (valori metric nel database):
+**Fields** (actual values):
+- Field name is determined by the **category** from `api_endpoints.yaml`
+- Field value is either:
+  - Numeric value (float) for structured data
+  - JSON string for metadata endpoints
 
-- `Production`: Energia prodotta
-- `Consumption`: Energia consumata
-- `SelfConsumption`: Energia autoconsumata (meter virtuale calcolato)
-- `FeedIn`: Energia esportata alla rete
-- `Purchased`: Energia importata dalla rete
+**Timestamp**:
+- Nanosecond precision
+- Converted from parsed datetime: `timestamp_seconds * 1_000_000_000`
 
-**Nota**: Nella richiesta API si usano nomi maiuscoli (PRODUCTION, CONSUMPTION), ma nella risposta e nel database sono salvati con prima lettera maiuscola.
+---
 
-**Query Grafana**:
+## Category System
 
-```flux
-// Produzione giornaliera (somma intervalli del giorno)
-import "timezone"
-option location = timezone.location(name: "Europe/Rome")
+### What is Category?
 
-from(bucket: "Solaredge")
-  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)
-  |> filter(fn: (r) => r["_measurement"] == "api")
-  |> filter(fn: (r) => r["_field"] == "Meter")
-  |> filter(fn: (r) => r["endpoint"] == "site_energy_details")
-  |> filter(fn: (r) => r["metric"] == "Production")
-  |> filter(fn: (r) => exists r._value)
-  |> aggregateWindow(every: 1d, fn: sum, createEmpty: false)
-  |> map(fn: (r) => ({ r with _field: "Produzione_Wh" }))
-  |> keep(columns: ["_time", "_value", "_field"])
+Category is defined in `config/sources/api_endpoints.yaml` for each endpoint and determines the **field name** used in InfluxDB.
+
+### Category Mapping
+
+| Category | Field Name | Data Type | Typical Endpoints |
+|----------|------------|-----------|-------------------|
+| `Inverter` | `Inverter` | float | site_energy_*, site_timeframe_energy, equipment_data |
+| `Meter` | `Meter` | float | site_energy_details, site_power_details |
+| `Flusso` | `Flusso` | string (JSON) | site_power_flow |
+| `Info` | `Info` | string (JSON) | site_details, site_overview, equipment_list, etc. |
+
+### How Category is Determined
+
+1. **Parser reads** endpoint configuration from `api_endpoints.yaml`
+2. **Extracts** `category` field from endpoint config
+3. **Uses** category as InfluxDB field name
+4. **Error**: If category missing, raises ValueError
+
+Code location: `parser/api_parser.py` → `_create_raw_point()` (line 69-90), `_create_structured_dicts()` (line 410-456)
+
+---
+
+## Data Flow Pipeline
+
+### Step 1: API Request
+
+CollectorAPI builds and executes HTTP requests:
+
+```python
+# URL construction
+url = f"{base_url}/site/{site_id}/energyDetails"
+
+# Parameters
+params = {
+    'api_key': api_key,
+    'startTime': '2025-11-29 00:00:00',
+    'endTime': '2025-11-29 23:59:59',
+    'meters': 'PRODUCTION,CONSUMPTION'
+}
+
+# HTTP call
+response = session.get(url, params=params, timeout=30)
+data = response.json()
 ```
 
-**Per bar chart continui** (visualizzare anche giorni senza produzione con 0):
+Code location: `collector/collector_api.py` → `_call_api()` (line 106-125)
 
-```flux
-import "timezone"
-option location = timezone.location(name: "Europe/Rome")
+### Step 2: Data Parsing
 
-from(bucket: "Solaredge")
-  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)
-  |> filter(fn: (r) => r["_measurement"] == "api")
-  |> filter(fn: (r) => r["_field"] == "Meter")
-  |> filter(fn: (r) => r["endpoint"] == "site_energy_details")
-  |> filter(fn: (r) => r["metric"] == "Production")
-  |> aggregateWindow(every: 1d, fn: sum, createEmpty: true)
-  |> timeShift(duration: -1s, columns: ["_time"])
-  |> fill(value: 0.0)
-  |> map(fn: (r) => ({ r with _field: "Produzione" }))
-  |> keep(columns: ["_time", "_value", "_field"])
+Parser processes API response based on `data_format`:
+
+**Structured Format** (numeric data):
+- Extracts values from nested JSON
+- Creates structured dictionaries with tags and fields
+- Parses timestamps to UTC
+
+**Raw JSON Format** (metadata):
+- Stores entire JSON response as string
+- Minimal processing
+
+Code location: `parser/api_parser.py` → `parse()` (line 458-517)
+
+### Step 3: Filtering
+
+Raw points pass through filtering rules:
+
+```python
+# Filter structured points
+filtered_structured = filter_structured_points(all_structured_dicts)
+
+# Filter raw points  
+filtered_raw = filter_raw_points(all_raw_points)
 ```
 
-**Nota**: `createEmpty: true`, `timeShift(duration: -1s)` e `fill(value: 0.0)` garantiscono che il bar chart mostri tutti i giorni del range, inclusi quelli senza dati (es: giorni futuri o periodi offline).
+Code location: `parser/api_parser.py` → `parse()` (line 488-493)
 
----
+### Step 4: Point Conversion
 
-### site_power_details
+Filtered data is converted to InfluxDB Point objects:
 
-**URL**: `/site/{siteId}/powerDetails`  
-**Descrizione**: Misurazioni potenza dettagliate da meters con risoluzione 15 minuti  
-**Category**: `Meter`  
-**Unit**: `W`  
-**Risoluzione**: Fissa a QUARTER_OF_AN_HOUR (15 minuti)  
-**Limitazioni API**: 1 mese max
-
-**Meters disponibili** (valori metric nel database):
-
-- `Production`: Potenza prodotta (AC production power meter/inverter)
-- `Consumption`: Potenza consumata
-- `SelfConsumption`: Potenza autoconsumata (meter virtuale calcolato)
-- `FeedIn`: Potenza esportata alla rete
-- `Purchased`: Potenza importata dalla rete
-
-**Query Grafana**:
-
-```flux
-// Potenza produzione media ultima ora
-from(bucket: "Solaredge")
-  |> range(start: -1h)
-  |> filter(fn: (r) => r["_measurement"] == "api")
-  |> filter(fn: (r) => r["_field"] == "Meter")
-  |> filter(fn: (r) => r["endpoint"] == "site_power_details")
-  |> filter(fn: (r) => r["metric"] == "Production")
-  |> aggregateWindow(every: 5m, fn: mean)
+```python
+point = Point("api")
+point.tag("endpoint", "site_energy_details")
+point.tag("metric", "Production")
+point.tag("unit", "Wh")
+point.field("Meter", 15420.0)  # category as field name
+point.time(1732875600000000000, WritePrecision.NS)
 ```
 
----
+Code location: `parser/api_parser.py` → `_convert_dict_to_point()` (line 131-165)
 
-## ENDPOINT INVERTER (Produzione ed Equipment)
+### Step 5: Storage
 
-### site_energy_day / site_energy_hour / site_energy_quarter
+InfluxWriter writes points to InfluxDB bucket.
 
-**URL**: `/site/{siteId}/energy`  
-**Descrizione**: Energia prodotta con diverse risoluzioni temporali (come mostrato nel Site Dashboard)  
-**Category**: `Inverter`  
-**Unit**: `Wh`  
-**Parametro timeUnit**: DAY, HOUR, QUARTER_OF_AN_HOUR  
-**Limitazioni API**:
-
-- DAY: max 1 anno
-- HOUR o QUARTER_OF_AN_HOUR: max 1 mese
-
-**Nota**: Questi endpoint forniscono solo produzione aggregata, senza distinzione tra meter types.
+Code location: `storage/writer_influx.py` → `write_points()`
 
 ---
 
-### site_timeframe_energy
+## Endpoint Types
 
-**URL**: `/site/{siteId}/timeFrameEnergy`  
-**Descrizione**: Energia totale prodotta per l'anno corrente (lifetime energy)  
-**Category**: `Inverter`  
-**Unit**: `Wh`  
-**Parametri**: startDate e endDate (tipicamente anno corrente)
+### Structured Data Endpoints
 
-**Risposta**: Singolo valore aggregato di energia prodotta dal sistema fotovoltaico.
+These endpoints return numeric time-series data:
+
+**site_energy_details**:
+- URL: `/site/{siteId}/energyDetails`
+- Data format: Nested meters with time-series values
+- Category: `Meter`
+- Parsing: Extracts meter type, timestamp, value, unit
+
+**site_power_details**:
+- URL: `/site/{siteId}/powerDetails`
+- Data format: Nested meters with time-series values
+- Category: `Meter`
+- Parsing: Same as energy_details
+
+**equipment_data**:
+- URL: `/equipment/{siteId}/{serialNumber}/data`
+- Data format: Array of telemetries
+- Category: `Inverter`
+- Parsing: Extracts multiple fields per telemetry (totalActivePower, dcVoltage, temperature, etc.)
+
+**site_timeframe_energy**:
+- URL: `/site/{siteId}/timeFrameEnergy`
+- Data format: Single energy value with metadata
+- Category: `Inverter`
+- Parsing: Extracts energy value and start date
+
+### Metadata Endpoints
+
+These endpoints return JSON metadata:
+
+**site_details**:
+- URL: `/site/{siteId}/details`
+- Data format: Nested JSON with site information
+- Category: `Info`
+- Storage: Flattened into multiple points (one per field)
+
+**site_overview**:
+- URL: `/site/{siteId}/overview`
+- Data format: JSON with current metrics
+- Category: `Info`
+- Storage: Single point with JSON string
+
+**equipment_list**:
+- URL: `/equipment/{siteId}/list`
+- Data format: JSON array of equipment
+- Category: `Info`
+- Storage: Single point with JSON string
 
 ---
 
-### equipment_data
+## Timestamp Handling
 
-**URL**: `/equipment/{siteId}/{serialNumber}/data`  
-**Descrizione**: Dati telemetrici dettagliati dall'inverter per un periodo specifico  
-**Category**: `Inverter`  
-**Limitazioni API**: Max 1 settimana (7 giorni)
+### Input Formats
 
-**Dati inclusi**: Parametri tecnici di performance (tensione AC/DC, corrente, frequenza, potenza attiva/reattiva/apparente, fattore di potenza, temperatura, modalità operative). Include versione software e tipo inverter (1ph/3ph). Dati divisi per fase dove applicabile.
+API provides timestamps in various formats:
+- `"2025-11-29 10:00:00"` (local time, no timezone)
+- `"2025-11-29T10:00:00+01:00"` (ISO 8601 with timezone)
 
-**Metriche principali**:
+### Conversion Process
 
-- `totalActivePower` (W): Potenza attiva totale
-- `dcVoltage` (V): Tensione DC dai pannelli
-- `groundFaultResistance` (Ω): Resistenza guasto a terra
-- `powerLimit` (%): Limite potenza applicato
-- `totalEnergy` (Wh): Energia lifetime
-- `temperature` (°C): Temperatura inverter
-- `inverterMode`: Modalità operativa (MPPT, OFF, SLEEPING, FAULT, etc.)
-- `operationMode`: 0=On-grid, 1=Off-grid PV/battery, 2=Off-grid con generator
+1. **Parse** string to datetime object
+2. **Localize** to configured timezone (default: Europe/Rome)
+3. **Convert** to UTC
+4. **Extract** Unix timestamp in seconds
+5. **Multiply** by 1,000,000,000 to get nanoseconds
+6. **Write** to InfluxDB with nanosecond precision
 
-**Metriche per fase (L1Data, L2Data, L3Data)**:
+Code location: `parser/api_parser.py` → `_parse_timestamp()` (line 92-98)
 
-- `acCurrent` (A): Corrente AC
-- `acVoltage` (V): Tensione AC
-- `acFrequency` (Hz): Frequenza
-- `apparentPower` (VA): Potenza apparente (comm board v2.474+)
-- `activePower` (W): Potenza attiva (comm board v2.474+)
-- `reactivePower` (VAr): Potenza reattiva (comm board v2.474+)
-- `cosPhi`: Fattore di potenza
+---
 
-**Tensioni trifase (solo 3ph)**:
+## Parameter Building
 
-- `vL1To2`, `vL2To3`, `vL3To1` (V): Tensioni linea-linea
+### Automatic Date Substitution
 
-**Tensioni monofase (solo 1ph)**:
+Collector automatically replaces placeholders in endpoint parameters:
 
-- `vL1ToN`, `vL2ToN` (V): Tensioni linea-neutro
+| Placeholder | Replaced With | Example |
+|-------------|---------------|---------|
+| `${API_START_DATE}` | Current date | `2025-11-29` |
+| `${API_END_DATE}` | Current date | `2025-11-29` |
+| `${API_START_TIME}` | Current date + 00:00:00 | `2025-11-29 00:00:00` |
+| `${API_END_TIME}` | Current date + 23:59:59 | `2025-11-29 23:59:59` |
+| `${CURRENT_YEAR_START}` | Year start | `2025-01-01` |
+| `${CURRENT_YEAR_END}` | Year end | `2025-12-31` |
 
-**Query Grafana**:
+Code location: `collector/collector_api.py` → `_build_params()` (line 71-104)
 
-```flux
-// Temperatura inverter
-from(bucket: "Solaredge")
-  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)
-  |> filter(fn: (r) => r["_measurement"] == "api")
-  |> filter(fn: (r) => r["_field"] == "Inverter")
-  |> filter(fn: (r) => r["endpoint"] == "equipment_data")
-  |> filter(fn: (r) => r["metric"] == "temperature")
-  |> aggregateWindow(every: 15m, fn: mean)
+### Automatic Date Addition
+
+For endpoints that require dates but don't have them in config:
+- Automatically adds `startTime` and `endTime` for current day
+- Applies to: energyDetails, powerDetails, meters endpoints
+
+---
+
+## Caching System
+
+### Cache Key Structure
+
+```
+source: "api_ufficiali"
+endpoint: "{endpoint_name}"
+date: "YYYY-MM-DD"
 ```
 
----
+### Cache Behavior
 
-## ENDPOINT FLUSSO (Power Flow)
+**Daily Mode** (`collect()`):
+- Each endpoint cached per day
+- TTL: 15 minutes (configurable)
+- Cache key: endpoint name + today's date
 
-### site_power_flow
+**History Mode** (`collect_with_dates()`):
+- Monthly data split into daily cache entries
+- Each day cached separately
+- Cache key: endpoint name + specific date
 
-**URL**: `/site/{siteId}/currentPowerFlow`  
-**Descrizione**: Flusso energetico corrente del sito (snapshot istantaneo)  
-**Category**: `Flusso`  
-**Data Format**: JSON string
+Code location: `collector/collector_api.py` → `collect()` (line 163-188), `collect_with_dates()` (line 220-362)
 
-**Contiene**: Snapshot corrente dei flussi energetici tra PV, GRID, LOAD, STORAGE con informazioni su connessioni ed elementi.
+### Data Splitting
 
----
+Monthly API responses are split into daily chunks for caching:
 
-## ENDPOINT INFO (Metadati)
+**site_energy_details / site_power_details**:
+- Groups values by date field
+- Creates separate cache entry per day
+- Preserves meter structure
 
-### site_details
+**equipment_data**:
+- Groups telemetries by date field
+- Creates separate cache entry per day
+- Preserves telemetry structure
 
-**URL**: `/site/{siteId}/details`  
-**Descrizione**: Dettagli completi del sito fotovoltaico  
-**Category**: `Info`  
-**Data Format**: JSON string
-
-**Contiene**: Nome, posizione, stato, configurazione, dati installazione, specifiche tecniche, peak power, valuta, date installazione/PTO, note, tipo sito.
-
----
-
-### site_overview
-
-**URL**: `/site/{siteId}/overview`  
-**Descrizione**: Panoramica corrente del sito con metriche chiave  
-**Category**: `Info`  
-**Data Format**: JSON string
-
-**Contiene**:
-
-- `currentPower`: Potenza istantanea corrente
-- `lastDayData`: Energia e revenue giornalieri
-- `lastMonthData`: Energia e revenue mensili
-- `lastYearData`: Energia e revenue annuali
-- `lifeTimeData`: Energia e revenue lifetime
-- `lastUpdateTime`: Timestamp ultimo aggiornamento
+Code location: `collector/collector_api.py` → `_split_data_by_day()` (line 586-670)
 
 ---
 
-### site_data_period
+## Special Endpoint Handling
 
-**URL**: `/site/{siteId}/dataPeriod`  
-**Descrizione**: Periodo temporale di produzione energetica del sito  
-**Category**: `Info`  
-**Data Format**: JSON string
+### Equipment Endpoints
 
-**Contiene**: Date di inizio e fine della raccolta dati (startDate, endDate).
+Require serial number from equipment_list:
 
----
+1. **Fetch** equipment_list endpoint
+2. **Extract** first serial number from reporters.list
+3. **Use** serial number in URL: `/equipment/{siteId}/{serialNumber}/data`
 
-### equipment_list
+Code location: `collector/collector_api.py` → `_collect_equipment_endpoint()` (line 127-161)
 
-**URL**: `/equipment/{siteId}/list`  
-**Descrizione**: Lista inverter e SMI installati  
-**Category**: `Info`  
-**Data Format**: JSON string
+### Equipment Data Time Limits
 
-**Contiene**: Nomi, modelli, produttori, numeri seriali di tutti i dispositivi di conversione energia.
+API limitation: Maximum 7 days per request
 
----
+**Solution**: Automatic week splitting for longer periods
+- Divides period into 6-day chunks (with overlap)
+- Makes multiple API calls
+- Aggregates telemetries into single response
 
-### site_inventory
+Code location: `collector/collector_api.py` → `_collect_equipment_by_weeks()` (line 445-492)
 
-**URL**: `/site/{siteId}/inventory`  
-**Descrizione**: Inventario completo equipment SolarEdge  
-**Category**: `Info`  
-**Data Format**: JSON string
+### Site Energy Day
 
-**Contiene**: Dettagli su inverter/SMI, batterie, meters, gateways, sensori con serial numbers, modelli, versioni firmware, connessioni.
+API limitation: Maximum 1 year per request (timeUnit=DAY)
 
----
+**Solution**: Automatic year splitting
+- Divides period into yearly chunks
+- Makes one API call per year
+- Aggregates values into single response
 
-### equipment_change_log
+Code location: `collector/collector_api.py` → `_collect_site_energy_day_with_dates()` (line 676-745)
 
-**URL**: `/equipment/{siteId}/{serialNumber}/changeLog`  
-**Descrizione**: Registro storico sostituzioni e cambi equipment  
-**Category**: `Info`  
-**Data Format**: JSON string
+### Site Timeframe Energy
 
-**Contiene**: Tutte le modifiche hardware ordinate per data.
+**Smart caching** per year:
+- Checks cache for each year individually
+- Only fetches missing years from API
+- As system ages, only new year requires API call
 
----
-
-### site_env_benefits
-
-**URL**: `/site/{siteId}/envBenefits`  
-**Descrizione**: Benefici ambientali derivanti dalla produzione energetica  
-**Category**: `Info`  
-**Data Format**: JSON string
-
-**Contiene**: Emissioni CO2 evitate, alberi equivalenti piantati, impatto ambientale positivo.
+Code location: `collector/collector_api.py` → `_collect_site_timeframe_energy_smart_cache()` (line 747-847)
 
 ---
 
-### site_meters
+## Meter Types
 
-**URL**: `/site/{siteId}/meters`  
-**Descrizione**: Metadati completi dei contatori installati  
-**Category**: `Info`  
-**Data Format**: JSON string
+### Available Meters
 
-**Contiene**: Numero seriale, modello, dispositivo connesso, tipo contatore, valori energia lifetime.
+API provides data for different meter types:
 
----
+| Meter Type | Description | Available In |
+|------------|-------------|--------------|
+| `Production` | Energy/Power produced | energy_details, power_details |
+| `Consumption` | Energy/Power consumed | energy_details, power_details |
+| `SelfConsumption` | Energy/Power self-consumed (virtual) | energy_details, power_details |
+| `FeedIn` | Energy/Power exported to grid | energy_details, power_details |
+| `Purchased` | Energy/Power imported from grid | energy_details, power_details |
 
-### site_sensors_list
+### Meter Type Storage
 
-**URL**: `/equipment/{siteId}/sensors`  
-**Descrizione**: Lista sensori installati nel sito  
-**Category**: `Info`  
-**Data Format**: JSON string
+Each meter type is stored with its own tag:
 
-**Contiene**: Sensori di irradianza, temperatura, vento con dettagli su posizione, tipo, dispositivi collegati.
-
----
-
-### site_storage_data
-
-**URL**: `/site/{siteId}/storageData`  
-**Descrizione**: Informazioni dettagliate batterie storage  
-**Category**: `Inverter`  
-**Data Format**: Structured
-
-**Contiene**: Stato energia, potenza, energia lifetime per batteria. Include serial number, capacità nominale, modello, stato batteria, energia caricata/scaricata lifetime, telemetrie potenza (positiva=carica, negativa=scarica).
-
-**Applicabile solo**: Sistemi con batterie.
-
----
-
-### sites_list
-
-**URL**: `/sites/list`  
-**Descrizione**: Lista completa siti associati all'account API  
-**Category**: `Info`  
-**Data Format**: JSON string
-
-**Contiene**: Nome, posizione, stato, configurazione, dettagli tecnici di ogni sito. Supporta ricerca, ordinamento, paginazione.
-
----
-
-### api_version_current / api_versions
-
-**URL**: `/version/current` e `/version/supported`  
-**Descrizione**: Informazioni versioni API SolarEdge  
-**Category**: `Info`  
-**Data Format**: JSON string
-
-**Contiene**: Versione corrente e versioni supportate dell'API.
-
----
-
-## METRICHE CHIAVE PER DASHBOARD
-
-### Produzione Fotovoltaica
-
-- **Istantanea**: `site_power_details` → field=`Meter`, metric=`Production` (W)
-- **Giornaliera**: `site_energy_details` → field=`Meter`, metric=`Production` (somma intervalli)
-- **Lifetime**: `site_timeframe_energy` → field=`Inverter` (Wh totali)
-- **Overview**: `site_overview` → field=`Info` (JSON con lastDayData, lastMonthData, lifeTimeData)
-
-### Consumi e Bilanci
-
-- **Consumo istantaneo**: `site_power_details` → field=`Meter`, metric=`Consumption` (W)
-- **Consumo giornaliero**: `site_energy_details` → field=`Meter`, metric=`Consumption` (somma)
-- **Prelievo rete**: `site_energy_details` → field=`Meter`, metric=`Purchased`
-- **Immissione rete**: `site_energy_details` → field=`Meter`, metric=`FeedIn`
-- **Autoconsumo**: `site_energy_details` → field=`Meter`, metric=`SelfConsumption`
-
-### Performance Inverter
-
-- **Potenza attiva**: `equipment_data` → field=`Inverter`, metric=`totalActivePower`
-- **Temperatura**: `equipment_data` → field=`Inverter`, metric=`temperature`
-- **Tensione DC**: `equipment_data` → field=`Inverter`, metric=`dcVoltage`
-- **Modalità**: `equipment_data` → field=`Inverter`, metric=`inverterMode`
-
----
-
-## CALCOLI DERIVATI
-
-### Percentuali Energetiche
-
-```flux
-import "timezone"
-option location = timezone.location(name: "Europe/Rome")
-
-// Recupera energie giornaliere
-import_energy = from(bucket: "Solaredge")
-  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)
-  |> filter(fn: (r) => r["_measurement"] == "api")
-  |> filter(fn: (r) => r["_field"] == "Meter")
-  |> filter(fn: (r) => r["endpoint"] == "site_energy_details")
-  |> filter(fn: (r) => r["metric"] == "Purchased")
-  |> aggregateWindow(every: 1d, fn: sum)
-  |> map(fn: (r) => ({ _time: r._time, _value: r._value, _field: "imported" }))
-
-production_energy = from(bucket: "Solaredge")
-  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)
-  |> filter(fn: (r) => r["_measurement"] == "api")
-  |> filter(fn: (r) => r["_field"] == "Meter")
-  |> filter(fn: (r) => r["endpoint"] == "site_energy_details")
-  |> filter(fn: (r) => r["metric"] == "Production")
-  |> aggregateWindow(every: 1d, fn: sum)
-  |> map(fn: (r) => ({ _time: r._time, _value: r._value, _field: "produced" }))
-
-export_energy = from(bucket: "Solaredge")
-  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)
-  |> filter(fn: (r) => r["_measurement"] == "api")
-  |> filter(fn: (r) => r["_field"] == "Meter")
-  |> filter(fn: (r) => r["endpoint"] == "site_energy_details")
-  |> filter(fn: (r) => r["metric"] == "FeedIn")
-  |> aggregateWindow(every: 1d, fn: sum)
-  |> map(fn: (r) => ({ _time: r._time, _value: r._value, _field: "exported" }))
-
-// Calcola percentuali
-union(tables: [import_energy, production_energy, export_energy])
-  |> pivot(rowKey: ["_time"], columnKey: ["_field"], valueColumn: "_value")
-  |> map(fn: (r) => ({
-    _time: r._time,
-    autoconsumo: r.produced - r.exported,
-    consumo_totale: r.imported + (r.produced - r.exported),
-    "Perc_Autoconsumo": ((r.produced - r.exported) / (r.imported + (r.produced - r.exported))) * 100.0,
-    "Perc_Prelievo": (r.imported / (r.imported + (r.produced - r.exported))) * 100.0
-  }))
+```
+measurement: api
+tags:
+  endpoint: site_energy_details
+  metric: Production  ← meter type
+  unit: Wh
+fields:
+  Meter: 15420.0
 ```
 
 ---
 
-## AGGREGAZIONI TEMPORALI (MENSILI/ANNUALI)
+## Equipment Data Fields
 
-### Produzione Storica per Mese e Anno
+### Main Telemetry Fields
 
-**IMPORTANTE**: La scelta del metodo di aggregazione dipende dal range temporale:
+| Field | Unit | Description |
+|-------|------|-------------|
+| `totalActivePower` | W | Total active power |
+| `dcVoltage` | V | DC voltage from panels |
+| `powerLimit` | % | Applied power limit |
+| `totalEnergy` | Wh | Lifetime energy |
+| `temperature` | °C | Inverter temperature |
 
-- **Range singolo anno** (anno corrente o precedente): Usare `aggregateWindow(every: 1mo)` con `createEmpty: true` e `offset: -1s` per garantire tutti i 12 mesi
-- **Range multi-anno** (storico completo): Usare `group()` + `sum()` con estrazione esplicita di anno e mese per evitare finestre non allineate
+### Phase Data Fields (L1Data, L2Data, L3Data)
 
-#### Query Multi-Anno - Tabella Pivot Mese/Anno (Storico Completo)
+| Field | Unit | Description |
+|-------|------|-------------|
+| `acCurrent` | A | AC current |
+| `acVoltage` | V | AC voltage |
+| `acFrequency` | Hz | AC frequency |
+| `apparentPower` | VA | Apparent power |
+| `activePower` | W | Active power |
+| `reactivePower` | VAr | Reactive power |
+| `cosPhi` | - | Power factor |
 
-```flux
-import "timezone"
-import "date"
+### Storage Format
 
-option location = timezone.location(name: "Europe/Rome")
+Each field is stored as separate point with metric tag:
 
-from(bucket: "Solaredge")
-  |> range(start: 0, stop: now())
-  |> filter(fn: (r) => r["_measurement"] == "api")
-  |> filter(fn: (r) => r["_field"] == "Inverter")
-  |> filter(fn: (r) => r["endpoint"] == "site_energy_day")
-  |> filter(fn: (r) => exists r._value)
-  |> map(fn: (r) => ({ 
-      r with 
-      year: string(v: date.year(t: r._time)),
-      month: date.month(t: r._time)
-  }))
-  |> group(columns: ["year", "month"])
-  |> sum(column: "_value")
-  |> map(fn: (r) => ({
-      r with
-      month_name: if r.month == 1 then "Gennaio"
-        else if r.month == 2 then "Febbraio"
-        else if r.month == 3 then "Marzo"
-        else if r.month == 4 then "Aprile"
-        else if r.month == 5 then "Maggio"
-        else if r.month == 6 then "Giugno"
-        else if r.month == 7 then "Luglio"
-        else if r.month == 8 then "Agosto"
-        else if r.month == 9 then "Settembre"
-        else if r.month == 10 then "Ottobre"
-        else if r.month == 11 then "Novembre"
-        else "Dicembre"
-  }))
-  |> group()
-  |> pivot(rowKey: ["month", "month_name"], columnKey: ["year"], valueColumn: "_value")
-  |> sort(columns: ["month"])
-  |> drop(columns: ["month"])
+```
+measurement: api
+tags:
+  endpoint: equipment_data
+  metric: L1Data_acCurrent  ← field name
+  unit: A
+fields:
+  Inverter: 5.2
 ```
 
-**Risultato**: Tabella con righe per ogni mese (nome italiano) e colonne per ogni anno con i valori di produzione in Wh.
-
-**Quando usare**: Range multi-anno (es: `start: 0` per tutto lo storico).
-
-#### Query Anno Singolo - Aggregazione Mensile (Anno Corrente/Precedente)
-
-```flux
-import "timezone"
-import "date"
-
-option location = timezone.location(name: "Europe/Rome")
-
-startOfYear = date.truncate(t: now(), unit: 1y)
-endOfYear = date.add(d: 1y, to: startOfYear)
-
-from(bucket: "Solaredge")
-  |> range(start: startOfYear, stop: endOfYear)
-  |> filter(fn: (r) => 
-      r._measurement == "api" and 
-      r._field == "Meter" and 
-      r.endpoint == "site_energy_details" and
-      r.metric == "Production"
-  )
-  |> aggregateWindow(every: 1mo, fn: sum, createEmpty: true, offset: -1s)
-  |> fill(value: 0.0)
-  |> map(fn: (r) => ({ r with _field: "Produzione" }))
-  |> keep(columns: ["_time", "_value", "_field"])
-```
-
-**Risultato**: Serie temporale con 12 punti (uno per mese), inclusi mesi senza dati (riempiti con 0).
-
-**Quando usare**: Range di un anno singolo (anno corrente o precedente). I parametri `createEmpty: true`, `offset: -1s` e `fill(value: 0.0)` garantiscono che tutti i 12 mesi siano visualizzati, inclusi gennaio e dicembre.
-
-**Per anno precedente**, modificare il range:
-```flux
-startOfLastYear = date.sub(d: 1y, from: date.truncate(t: now(), unit: 1y))
-endOfLastYear = date.truncate(t: now(), unit: 1y)
-
-from(bucket: "Solaredge")
-  |> range(start: startOfLastYear, stop: endOfLastYear)
-  // ... resto della query identico
-```
-
-#### Query Alternativa - Serie Temporale Mensile
-
-```flux
-import "timezone"
-import "date"
-
-option location = timezone.location(name: "Europe/Rome")
-
-from(bucket: "Solaredge")
-  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)
-  |> filter(fn: (r) => r["_measurement"] == "api")
-  |> filter(fn: (r) => r["_field"] == "Inverter")
-  |> filter(fn: (r) => r["endpoint"] == "site_energy_day")
-  |> filter(fn: (r) => exists r._value)
-  |> map(fn: (r) => ({ 
-      r with 
-      year: date.year(t: r._time),
-      month: date.month(t: r._time)
-  }))
-  |> group(columns: ["year", "month"])
-  |> sum(column: "_value")
-  |> map(fn: (r) => ({
-      _time: date.truncate(t: r._time, unit: 1mo),
-      _value: r._value / 1000.0,  // Converti in kWh
-      _field: "Produzione_kWh"
-  }))
-  |> group()
-  |> sort(columns: ["_time"])
-```
-
-**Risultato**: Serie temporale con un punto per mese, valori in kWh.
-
-#### Query Totali Annuali
-
-```flux
-import "timezone"
-import "date"
-
-option location = timezone.location(name: "Europe/Rome")
-
-from(bucket: "Solaredge")
-  |> range(start: 0, stop: now())
-  |> filter(fn: (r) => r["_measurement"] == "api")
-  |> filter(fn: (r) => r["_field"] == "Inverter")
-  |> filter(fn: (r) => r["endpoint"] == "site_energy_day")
-  |> filter(fn: (r) => exists r._value)
-  |> map(fn: (r) => ({ 
-      r with 
-      year: string(v: date.year(t: r._time))
-  }))
-  |> group(columns: ["year"])
-  |> sum(column: "_value")
-  |> map(fn: (r) => ({
-      _time: r._time,
-      _value: r._value / 1000.0,  // Converti in kWh
-      _field: r.year
-  }))
-  |> group()
-  |> sort(columns: ["_time"])
-```
-
-**Risultato**: Totale produzione per anno in kWh.
-
-#### Query Multi-Metrica Anno Corrente (Produzione, Consumo, Bilanci)
-
-```flux
-import "timezone"
-import "date"
-
-option location = timezone.location(name: "Europe/Rome")
-
-startOfYear = date.truncate(t: now(), unit: 1y)
-endOfYear = date.add(d: 1y, to: startOfYear)
-
-from(bucket: "Solaredge")
-  |> range(start: startOfYear, stop: endOfYear)
-  |> filter(fn: (r) => 
-      r._measurement == "api" and 
-      r._field == "Meter" and 
-      r.endpoint == "site_energy_details" and
-      (r.metric == "Production" or 
-       r.metric == "Consumption" or 
-       r.metric == "SelfConsumption" or 
-       r.metric == "Purchased" or 
-       r.metric == "FeedIn")
-  )
-  |> aggregateWindow(every: 1mo, fn: sum, createEmpty: true, offset: -1s)
-  |> fill(value: 0.0)
-  |> map(fn: (r) => ({
-      _time: r._time,
-      _value: r._value,
-      _field: if r.metric == "Production" then "Produzione"
-        else if r.metric == "Consumption" then "Consumo"
-        else if r.metric == "SelfConsumption" then "Autoconsumo"
-        else if r.metric == "Purchased" then "Prelievo"
-        else "Immissione"
-  }))
-  |> pivot(rowKey: ["_time"], columnKey: ["_field"], valueColumn: "_value")
-```
-
-**Risultato**: Tabella con timestamp mensili e colonne per ogni metrica energetica (Produzione, Consumo, Autoconsumo, Prelievo, Immissione).
-
-**Quando usare**: Dashboard mensili con più metriche per l'anno corrente o precedente.
-
-### Quando Usare Quale Metodo
-
-| Scenario | Metodo | Motivo |
-|----------|--------|--------|
-| **Storico completo multi-anno** | `group()` + `sum()` | Evita finestre non allineate tra anni diversi |
-| **Anno corrente** | `aggregateWindow(every: 1mo)` | Più veloce, garantisce tutti i 12 mesi con `createEmpty: true` |
-| **Anno precedente** | `aggregateWindow(every: 1mo)` | Più veloce, garantisce tutti i 12 mesi con `createEmpty: true` |
-| **Confronto anni (pivot)** | `group()` + `sum()` + `pivot()` | Crea tabella con mesi come righe e anni come colonne |
-| **Bar chart con zeri** | `aggregateWindow()` + `fill()` | Visualizza periodi senza produzione (es: notte, mesi mancanti) |
-
-### Best Practices Aggregazioni
-
-1. **Impostare timezone** con `option location = timezone.location(name: "Europe/Rome")` all'inizio di ogni query
-2. **Range multi-anno**: Usare `group(columns: ["year", "month"])` + `sum()` per precisione
-3. **Range anno singolo**: Usare `aggregateWindow(every: 1mo, fn: sum, createEmpty: true, offset: -1s)` per velocità
-4. **Bar chart continui**: Aggiungere `fill(value: 0.0)` dopo `aggregateWindow()` per visualizzare periodi senza dati
-5. **Convertire in kWh** dividendo per 1000 se necessario per leggibilità
-6. **Usare `pivot()`** per creare tabelle mese/anno o multi-metrica leggibili
-7. **Filtrare valori null** con `exists r._value` prima delle aggregazioni
-8. **Range precisi**: Per anno corrente/precedente, usare `date.truncate()` e `date.add()`/`date.sub()` per limiti esatti
+Code location: `parser/api_parser.py` → `_process_equipment_data()` (line 351-408)
 
 ---
 
-## NOTE TECNICHE
+## Unit Normalization
 
-### Timezone
+Units from API are normalized to standard format:
 
-Tutti i timestamp sono nel timezone del sito. Usare sempre:
+| API Unit | Normalized | Notes |
+|----------|------------|-------|
+| `w`, `W` | `W` | Watts |
+| `wh`, `Wh` | `Wh` | Watt-hours |
+| `kw`, `kW` | `kW` | Kilowatts |
+| `kwh`, `kWh` | `kWh` | Kilowatt-hours |
+| Others | Unchanged | Passed through as-is |
 
-```flux
-import "timezone"
-option location = timezone.location(name: "Europe/Rome")
+Code location: `parser/api_parser.py` → `_normalize_unit()` (line 100-105)
+
+---
+
+## Storage Examples
+
+### Example 1: Energy Details
+
+**API Response**:
+```json
+{
+  "energyDetails": {
+    "timeUnit": "QUARTER_OF_AN_HOUR",
+    "unit": "Wh",
+    "meters": [
+      {
+        "type": "Production",
+        "values": [
+          {"date": "2025-11-29 10:00:00", "value": 1250.5}
+        ]
+      }
+    ]
+  }
+}
 ```
 
-### Valori per Intervallo Temporale
+**InfluxDB Point**:
+```
+measurement: api
+tags:
+  endpoint=site_energy_details
+  metric=Production
+  unit=Wh
+fields:
+  Meter=1250.5
+timestamp: 1732875600000000000 (nanoseconds)
+```
 
-I valori di energia e potenza sono per ogni intervallo temporale, NON contatori crescenti. Per calcoli giornalieri usare `sum()`.
+### Example 2: Equipment Data
 
-### Gestione Errori
+**API Response**:
+```json
+{
+  "data": {
+    "telemetries": [
+      {
+        "date": "2025-11-29 10:00:00",
+        "totalActivePower": 3500,
+        "temperature": 45.2
+      }
+    ]
+  }
+}
+```
 
-Usare sempre `filter(fn: (r) => exists r._value)` per evitare valori null.
+**InfluxDB Points** (2 points, one per field):
+```
+1. measurement: api
+   tags: endpoint=equipment_data, metric=totalActivePower, unit=W
+   fields: Inverter=3500.0
+   timestamp: 1732875600000000000
 
-### Unità di Misura
+2. measurement: api
+   tags: endpoint=equipment_data, metric=temperature, unit=C
+   fields: Inverter=45.2
+   timestamp: 1732875600000000000
+```
 
-- **Energie**: Wh (dividere per 1000 per kWh)
-- **Potenze**: W (dividere per 1000 per kW)
-- **Tensioni**: V
-- **Correnti**: A
-- **Temperature**: °C
-- **Frequenze**: Hz
-- **Potenza apparente**: VA
-- **Potenza reattiva**: VAr
+### Example 3: Site Details (Metadata)
 
-### Best Practices
+**API Response**:
+```json
+{
+  "details": {
+    "name": "My Solar Site",
+    "peakPower": 5000,
+    "location": {
+      "country": "Italy",
+      "city": "Rome"
+    }
+  }
+}
+```
 
-1. Usare `exists r._value` per evitare valori null
-2. Per energie giornaliere: `aggregateWindow(every: 1d, fn: sum)`
-3. Per potenze medie: `aggregateWindow(every: 5m, fn: mean)`
-4. Filtrare sempre per measurement, field, endpoint, metric
-5. Per percentuali: usare `union()` + `pivot()`
-6. Meters virtuali (SELFCONSUMPTION) sono calcolati, non misurati
+**InfluxDB Points** (multiple points, flattened):
+```
+1. measurement: api
+   tags: endpoint=site_details, metric=name, unit=raw
+   fields: Info="My Solar Site"
 
-### Limitazioni API
+2. measurement: api
+   tags: endpoint=site_details, metric=peakPower, unit=raw
+   fields: Info="5000"
 
-- **site_energy_details**: 1 anno (DAY), 1 mese (HOUR/QUARTER)
-- **site_power_details**: 1 mese
-- **equipment_data**: 1 settimana
-- **Daily quota**: 300 richieste per account/site
-- **Concurrency**: Max 3 chiamate concurrent dallo stesso IP
+3. measurement: api
+   tags: endpoint=site_details, metric=location_country, unit=raw
+   fields: Info="Italy"
+
+4. measurement: api
+   tags: endpoint=site_details, metric=location_city, unit=raw
+   fields: Info="Rome"
+```
+
+Code location: `parser/api_parser.py` → `_convert_site_details_to_points()` (line 183-213)
+
+---
+
+## Configuration Dependency
+
+### api_endpoints.yaml Role
+
+The collector and parser **require** `api_endpoints.yaml` to function:
+
+**Collector uses**:
+- `enabled`: Whether to collect this endpoint
+- `endpoint`: API URL path
+- `parameters`: Query parameters with placeholders
+
+**Parser uses**:
+- `category`: InfluxDB field name
+- `data_format`: "structured" or "raw_json"
+- `extraction`: How to extract values from response
+
+### Config Structure Example
+
+```yaml
+sources:
+  api_ufficiali:
+    endpoints:
+      site_energy_details:
+        enabled: true
+        endpoint: "/site/{siteId}/energyDetails"
+        category: "Meter"  # ← Used as InfluxDB field name
+        data_format: "structured"
+        parameters:
+          meters: "PRODUCTION,CONSUMPTION"
+          timeUnit: "QUARTER_OF_AN_HOUR"
+        extraction:
+          values_path: "energyDetails.meters"
+          time_field: "date"
+          value_field: "value"
+```
+
+---
+
+## Error Handling
+
+### Missing Category
+- **Trigger**: Endpoint config lacks `category` field
+- **Action**: Raise ValueError
+- **Log**: Error message with endpoint name
+
+### HTTP Errors
+- **Trigger**: API returns non-200 status code
+- **Action**: Log error and skip endpoint
+- **Log**: HTTP status code and endpoint name
+
+### Parsing Errors
+- **Trigger**: Unexpected data structure
+- **Action**: Log error and skip that endpoint
+- **Log**: Exception details
+
+Code location: `collector/collector_api.py` → `_call_api()` (line 106-125), `collect()` (line 184-186)
+
+---
+
+## Performance Optimizations
+
+### HTTP Session Pooling
+
+Single session reused for all requests:
+```python
+self._session = requests.Session()
+self._session.headers.update({
+    'User-Agent': 'SolarEdge-Collector/1.0',
+    'Accept': 'application/json'
+})
+```
+
+Benefits:
+- Connection reuse (TCP keep-alive)
+- Reduced latency
+- Lower resource usage
+
+Code location: `collector/collector_api.py` → `__init__()` (line 36-41)
+
+### Scheduler Integration
+
+Optional scheduler for rate limiting:
+```python
+if self.scheduler:
+    return self.scheduler.execute_with_timing(SourceType.API, _http_call, cache_hit=False)
+else:
+    return _http_call()
+```
+
+Code location: `collector/collector_api.py` → `_call_api()` (line 122-125)
+
+### Smart Caching
+
+- Daily cache for normal mode
+- Per-year cache for timeframe_energy
+- Automatic cache splitting for history mode
+
+---
+
+## API Limitations
+
+### Rate Limits
+
+- **Daily quota**: 300 requests per account/site
+- **Concurrency**: Max 3 simultaneous requests from same IP
+
+### Time Range Limits
+
+| Endpoint | Max Range | Resolution |
+|----------|-----------|------------|
+| site_energy_details (DAY) | 1 year | Daily |
+| site_energy_details (HOUR/QUARTER) | 1 month | Hourly/15min |
+| site_power_details | 1 month | 15 minutes |
+| equipment_data | 1 week | Variable |
+
+### Workarounds
+
+System automatically handles limitations:
+- **Year splitting** for site_energy_day
+- **Week splitting** for equipment_data
+- **Smart caching** to minimize API calls
+
+---
+
+## Summary
+
+The API data storage system:
+
+1. **Builds** HTTP requests with automatic parameter substitution
+2. **Fetches** data from SolarEdge API with caching
+3. **Parses** responses based on endpoint configuration
+4. **Filters** data points using filtering rules
+5. **Converts** to InfluxDB points with:
+   - Measurement: `api`
+   - Tags: `endpoint`, `metric`, `unit`
+   - Field: Named by category, value from API
+   - Timestamp: Nanosecond precision
+6. **Writes** to InfluxDB in batches
+
+**Key Design**: Configuration-driven system where endpoint behavior is defined in YAML, allowing flexible data collection without code changes.
