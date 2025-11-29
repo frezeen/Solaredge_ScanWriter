@@ -186,28 +186,81 @@ class SolarEdgeAPIParser:
                 # Metadata endpoint
                 raw_json = raw_point["json_data"]
                 
-                # Gestione speciale per site_details: estrai campi individuali
+                # Gestione speciale per site_details: estrai TUTTI i campi
                 if device_type == "site_details" and isinstance(raw_json, dict):
                     details = raw_json.get("details", {})
                     location = details.get("location", {})
+                    primary_module = details.get("primaryModule", {})
+                    uris = details.get("uris", {})
+                    public_settings = details.get("publicSettings", {})
                     
-                    # Scrivi campi principali come field separati
-                    if name := details.get("name"):
-                        point.field("name", str(name))
-                    if status := details.get("status"):
-                        point.field("status", str(status))
-                    if peak_power := details.get("peakPower"):
-                        point.field("peakPower", float(peak_power))
-                    if install_date := details.get("installationDate"):
-                        point.field("installationDate", str(install_date))
-                    if site_type := details.get("type"):
-                        point.field("type", str(site_type))
-                    if city := location.get("city"):
-                        point.field("location_city", str(city))
-                    if address := location.get("address"):
-                        point.field("location_address", str(address))
-                    if country := location.get("country"):
-                        point.field("location_country", str(country))
+                    # Campi principali (converti tutto a string per evitare conflitti)
+                    if val := details.get("id"):
+                        point.field("id", str(val))
+                    if val := details.get("name"):
+                        point.field("name", str(val))
+                    if val := details.get("accountId"):
+                        point.field("accountId", str(val))
+                    if val := details.get("status"):
+                        point.field("status", str(val))
+                    if val := details.get("peakPower"):
+                        point.field("peakPower", str(val))
+                    if val := details.get("lastUpdateTime"):
+                        point.field("lastUpdateTime", str(val))
+                    if val := details.get("installationDate"):
+                        point.field("installationDate", str(val))
+                    if val := details.get("ptoDate"):
+                        point.field("ptoDate", str(val))
+                    if val := details.get("notes"):
+                        point.field("notes", str(val))
+                    if val := details.get("type"):
+                        point.field("type", str(val))
+                    if val := details.get("alertQuantity"):
+                        point.field("alertQuantity", str(val))
+                    if val := details.get("highestImpact"):
+                        point.field("highestImpact", str(val))
+                    
+                    # Location
+                    if val := location.get("country"):
+                        point.field("location_country", str(val))
+                    if val := location.get("city"):
+                        point.field("location_city", str(val))
+                    if val := location.get("address"):
+                        point.field("location_address", str(val))
+                    if val := location.get("address2"):
+                        point.field("location_address2", str(val))
+                    if val := location.get("zip"):
+                        point.field("location_zip", str(val))
+                    if val := location.get("timeZone"):
+                        point.field("location_timeZone", str(val))
+                    if val := location.get("countryCode"):
+                        point.field("location_countryCode", str(val))
+                    if val := location.get("latitude"):
+                        point.field("location_latitude", str(val))
+                    if val := location.get("longitude"):
+                        point.field("location_longitude", str(val))
+                    
+                    # Primary Module
+                    if val := primary_module.get("manufacturerName"):
+                        point.field("module_manufacturerName", str(val))
+                    if val := primary_module.get("modelName"):
+                        point.field("module_modelName", str(val))
+                    if val := primary_module.get("maximumPower"):
+                        point.field("module_maximumPower", str(val))
+                    if val := primary_module.get("temperatureCoef"):
+                        point.field("module_temperatureCoef", str(val))
+                    
+                    # URIs
+                    if val := uris.get("DETAILS"):
+                        point.field("uri_details", str(val))
+                    if val := uris.get("DATA_PERIOD"):
+                        point.field("uri_dataPeriod", str(val))
+                    if val := uris.get("OVERVIEW"):
+                        point.field("uri_overview", str(val))
+                    
+                    # Public Settings
+                    if val := public_settings.get("isPublic"):
+                        point.field("publicSettings_isPublic", str(val))
                     
                     # Mantieni anche il JSON completo per retrocompatibilità
                     point.field(category, json.dumps(raw_json))
