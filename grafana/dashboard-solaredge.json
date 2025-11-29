@@ -2532,7 +2532,7 @@
           "mode": "single",
           "sort": "none"
         },
-        "xField": "_time",
+        "xField": "Time",
         "xTickLabelRotation": 0,
         "xTickLabelSpacing": 100
       },
@@ -2543,8 +2543,7 @@
             "type": "influxdb",
             "uid": "ff27vpmruzxtsc"
           },
-          "hide": false,
-          "query": "import \"timezone\"\r\noption location = timezone.location(name: \"Europe/Rome\")\r\n\r\nfrom(bucket: \"Solaredge\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"api\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"Meter\")\r\n  |> filter(fn: (r) => r[\"endpoint\"] == \"site_energy_details\")\r\n  |> filter(fn: (r) => r[\"metric\"] == \"Production\")\r\n  |> aggregateWindow(every: 1d, fn: sum, createEmpty: true)\r\n  |> timeShift(duration: -1s, columns: [\"_time\"])\r\n  |> fill(value: 0.0)\r\n  |> map(fn: (r) => ({ r with _field: \"Produzione\" }))\r\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])\r\n",
+          "query": "import \"timezone\"\noption location = timezone.location(name: \"Europe/Rome\")\n\nfrom(bucket: \"Solaredge\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r[\"_measurement\"] == \"api\")\n  |> filter(fn: (r) => r[\"_field\"] == \"Meter\")\n  |> filter(fn: (r) => r[\"endpoint\"] == \"site_energy_details\")\n  |> filter(fn: (r) => r[\"metric\"] == \"Production\")\n  |> aggregateWindow(every: 1d, fn: sum, createEmpty: true)\n  |> timeShift(duration: -1s, columns: [\"_time\"])\n  |> fill(value: 0.0)\n  |> map(fn: (r) => ({ r with _field: \"Produzione\" }))\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])",
           "refId": "Produzione"
         },
         {
@@ -2552,8 +2551,7 @@
             "type": "influxdb",
             "uid": "ff27vpmruzxtsc"
           },
-          "hide": false,
-          "query": "import \"timezone\"\r\noption location = timezone.location(name: \"Europe/Rome\")\r\n\r\nfrom(bucket: \"Solaredge\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"api\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"Meter\")\r\n  |> filter(fn: (r) => r[\"endpoint\"] == \"site_energy_details\")\r\n  |> filter(fn: (r) => r[\"metric\"] == \"Consumption\")\r\n  |> aggregateWindow(every: 1d, fn: sum, createEmpty: true)\r\n  |> timeShift(duration: -1s, columns: [\"_time\"])\r\n  |> fill(value: 0.0)\r\n  |> map(fn: (r) => ({ r with _field: \"Consumo\" }))\r\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])\r\n",
+          "query": "import \"timezone\"\noption location = timezone.location(name: \"Europe/Rome\")\n\n// Consumption (disponibile di giorno)\nconsumption = from(bucket: \"Solaredge\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r[\"_measurement\"] == \"api\")\n  |> filter(fn: (r) => r[\"_field\"] == \"Meter\")\n  |> filter(fn: (r) => r[\"endpoint\"] == \"site_energy_details\")\n  |> filter(fn: (r) => r[\"metric\"] == \"Consumption\")\n  |> aggregateWindow(every: 1d, fn: sum, createEmpty: false)\n  |> timeShift(duration: -1s, columns: [\"_time\"])\n  |> map(fn: (r) => ({_time: r._time, _value: r._value, _field: \"Consumo\"}))\n\n// Purchased (fallback per la notte)\npurchased = from(bucket: \"Solaredge\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r[\"_measurement\"] == \"api\")\n  |> filter(fn: (r) => r[\"_field\"] == \"Meter\")\n  |> filter(fn: (r) => r[\"endpoint\"] == \"site_energy_details\")\n  |> filter(fn: (r) => r[\"metric\"] == \"Purchased\")\n  |> aggregateWindow(every: 1d, fn: sum, createEmpty: false)\n  |> timeShift(duration: -1s, columns: [\"_time\"])\n  |> map(fn: (r) => ({_time: r._time, _value: r._value, _field: \"Consumo\"}))\n\n// Unisci - Consumption ha priorità, Purchased riempie i buchi\nunion(tables: [consumption, purchased])\n  |> sort(columns: [\"_time\", \"_value\"], desc: true)\n  |> unique(column: \"_time\")\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])\n",
           "refId": "Consumo"
         },
         {
@@ -2561,8 +2559,7 @@
             "type": "influxdb",
             "uid": "ff27vpmruzxtsc"
           },
-          "hide": false,
-          "query": "import \"timezone\"\r\noption location = timezone.location(name: \"Europe/Rome\")\r\n\r\nfrom(bucket: \"Solaredge\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"api\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"Meter\")\r\n  |> filter(fn: (r) => r[\"endpoint\"] == \"site_energy_details\")\r\n  |> filter(fn: (r) => r[\"metric\"] == \"SelfConsumption\")\r\n  |> aggregateWindow(every: 1d, fn: sum, createEmpty: true)\r\n  |> timeShift(duration: -1s, columns: [\"_time\"])\r\n  |> fill(value: 0.0)\r\n  |> map(fn: (r) => ({ r with _field: \"Autoconsumo\" }))\r\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])\r\n",
+          "query": "import \"timezone\"\noption location = timezone.location(name: \"Europe/Rome\")\n\n// SelfConsumption (disponibile di giorno)\nselfConsumption = from(bucket: \"Solaredge\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r[\"_measurement\"] == \"api\")\n  |> filter(fn: (r) => r[\"_field\"] == \"Meter\")\n  |> filter(fn: (r) => r[\"endpoint\"] == \"site_energy_details\")\n  |> filter(fn: (r) => r[\"metric\"] == \"SelfConsumption\")\n  |> aggregateWindow(every: 1d, fn: sum, createEmpty: false)\n  |> timeShift(duration: -1s, columns: [\"_time\"])\n  |> map(fn: (r) => ({_time: r._time, _value: r._value, _field: \"Autoconsumo\"}))\n\n// Fallback 0 per la notte (usa Production che ha sempre lo 0 a mezzanotte)\nzeroFallback = from(bucket: \"Solaredge\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r[\"_measurement\"] == \"api\")\n  |> filter(fn: (r) => r[\"_field\"] == \"Meter\")\n  |> filter(fn: (r) => r[\"endpoint\"] == \"site_energy_details\")\n  |> filter(fn: (r) => r[\"metric\"] == \"Production\")\n  |> aggregateWindow(every: 1d, fn: sum, createEmpty: false)\n  |> timeShift(duration: -1s, columns: [\"_time\"])\n  |> map(fn: (r) => ({_time: r._time, _value: 0.0, _field: \"Autoconsumo\"}))\n\n// Unisci - SelfConsumption ha priorità, 0 riempie i buchi\nunion(tables: [selfConsumption, zeroFallback])\n  |> sort(columns: [\"_time\", \"_value\"], desc: true)\n  |> unique(column: \"_time\")\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])\n",
           "refId": "Autoconsumo"
         },
         {
@@ -2570,8 +2567,7 @@
             "type": "influxdb",
             "uid": "ff27vpmruzxtsc"
           },
-          "hide": false,
-          "query": "import \"timezone\"\r\noption location = timezone.location(name: \"Europe/Rome\")\r\n\r\nfrom(bucket: \"Solaredge\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"api\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"Meter\")\r\n  |> filter(fn: (r) => r[\"endpoint\"] == \"site_energy_details\")\r\n  |> filter(fn: (r) => r[\"metric\"] == \"Purchased\")\r\n  |> aggregateWindow(every: 1d, fn: sum, createEmpty: true)\r\n  |> timeShift(duration: -1s, columns: [\"_time\"])\r\n  |> fill(value: 0.0)\r\n  |> map(fn: (r) => ({ r with _field: \"Prelievo\" }))\r\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])\r\n",
+          "query": "import \"timezone\"\noption location = timezone.location(name: \"Europe/Rome\")\n\nfrom(bucket: \"Solaredge\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r[\"_measurement\"] == \"api\")\n  |> filter(fn: (r) => r[\"_field\"] == \"Meter\")\n  |> filter(fn: (r) => r[\"endpoint\"] == \"site_energy_details\")\n  |> filter(fn: (r) => r[\"metric\"] == \"Purchased\")\n  |> aggregateWindow(every: 1d, fn: sum, createEmpty: true)\n  |> timeShift(duration: -1s, columns: [\"_time\"])\n  |> fill(value: 0.0)\n  |> map(fn: (r) => ({ r with _field: \"Prelievo\" }))\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])",
           "refId": "Prelievo"
         },
         {
@@ -2579,8 +2575,7 @@
             "type": "influxdb",
             "uid": "ff27vpmruzxtsc"
           },
-          "hide": false,
-          "query": "import \"timezone\"\r\noption location = timezone.location(name: \"Europe/Rome\")\r\n\r\nfrom(bucket: \"Solaredge\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"api\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"Meter\")\r\n  |> filter(fn: (r) => r[\"endpoint\"] == \"site_energy_details\")\r\n  |> filter(fn: (r) => r[\"metric\"] == \"FeedIn\")\r\n  |> aggregateWindow(every: 1d, fn: sum, createEmpty: true)\r\n  |> timeShift(duration: -1s, columns: [\"_time\"])\r\n  |> fill(value: 0.0)\r\n  |> map(fn: (r) => ({ r with _field: \"Immissione\" }))\r\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])\r\n",
+          "query": "import \"timezone\"\noption location = timezone.location(name: \"Europe/Rome\")\n\nfrom(bucket: \"Solaredge\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r[\"_measurement\"] == \"api\")\n  |> filter(fn: (r) => r[\"_field\"] == \"Meter\")\n  |> filter(fn: (r) => r[\"endpoint\"] == \"site_energy_details\")\n  |> filter(fn: (r) => r[\"metric\"] == \"FeedIn\")\n  |> aggregateWindow(every: 1d, fn: sum, createEmpty: true)\n  |> timeShift(duration: -1s, columns: [\"_time\"])\n  |> fill(value: 0.0)\n  |> map(fn: (r) => ({ r with _field: \"Immissione\" }))\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])",
           "refId": "Immissione"
         }
       ],
@@ -2724,7 +2719,7 @@
             "uid": "ff27vpmruzxtsc"
           },
           "hide": false,
-          "query": "import \"timezone\"\r\noption location = timezone.location(name: \"Europe/Rome\")\r\n\r\nfrom(bucket: \"Solaredge\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"api\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"Meter\")\r\n  |> filter(fn: (r) => r[\"endpoint\"] == \"site_energy_details\")\r\n  |> filter(fn: (r) => r[\"metric\"] == \"Consumption\")\r\n  |> filter(fn: (r) => exists r._value)\r\n  |> aggregateWindow(every: 1d, fn: sum, createEmpty: false)\r\n  |> yield(name: \"Consumo\")\r\n",
+          "query": "import \"timezone\"\r\noption location = timezone.location(name: \"Europe/Rome\")\r\n\r\n// Consumption (disponibile di giorno)\r\nconsumption = from(bucket: \"Solaredge\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"api\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"Meter\")\r\n  |> filter(fn: (r) => r[\"endpoint\"] == \"site_energy_details\")\r\n  |> filter(fn: (r) => r[\"metric\"] == \"Consumption\")\r\n  |> aggregateWindow(every: 1d, fn: sum, createEmpty: false)\r\n  |> timeShift(duration: -1s, columns: [\"_time\"])\r\n  |> map(fn: (r) => ({_time: r._time, _value: r._value, _field: \"Consumo\"}))\r\n\r\n// Purchased (fallback per la notte)\r\npurchased = from(bucket: \"Solaredge\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"api\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"Meter\")\r\n  |> filter(fn: (r) => r[\"endpoint\"] == \"site_energy_details\")\r\n  |> filter(fn: (r) => r[\"metric\"] == \"Purchased\")\r\n  |> aggregateWindow(every: 1d, fn: sum, createEmpty: false)\r\n  |> timeShift(duration: -1s, columns: [\"_time\"])\r\n  |> map(fn: (r) => ({_time: r._time, _value: r._value, _field: \"Consumo\"}))\r\n\r\n// Unisci - Consumption ha priorità, Purchased riempie i buchi\r\nunion(tables: [consumption, purchased])\r\n  |> sort(columns: [\"_time\", \"_value\"], desc: true)\r\n  |> unique(column: \"_time\")\r\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])\r\n",
           "refId": "Consumo"
         }
       ],
@@ -5321,6 +5316,6 @@
   "timezone": "",
   "title": "Solaredge 3.0",
   "uid": "afb91a6f-d8f7-43ae-8a98-67eab1bb4baa",
-  "version": 388,
+  "version": 422,
   "weekStart": "monday"
 }
