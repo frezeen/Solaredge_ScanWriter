@@ -1,452 +1,366 @@
-# SolarEdge Web Endpoints - Riferimento Completo per Query Grafana
+# Web Data Storage - Technical Reference
 
-## Panoramica
+## Purpose
 
-Questo documento analizza tutti gli endpoint web scraping disponibili nel sistema SolarEdge Data Collector per la costruzione di query Grafana precise. I dati vengono salvati in InfluxDB nella measurement `web` con diversi field types basati sulla categoria del dispositivo.
-
-## Struttura Dati InfluxDB
-
-### Measurement: `web`
-- **Field Types** (basati su categoria):
-  - `Energy` (float): Valori di energia (Wh, kWh)
-  - `Power` (float): Valori di potenza (W, kW)
-  - `Voltage` (float): Valori di tensione (V)
-  - `Current` (float): Valori di corrente (A)
-  - `Temperature` (float): Valori di temperatura (°C)
-  - `Info` (string/float): Informazioni generiche e metriche varie
-
-### Tags Comuni
-- `endpoint`: Tipo di measurement (es: "Energy", "Power", "Voltage", "Temperature")
-- `device_id`: ID dispositivo specifico (es: "7F123456", "400123456", "weather_default")
-- `unit`: Unità di misura (es: "W", "Wh", "V", "A", "°C")
+This document describes **how the web data storage system works** technically in InfluxDB. It does NOT describe how to query it or what to do with it, but rather the technical implementation of data storage.
 
 ---
 
-## INVERTER ENDPOINTS
+## InfluxDB Storage Structure
 
-### Device Type: `INVERTER`
-**Device ID Pattern**: Numero seriale inverter (es: "7F123456")
+### Measurement Name
+All web scraping data is stored in a single measurement: **`web`**
 
-#### Metriche Disponibili
+### Data Point Structure
 
-| Endpoint (measurementType) | Field Type | Unit | Descrizione |
-|----------------------------|------------|------|-------------|
-| `Energy` | `Energy` | Wh | **Energia prodotta totale** - Contatore crescente |
-| `Power` | `Power` | W | **Potenza istantanea** - Produzione corrente |
-| `Voltage` | `Voltage` | V | Tensione AC inverter |
-| `Current` | `Current` | A | Corrente AC inverter |
-| `Temperature` | `Temperature` | °C | Temperatura interna inverter |
+Each data point written to InfluxDB has:
 
-#### Query Pattern Inverter
-```flux
-// Potenza inverter istantanea
-from(bucket: "Solaredge")
-  |> range(start: -1h)
-  |> filter(fn: (r) => r["_measurement"] == "web")
-  |> filter(fn: (r) => r["_field"] == "Power")
-  |> filter(fn: (r) => r["endpoint"] == "Power")
-  |> filter(fn: (r) => r["device_id"] == "7F123456")  // Sostituire con serial inverter
-  |> aggregateWindow(every: 5m, fn: mean)
-```
+**Tags** (indexed, used for filtering):
+- `endpoint`: The measurement type from API (e.g., "PRODUCTION_POWER", "PRODUCTION_ENERGY")
+- `device_id`: The device identifier (e.g., "7403D7C5-13", "606483640", "weather_default")
+- `unit`: The unit of measurement (e.g., "W", "Wh", "V", "A", "°C") - optional
 
-```flux
-// Energia prodotta oggi dall'inverter
-from(bucket: "Solaredge")
-  |> range(start: today_start)
-  |> filter(fn: (r) => r["_measurement"] == "web")
-  |> filter(fn: (r) => r["_field"] == "Energy")
-  |> filter(fn: (r) => r["endpoint"] == "Energy")
-  |> filter(fn: (r) => r["device_id"] == "7F123456")
-  |> reduce(fn: (r, accumulator) => ({
-      first: if accumulator.count == 0 then r._value else accumulator.first,
-      last: r._value,
-      count: accumulator.count + 1
-    }))
-  |> map(fn: (r) => ({ _value: (r.last - r.first) / 1000.0 }))  // Converti in kWh
-```
+**Fields** (actual values):
+- Field name is determined by the **category** from `web_endpoints.yaml`
+- Field value is the numeric measurement value
+- If value cannot be converted to float, it's stored as string
+
+**Timestamp**:
+- Nanosecond precision
+- Converted from API milliseconds: `timestamp_ms * 1_000_000`
 
 ---
 
-## OPTIMIZER ENDPOINTS
+## Category System
 
-### Device Type: `OPTIMIZER`
-**Device ID Pattern**: Numero seriale optimizer (es: "0123456789AB")
+### What is Category?
 
-#### Metriche Disponibili
+Category is defined in `config/sources/web_endpoints.yaml` for each device and determines the **field name** used in InfluxDB.
 
-| Endpoint (measurementType) | Field Type | Unit | Descrizione |
-|----------------------------|------------|------|-------------|
-| `Power` | `Power` | W | **Potenza DC optimizer** - Produzione singolo pannello |
-| `Voltage` | `Voltage` | V | Tensione DC optimizer |
-| `Current` | `Current` | A | Corrente DC optimizer |
-| `Temperature` | `Temperature` | °C | Temperatura optimizer |
+### Category Mapping
 
-#### Query Pattern Optimizer
+| Category | Field Name | Data Type | Typical Values |
+|----------|------------|-----------|----------------|
+| `Inverter` | `Inverter` | float | Power, Energy, Voltage, Current |
+| `Meter` | `Meter` | float | Power, Energy, Voltage, Current |
+| `Site` | `Site` | float | Production/Import/Export Power/Energy |
+| `Optimizer group` | `Optimizer group` | float | Power, Energy, Voltage, Current |
+| `String` | `String` | float | Power, Energy |
+| `Weather` | `Weather` | float | Temperature, Wind Speed, Humidity |
+| `Info` (default) | `Info` | float/string | Generic data |
 
-**IMPORTANTE**: Per query universali che funzionano su qualsiasi impianto, NON filtrare per `device_id` specifico. Il sistema gestisce automaticamente tutti gli optimizer configurati.
+### How Category is Determined
 
-```flux
-// Potenza di tutti gli optimizer (UNIVERSALE)
-from(bucket: "Solaredge")
-  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)
-  |> filter(fn: (r) => 
-      r._measurement == "web" and
-      r._field == "Optimizer group" and
-      r.endpoint == "PRODUCTION_POWER"
-  )
-  |> filter(fn: (r) => exists r._value)
-  |> aggregateWindow(every: 15m, fn: last, createEmpty: false)
-  |> map(fn: (r) => ({_time: r._time, _value: r._value, _field: r.device_id}))
-  |> pivot(rowKey: ["_time"], columnKey: ["_field"], valueColumn: "_value")
-```
+1. **Parser reads** `web_endpoints.yaml` configuration
+2. **Matches** `device_id` from API response to config entry
+3. **Extracts** `category` field from matched config
+4. **Uses** category as InfluxDB field name
+5. **Fallback**: If no match found, uses `"Info"` as default
 
-```flux
-// Optimizer con potenza più bassa (possibile problema) - UNIVERSALE
-from(bucket: "Solaredge")
-  |> range(start: -15m)
-  |> filter(fn: (r) => 
-      r._measurement == "web" and
-      r._field == "Optimizer group" and
-      r.endpoint == "PRODUCTION_POWER"
-  )
-  |> filter(fn: (r) => exists r._value)
-  |> group(columns: ["device_id"])
-  |> mean()
-  |> group()
-  |> sort(columns: ["_value"], desc: false)
-  |> limit(n: 5)
-```
+Code location: `parser/web_parser.py` → `_get_category_from_config()` (line 138-156)
 
 ---
 
-## METER ENDPOINTS (Contatori)
+## Data Flow Pipeline
 
-### Device Type: `METER`
-**Device ID Pattern**: Numero ID meter (es: "400123456")
+### Step 1: API Response
 
-#### Metriche Disponibili
-
-| Endpoint (measurementType) | Field Type | Unit | Descrizione |
-|----------------------------|------------|------|-------------|
-| `Power` | `Power` | W | **Potenza netta verso/dalla rete** - Positiva=immissione, Negativa=prelievo |
-| `Voltage` | `Voltage` | V | Tensione rete |
-| `Current` | `Current` | A | Corrente rete |
-| `Frequency` | `Info` | Hz | Frequenza rete |
-| `PowerFactor` | `Info` | - | Fattore di potenza |
-
-#### Query Pattern Meter
-```flux
-// Potenza netta rete (positiva=immissione, negativa=prelievo)
-from(bucket: "Solaredge")
-  |> range(start: -1h)
-  |> filter(fn: (r) => r["_measurement"] == "web")
-  |> filter(fn: (r) => r["_field"] == "Power")
-  |> filter(fn: (r) => r["endpoint"] == "Power")
-  |> filter(fn: (r) => r["device_id"] == "400123456")  // Sostituire con ID meter
-  |> aggregateWindow(every: 5m, fn: mean)
+CollectorWeb receives JSON from SolarEdge API:
+```json
+{
+  "list": [
+    {
+      "device": {
+        "itemType": "OPTIMIZER",
+        "id": "21830A42-F0"
+      },
+      "measurementType": "PRODUCTION_POWER",
+      "unitType": "W",
+      "measurements": [
+        {
+          "time": "2025-11-29T10:00:00+01:00",
+          "measurement": 245.5
+        }
+      ]
+    }
+  ]
+}
 ```
 
-```flux
-// Tensione rete
-from(bucket: "Solaredge")
-  |> range(start: -1h)
-  |> filter(fn: (r) => r["_measurement"] == "web")
-  |> filter(fn: (r) => r["_field"] == "Voltage")
-  |> filter(fn: (r) => r["endpoint"] == "Voltage")
-  |> filter(fn: (r) => r["device_id"] == "400123456")
-  |> aggregateWindow(every: 5m, fn: mean)
+### Step 2: Raw Point Creation
+
+Parser extracts data and creates raw point:
+```python
+{
+    "source": "web",
+    "device_id": "21830A42-F0",
+    "device_type": "OPTIMIZER",
+    "metric": "PRODUCTION_POWER",
+    "value": 245.5,
+    "timestamp": 1732875600000,  # milliseconds
+    "unit": "W",
+    "category": "Optimizer group"  # from config
+}
 ```
+
+Code location: `parser/web_parser.py` → `_create_raw_point()` (line 78-97)
+
+### Step 3: InfluxDB Point Conversion
+
+Raw point is converted to InfluxDB Point object:
+```python
+Point("web")
+    .tag("endpoint", "PRODUCTION_POWER")
+    .tag("device_id", "21830A42-F0")
+    .tag("unit", "W")
+    .field("Optimizer group", 245.5)  # category as field name
+    .time(1732875600000000000, WritePrecision.NS)
+```
+
+Code location: `parser/web_parser.py` → `_convert_raw_point_to_influx_point()` (line 106-136)
+
+### Step 4: Storage
+
+InfluxWriter writes the point to InfluxDB bucket.
+
+Code location: `storage/writer_influx.py` → `write_points()` (line 158)
 
 ---
 
-## BATTERY ENDPOINTS
+## Device ID Patterns
 
-### Device Type: `BATTERY`
-**Device ID Pattern**: Numero seriale batteria
+### How Device IDs are Determined
 
-#### Metriche Disponibili
+Device IDs come from the API response `device.id` field, with special handling:
 
-| Endpoint (measurementType) | Field Type | Unit | Descrizione |
-|----------------------------|------------|------|-------------|
-| `Power` | `Power` | W | **Potenza batteria** - Positiva=carica, Negativa=scarica |
-| `StateOfCharge` | `Info` | % | Stato di carica batteria |
-| `Voltage` | `Voltage` | V | Tensione batteria |
-| `Current` | `Current` | A | Corrente batteria |
-| `Temperature` | `Temperature` | °C | Temperatura batteria |
+| Device Type | ID Source | Example | Notes |
+|-------------|-----------|---------|-------|
+| INVERTER | API `id` | `7403D7C5-13` | Serial number with suffix |
+| METER | API `id` | `606483640` | Numeric ID |
+| OPTIMIZER | API `id` | `21830A42-F0` | Serial number with suffix |
+| STRING | API `id` | `0`, `1`, `2` | Numeric index |
+| SITE | API `id` | `2489781` | Site ID number |
+| WEATHER | Hardcoded | `weather_default` | Always same ID |
 
-#### Query Pattern Battery
-```flux
-// Stato di carica batteria
-from(bucket: "Solaredge")
-  |> range(start: -24h)
-  |> filter(fn: (r) => r["_measurement"] == "web")
-  |> filter(fn: (r) => r["_field"] == "Info")
-  |> filter(fn: (r) => r["endpoint"] == "StateOfCharge")
-  |> aggregateWindow(every: 15m, fn: mean)
-```
-
-```flux
-// Potenza batteria (positiva=carica, negativa=scarica)
-from(bucket: "Solaredge")
-  |> range(start: -1h)
-  |> filter(fn: (r) => r["_measurement"] == "web")
-  |> filter(fn: (r) => r["_field"] == "Power")
-  |> filter(fn: (r) => r["endpoint"] == "Power")
-  |> filter(fn: (r) => r["device_id"] =~ /BAT/)  // Pattern batteria
-  |> aggregateWindow(every: 5m, fn: mean)
-```
+Code location: `parser/web_parser.py` → `_extract_device_info()` (line 38-55)
 
 ---
 
-## STRING ENDPOINTS (Stringhe DC)
+## Unit Normalization
 
-### Device Type: `STRING`
-**Device ID Pattern**: ID stringa (es: "1", "2")
+Units from API are normalized to standard format:
 
-#### Metriche Disponibili
+| API Unit | Normalized | Notes |
+|----------|------------|-------|
+| `w`, `W` | `W` | Watts |
+| `wh`, `Wh` | `Wh` | Watt-hours |
+| `kw`, `kW` | `kW` | Kilowatts |
+| `kwh`, `kWh` | `kWh` | Kilowatt-hours |
+| Others | Unchanged | Passed through as-is |
 
-| Endpoint (measurementType) | Field Type | Unit | Descrizione |
-|----------------------------|------------|------|-------------|
-| `Power` | `Power` | W | Potenza DC stringa |
-| `Voltage` | `Voltage` | V | Tensione DC stringa |
-| `Current` | `Current` | A | Corrente DC stringa |
-
-#### Query Pattern String
-```flux
-// Potenza tutte le stringhe
-from(bucket: "Solaredge")
-  |> range(start: -1h)
-  |> filter(fn: (r) => r["_measurement"] == "web")
-  |> filter(fn: (r) => r["_field"] == "Power")
-  |> filter(fn: (r) => r["endpoint"] == "Power")
-  |> filter(fn: (r) => r["device_id"] =~ /^[0-9]+$/)  // Pattern stringa
-  |> aggregateWindow(every: 5m, fn: mean)
-  |> group(columns: ["device_id"])
-```
+Code location: `parser/web_parser.py` → `_normalize_unit()` (line 99-104)
 
 ---
 
-## WEATHER ENDPOINTS
+## Timestamp Handling
 
-### Device Type: `WEATHER`
-**Device ID**: `weather_default`
+### Input Format
 
-#### Metriche Disponibili
+API provides timestamps in ISO 8601 format:
+- `"2025-11-29T10:00:00+01:00"` (with timezone)
+- `"2025-11-29T10:00:00Z"` (UTC)
 
-| Endpoint (measurementType) | Field Type | Unit | Descrizione |
-|----------------------------|------------|------|-------------|
-| `Temperature` | `Temperature` | °C | Temperatura ambiente |
-| `WindSpeed` | `Info` | m/s | Velocità vento |
-| `Irradiance` | `Info` | W/m² | Irraggiamento solare |
+### Conversion Process
 
-#### Query Pattern Weather
-```flux
-// Temperatura ambiente
-from(bucket: "Solaredge")
-  |> range(start: -24h)
-  |> filter(fn: (r) => r["_measurement"] == "web")
-  |> filter(fn: (r) => r["_field"] == "Temperature")
-  |> filter(fn: (r) => r["endpoint"] == "Temperature")
-  |> filter(fn: (r) => r["device_id"] == "weather_default")
-  |> aggregateWindow(every: 15m, fn: mean)
-```
+1. **Parse** ISO 8601 string to datetime object
+2. **Convert** to UTC if timezone-aware
+3. **Extract** Unix timestamp in milliseconds
+4. **Multiply** by 1,000,000 to get nanoseconds
+5. **Write** to InfluxDB with nanosecond precision
 
-```flux
-// Irraggiamento solare
-from(bucket: "Solaredge")
-  |> range(start: -24h)
-  |> filter(fn: (r) => r["_measurement"] == "web")
-  |> filter(fn: (r) => r["_field"] == "Info")
-  |> filter(fn: (r) => r["endpoint"] == "Irradiance")
-  |> filter(fn: (r) => r["device_id"] == "weather_default")
-  |> aggregateWindow(every: 15m, fn: mean)
-```
+Code location: `parser/web_parser.py` → `_convert_timestamp()` (line 57-76)
 
 ---
 
-## METRICHE CHIAVE PER DASHBOARD
+## Data Filtering
 
-### Produzione Fotovoltaica
-- **Istantanea inverter**: `web` → endpoint=`Power`, device_id=inverter_serial
-- **Giornaliera inverter**: `web` → endpoint=`Energy`, device_id=inverter_serial (differenza primo/ultimo)
-- **Per optimizer**: Somma di tutti gli optimizer con endpoint=`Power`
+Before writing to InfluxDB, raw points pass through filtering:
 
-### Monitoraggio Optimizer
-- **Potenza individuale**: Filtrare per `device_id` specifico
-- **Optimizer problematici**: Ordinare per potenza crescente e prendere i primi 5
-- **Temperatura massima**: Aggregare con `max()` su tutti gli optimizer
-- **Distribuzione potenza**: Visualizzare tutti gli optimizer in un grafico
+### Filter Rules
 
-### Qualità Rete (da Meter)
-- **Tensione rete**: endpoint=`Voltage`, device_id=meter_id
-- **Frequenza**: endpoint=`Frequency`, device_id=meter_id
-- **Fattore di potenza**: endpoint=`PowerFactor`, device_id=meter_id
+1. **Null values**: Points with `value = None` are discarded
+2. **Invalid timestamps**: Points with `timestamp <= 0` are discarded
+3. **Duplicate detection**: Implemented in `filtro/regole_filtraggio.py`
 
-### Batteria (se presente)
-- **Stato di carica**: endpoint=`StateOfCharge`
-- **Potenza carica/scarica**: endpoint=`Power` (positiva=carica, negativa=scarica)
-- **Temperatura**: endpoint=`Temperature`
-
-### Condizioni Ambientali
-- **Temperatura ambiente**: device_id=`weather_default`, endpoint=`Temperature`
-- **Irraggiamento**: device_id=`weather_default`, endpoint=`Irradiance`
-- **Vento**: device_id=`weather_default`, endpoint=`WindSpeed`
+Code location: `parser/web_parser.py` → `parse_web()` (line 194)
 
 ---
 
-## CALCOLI DERIVATI
+## Measurement Types by Device
 
-### Efficienza Optimizer (UNIVERSALE)
-```flux
-// Confronto potenza optimizer vs media
-avg_power = from(bucket: "Solaredge")
-  |> range(start: -15m)
-  |> filter(fn: (r) => 
-      r._measurement == "web" and
-      r._field == "Optimizer group" and
-      r.endpoint == "PRODUCTION_POWER"
-  )
-  |> filter(fn: (r) => exists r._value)
-  |> mean()
-  |> group()
-  |> mean()
+### INVERTER
+- `AC_PRODUCTION_POWER` (W)
+- `AC_PRODUCTION_ENERGY` (Wh)
+- `AC_CONSUMPTION_POWER` (W)
+- `AC_CONSUMPTION_ENERGY` (Wh)
+- `AC_VOLTAGE` (V)
+- `AC_CURRENT` (A)
+- `AC_FREQUENCY` (Hz)
+- `DC_VOLTAGE` (V)
+- `KWH_KWP_RATIO` (ratio)
 
-optimizer_power = from(bucket: "Solaredge")
-  |> range(start: -15m)
-  |> filter(fn: (r) => 
-      r._measurement == "web" and
-      r._field == "Optimizer group" and
-      r.endpoint == "PRODUCTION_POWER"
-  )
-  |> filter(fn: (r) => exists r._value)
-  |> group(columns: ["device_id"])
-  |> mean()
+### METER
+- `IMPORT_POWER` (W)
+- `IMPORT_ENERGY` (Wh)
+- `EXPORT_POWER` (W)
+- `EXPORT_ENERGY` (Wh)
 
-// Calcola deviazione dalla media
-join(tables: {opt: optimizer_power, avg: avg_power}, on: ["_time"])
-  |> map(fn: (r) => ({
-    _time: r._time,
-    device_id: r.device_id,
-    power: r._value_opt,
-    avg_power: r._value_avg,
-    deviation_pct: ((r._value_opt - r._value_avg) / r._value_avg) * 100.0
-  }))
-  |> filter(fn: (r) => r.deviation_pct < -20.0)  // Optimizer con -20% rispetto alla media
+### OPTIMIZER
+- `PRODUCTION_POWER` (W)
+- `PRODUCTION_ENERGY` (Wh)
+- `MODULE_CURRENT` (A)
+- `MODULE_OUTPUT_VOLTAGE` (V)
+- `OPTIMIZER_OUTPUT_VOLTAGE` (V)
+
+### SITE
+- `PRODUCTION_POWER` (W)
+- `PRODUCTION_ENERGY` (Wh)
+- `IMPORT_POWER` (W)
+- `IMPORT_ENERGY` (Wh)
+- `EXPORT_POWER` (W)
+- `EXPORT_ENERGY` (Wh)
+- `KWH_KWP_RATIO` (ratio)
+
+### STRING
+- `PRODUCTION_POWER` (W)
+- `PRODUCTION_ENERGY` (Wh)
+
+### WEATHER
+- `TEMPERATURE` (°C)
+- `WIND_SPEED` (m/s)
+- `HUMIDITY` (%)
+- `IRRADIANCE` (W/m²)
+
+---
+
+## Storage Example
+
+### Input (API Response)
+```json
+{
+  "device": {"itemType": "SITE", "id": "2489781"},
+  "measurementType": "PRODUCTION_ENERGY",
+  "unitType": "Wh",
+  "measurements": [
+    {"time": "2025-11-29T10:00:00Z", "measurement": 15420}
+  ]
+}
 ```
 
-### Bilancio Energetico con Web Data
-```flux
-// Produzione inverter
-production = from(bucket: "Solaredge")
-  |> range(start: -15m)
-  |> filter(fn: (r) => r["_measurement"] == "web")
-  |> filter(fn: (r) => r["_field"] == "Power")
-  |> filter(fn: (r) => r["endpoint"] == "Power")
-  |> filter(fn: (r) => r["device_id"] == "7F123456")  // Inverter
-  |> mean()
-  |> map(fn: (r) => ({ _time: r._time, _value: r._value, _field: "production" }))
+### Output (InfluxDB Point)
+```
+Measurement: web
+Tags:
+  endpoint=PRODUCTION_ENERGY
+  device_id=2489781
+  unit=Wh
+Fields:
+  Site=15420.0
+Timestamp: 1732875600000000000 (nanoseconds)
+```
 
-// Flusso rete
-grid = from(bucket: "Solaredge")
-  |> range(start: -15m)
-  |> filter(fn: (r) => r["_measurement"] == "web")
-  |> filter(fn: (r) => r["_field"] == "Power")
-  |> filter(fn: (r) => r["endpoint"] == "Power")
-  |> filter(fn: (r) => r["device_id"] == "400123456")  // Meter
-  |> mean()
-  |> map(fn: (r) => ({ _time: r._time, _value: r._value, _field: "grid" }))
-
-// Calcola consumo
-union(tables: [production, grid])
-  |> pivot(rowKey: ["_time"], columnKey: ["_field"], valueColumn: "_value")
-  |> map(fn: (r) => ({
-    _time: r._time,
-    consumo: if r.grid >= 0.0 then r.production - r.grid else r.production + (r.grid * -1.0)
-  }))
+### InfluxDB Line Protocol
+```
+web,endpoint=PRODUCTION_ENERGY,device_id=2489781,unit=Wh Site=15420.0 1732875600000000000
 ```
 
 ---
 
-## CONVENZIONI NAMING PER QUERY
+## Configuration Dependency
 
-### Rinominazione Campi Obbligatoria
-Tutti i risultati delle query devono essere rinominati con nomi descrittivi.
+### web_endpoints.yaml Role
 
-#### Pattern di Naming:
-- **Inverter**: `Inverter_METRICA` (es: `Inverter_Potenza`, `Inverter_Temperatura`)
-- **Optimizer**: `Optimizer_SERIAL_METRICA` o `Optimizer_METRICA` per aggregati
-- **Meter**: `Rete_METRICA` (es: `Rete_Potenza`, `Rete_Tensione`)
-- **Battery**: `Batteria_METRICA` (es: `Batteria_SoC`, `Batteria_Potenza`)
-- **Weather**: `Meteo_METRICA` (es: `Meteo_Temperatura`, `Meteo_Irraggiamento`)
+The parser **requires** `web_endpoints.yaml` to determine categories:
+
+1. **Without config**: All data stored with field name `"Info"`
+2. **With config**: Data stored with proper category field names
+
+### Config Structure Used
+```yaml
+web_scraping:
+  endpoints:
+    site_2489781:
+      device_id: "2489781"
+      category: "Site"  # ← Used as InfluxDB field name
+```
 
 ---
 
-## NOTE TECNICHE
+## Error Handling
 
-### Timezone
-Tutti i timestamp sono in UTC. Usare sempre:
-```flux
-import "timezone"
-option location = timezone.location(name: "Europe/Rome")
-```
+### Missing Category
+- **Trigger**: `device_id` not found in `web_endpoints.yaml`
+- **Action**: Use `"Info"` as default category
+- **Log**: Warning message with available device IDs
 
-### Intervallo Dati
-- **Dati web**: Intervallo 15 minuti (sincronizzato con API)
-- **Granularità**: Dipende dalla frequenza di scraping configurata
+### Invalid Value
+- **Trigger**: Value cannot be converted to float
+- **Action**: Store as string in InfluxDB
+- **Log**: Debug message
 
-### Device ID e Field Types
+### Missing Timestamp
+- **Trigger**: Timestamp is None or <= 0
+- **Action**: Discard the data point
+- **Log**: No log (silent discard)
 
-**IMPORTANTE PER QUERY UNIVERSALI**:
-- **Optimizer**: Usare `_field == "Optimizer group"` e `endpoint == "PRODUCTION_POWER"` invece di filtrare per `device_id`
-- **Inverter**: Serial number (es: "7F123456") - filtrare per device_id specifico
-- **Meter**: ID numerico (es: "400123456") - filtrare per device_id specifico
-- **Weather**: Sempre "weather_default"
-- **Battery**: Contiene "BAT" nel serial
-- **String**: ID numerico semplice (es: "1", "2")
+---
 
-**Nota**: Per optimizer, il sistema salva i dati con `_field == "Optimizer group"` che permette query universali senza conoscere i serial specifici.
+## Supported Date Ranges
 
-### Gestione Errori
-Alcuni valori possono essere `null`. Usare sempre:
-```flux
-|> filter(fn: (r) => exists r._value)
-```
+Based on technical testing, the SolarEdge API has specific limitations on date ranges for different device types:
 
-### Unità di Misura
-- **Potenze**: W (convertire in kW dividendo per 1000)
-- **Energie**: Wh (convertire in kWh dividendo per 1000)
-- **Tensioni**: V
-- **Correnti**: A
-- **Temperature**: °C
-- **Frequenze**: Hz
-- **Irraggiamento**: W/m²
+| Device Type | 1 Day | 3 Days | 7 Days | 1 Month | Notes |
+|-------------|-------|--------|--------|---------|-------|
+| **OPTIMIZER** | ✅ | ✅ | ✅ | ❌ | Fails with HTTP 400 for ranges > 7 days |
+| **SITE** | ✅ | ✅ | ✅ | ✅ | Supports full monthly range |
+| **WEATHER** | ✅ | ✅ | ✅ | ✅ | Supports full monthly range |
+| **INVERTER** | ✅ | ✅ | ✅ | ✅ | Generally supports monthly range |
+| **METER** | ✅ | ✅ | ✅ | ✅ | Generally supports monthly range |
 
-### Best Practices
-1. **Sempre usare `exists r._value`** per evitare valori null
-2. **Query universali optimizer**: Usare `_field == "Optimizer group"` invece di filtrare per `device_id`
-3. **Range Grafana**: Usare `v.timeRangeStart` e `v.timeRangeStop` per compatibilità con qualsiasi periodo
-4. **Aggregare con `aggregateWindow()`** per ridurre granularità (15m per optimizer)
-5. **Per contatori energia**: Usare `reduce()` per calcolare differenza primo/ultimo
-6. **Monitorare optimizer**: Confrontare con media per identificare problemi
-7. **Pivot per visualizzazione**: Usare `pivot()` per mostrare ogni optimizer come serie separata
+**Technical Implication**:
+- For **Optimizers**, the collector must split monthly requests into smaller chunks (e.g., daily or weekly) to avoid errors.
+- For **Site/Weather**, bulk monthly collection is efficient and supported.
 
-### Problemi Comuni e Soluzioni
+---
 
-#### Problema: Troppi optimizer da visualizzare
-**Soluzione**: Aggregare con `mean()` o `sum()`, oppure filtrare solo quelli problematici
+## Performance Considerations
 
-#### Problema: Device ID non trovato
-**Causa**: Device ID errato o dispositivo non configurato
-**Soluzione**: Verificare configurazione in `config/main.yaml` sezione `web_scraping`
+### Batch Writing
+- Points are collected in memory
+- Written in batches to InfluxDB
+- Batch size: 500 points (configurable)
 
-#### Problema: Dati mancanti per alcuni dispositivi
-**Causa**: Dispositivo offline o non abilitato in configurazione
-**Soluzione**: Verificare stato dispositivo nel portale SolarEdge
+### Tag Cardinality
+- `endpoint`: ~10-20 unique values per device type
+- `device_id`: Number of physical devices (typically 1-50)
+- `unit`: ~10 unique values total
 
-#### Problema: Valori negativi inaspettati
-**Causa**: Normale per meter (prelievo rete) e battery (scarica)
-**Soluzione**: Gestire segno nel calcolo: positivo=immissione/carica, negativo=prelievo/scarica
+**Total cardinality**: Low (< 1000 unique tag combinations)
 
-#### Problema: Differenza tra web e API
-**Causa**: Fonti dati diverse, web può avere granularità diversa
-**Soluzione**: Preferire API per dati ufficiali, web per dettagli optimizer e dispositivi specifici
+---
+
+## Summary
+
+The web data storage system:
+
+1. **Receives** JSON from SolarEdge API
+2. **Parses** device info and measurements
+3. **Looks up** category from configuration
+4. **Creates** InfluxDB points with:
+   - Measurement: `web`
+   - Tags: `endpoint`, `device_id`, `unit`
+   - Field: Named by category, value from API
+   - Timestamp: Nanosecond precision
+5. **Writes** to InfluxDB in batches
+
+**Key Design**: Category system allows flexible field naming while maintaining consistent measurement structure.
