@@ -26,7 +26,7 @@ def run_gui_mode(log: Logger, cache: CacheManager, config: Optional[Dict[str, An
         # Prova ad avviare sulla porta 8092 (usa default host='127.0.0.1')
         try:
             runner, _ = await gui.start(port=port)
-            log.info(f"✅ Server GUI avviato su porta {port}")
+            # Log rimosso (già loggato da SimpleWebGUI)
         except OSError as e:
             error_msg = str(e).lower()
             
@@ -37,7 +37,7 @@ def run_gui_mode(log: Logger, cache: CacheManager, config: Optional[Dict[str, An
                     log.info("🔄 Riprovo ad avviare il server...")
                     try:
                         runner, _ = await gui.start(port=port)
-                        log.info(f"✅ Server GUI avviato su porta {port}")
+                        # Log rimosso (già loggato da SimpleWebGUI)
                     except OSError as retry_error:
                         log.error(f"❌ Porta {port} ancora occupata dopo kill: {retry_error}")
                         return 1
@@ -56,10 +56,11 @@ def run_gui_mode(log: Logger, cache: CacheManager, config: Optional[Dict[str, An
         
         # Apri browser SUBITO dopo che il server è avviato
         url = f"http://127.0.0.1:{port}"
-        log.info(f"🌐 GUI disponibile su: {url}")
-        log.info(f"📡 Accesso rete locale: http://{gui.real_ip}:{port} (se firewall permette)")
-        log.info("Loop avviato automaticamente - usa la GUI per controllarlo")
-        log.info("Premi Ctrl+C per fermare la GUI")
+        # Log rimossi (già loggati da SimpleWebGUI)
+        # log.info(f"🌐 GUI disponibile su: {url}")
+        # log.info(f"📡 Accesso rete locale: http://{gui.real_ip}:{port} (se firewall permette)")
+        # log.info("Loop avviato automaticamente - usa la GUI per controllarlo")
+        # log.info("Premi Ctrl+C per fermare la GUI")
         
         # Aspetta che il server sia pronto (usa delay configurabile)
         await asyncio.sleep(float(os.getenv('SCHEDULER_API_DELAY_SECONDS', '1')))

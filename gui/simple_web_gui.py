@@ -363,18 +363,6 @@ class SimpleWebGUI:
             
         except Exception as e:
             return self.error_handler.handle_api_error(e, "getting loop status", "Error retrieving loop status")
-
-    async def handle_loop_logs(self, request):
-        """Restituisce i log del loop mode con filtro opzionale per flow - REFACTORED"""
-        try:
-            # Parametri query
-            limit = int(request.query.get('limit', 500))
-            flow_filter = request.query.get('flow', 'all')
-            
-            # Delega a StateManager
-            filtered_logs = self.state_manager.get_filtered_logs(flow_filter, limit)
-            run_counts = self.state_manager.get_run_counts()
-            
             return web.json_response({
                 "logs": filtered_logs,
                 "total": len(filtered_logs),
@@ -584,9 +572,8 @@ class SimpleWebGUI:
             
             self.logger.info("="*50)
             self.logger.info("🚀 SOLAREDGE DASHBOARD MODERNA")
-            self.logger.info(f"URL: http://{self.real_ip}:{bind_port}")
-            self.logger.info(f"Config: {self.config_file}")
-            self.logger.info("Premi Ctrl+C per fermare")
+            self.logger.info(f"   URL: http://{self.real_ip}:{bind_port}")
+            self.logger.info(f"   Config: {self.config_file}")
             self.logger.info("="*50)
             
             # Avvia automaticamente il loop se richiesto
