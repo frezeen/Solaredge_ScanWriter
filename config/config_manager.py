@@ -38,6 +38,7 @@ class SchedulerConfig:
     api_delay_seconds: float = 1.0
     web_delay_seconds: float = 2.0
     realtime_delay_seconds: float = 0.0
+    gme_delay_seconds: float = 6.0
     skip_delay_on_cache_hit: bool = True
 
 
@@ -196,6 +197,7 @@ class ConfigManager:
             api_delay_seconds=float(scheduler_data.get('api_delay_seconds', 1.0)),
             web_delay_seconds=float(scheduler_data.get('web_delay_seconds', 2.0)),
             realtime_delay_seconds=float(scheduler_data.get('realtime_delay_seconds', 0.0)),
+            gme_delay_seconds=float(scheduler_data.get('gme_delay_seconds', 6.0)),
             skip_delay_on_cache_hit=bool(scheduler_data.get('skip_delay_on_cache_hit', True))
         )
     
