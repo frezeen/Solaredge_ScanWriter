@@ -47,12 +47,13 @@ class HistoryManager:
             months = self._generate_months_list(start_date, end_date)
             
             # 3. Processa tutti i mesi
-            success_count, failed_count, web_success, web_failed, interrupted, web_executed, gme_success, gme_failed = \
+            success_count, failed_count, web_success, web_failed, interrupted, web_executed, gme_success, gme_failed, web_monthly_success, web_monthly_failed = \
                 self._process_months(months, end_date)
             
             # 4. Stampa statistiche finali
             self._print_final_statistics(success_count, failed_count, web_success, web_failed,
-                                       interrupted, web_executed, len(months), gme_success, gme_failed)
+                                       interrupted, web_executed, len(months), gme_success, gme_failed,
+                                       web_monthly_success, web_monthly_failed)
             
         finally:
             # Chiudi sessione HTTP per liberare risorse
@@ -129,11 +130,16 @@ class HistoryManager:
         web_executed = False
         gme_success_count = 0
         gme_failed_count = 0
+        web_monthly_success_count = 0
+        web_monthly_failed_count = 0
         
         try:
             # Processa tutti i mesi
             for idx, month_data in enumerate(months, 1):
                 self.log.info(color.info(f"🔄 [{idx}/{len(months)}] Processando {month_data['label']}: {month_data['start']} → {month_data['end']}"))
+                
+                month_web_executed = False
+                month_web_success = False
                 
                 try:
                     # 1. API Flow con date personalizzate (sempre) - CON CACHE
@@ -172,12 +178,15 @@ class HistoryManager:
                             end_date=month_data['end'],
                             allowed_date_ranges=['monthly']
                         )
+                        month_web_executed = True
                         if web_monthly_result == 0:
-                            web_executed = True
-                            web_success = True
+                            web_monthly_success_count += 1
+                            month_web_success = True
+                        else:
+                            web_monthly_failed_count += 1
                     except Exception as e:
                         self.log.warning(color.warning(f"   ⚠️ Web Monthly {month_data['label']} errore: {e}"))
-                        web_failed = True
+                        web_monthly_failed_count += 1
 
                     
                     # 2. Web Flow solo per gli ultimi 7 giorni (alla fine)
@@ -207,10 +216,10 @@ class HistoryManager:
                     # Considera successo se API è ok (web è opzionale)
                     if api_result == 0:
                         success_count += 1
-                        if web_executed and web_result == 0:
-                            self.log.info(color.success(f"   ✅ {month_data['label']} completato (API + Web)"))
-                        elif web_executed:
-                            self.log.info(color.warning(f"   ✅ {month_data['label']} completato (API ok, Web warning)"))
+                        if month_web_executed and month_web_success:
+                            self.log.info(color.success(f"   ✅ {month_data['label']} completato (API + Web Site)"))
+                        elif month_web_executed:
+                            self.log.info(color.warning(f"   ✅ {month_data['label']} completato (API ok, Web Site warning)"))
                         else:
                             self.log.info(color.success(f"   ✅ {month_data['label']} completato (API)"))
                     else:
@@ -229,10 +238,11 @@ class HistoryManager:
             self.log.info(color.warning("🛑 Interruzione richiesta dall'utente (Ctrl+C)"))
             self.log.info(color.dim(f"📊 Processati {success_count + failed_count}/{len(months)} mesi prima dell'interruzione"))
         
-        return success_count, failed_count, web_success, web_failed, interrupted, web_executed, gme_success_count, gme_failed_count
+        return success_count, failed_count, web_success, web_failed, interrupted, web_executed, gme_success_count, gme_failed_count, web_monthly_success_count, web_monthly_failed_count
     
     def _print_final_statistics(self, success_count, failed_count, web_success, web_failed, 
-                               interrupted, web_executed, total_months, gme_success=0, gme_failed=0):
+                               interrupted, web_executed, total_months, gme_success=0, gme_failed=0,
+                               web_monthly_success=0, web_monthly_failed=0):
         """Stampa statistiche finali del history mode"""
         self.log.info(color.bold("=" * 60))
         if interrupted:
@@ -250,12 +260,17 @@ class HistoryManager:
         if gme_failed > 0:
             self.log.info(color.error(f"❌ Fallimenti GME: {gme_failed}/{total_months}"))
             
-        # Web Stats
+        # Web Monthly Stats (Site)
+        self.log.info(color.success(f"✅ Web Site (Monthly): {web_monthly_success}/{total_months} mesi"))
+        if web_monthly_failed > 0:
+            self.log.info(color.error(f"❌ Fallimenti Web Site: {web_monthly_failed}/{total_months}"))
+
+        # Web Recent Stats (Optimizers)
         if web_executed:
             if web_success:
-                self.log.info(color.success(f"✅ Web: 7/7 giorni"))
+                self.log.info(color.success(f"✅ Web Recent (Optimizers): 7/7 giorni"))
             elif web_failed:
-                self.log.info(color.error(f"❌ Web: 0/7 giorni (fallito)"))
+                self.log.info(color.error(f"❌ Web Recent (Optimizers): 0/7 giorni (fallito)"))
         
         if interrupted:
             self.log.info(color.dim(f"⏸️ Rimanenti: {total_months - success_count - failed_count}/{total_months}"))
