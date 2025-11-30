@@ -14,13 +14,15 @@ def run_web_flow(
     cache: CacheManager,
     config: Dict[str, Any],
     start_date: Optional[str] = None,
-    end_date: Optional[str] = None
+    end_date: Optional[str] = None,
+    allowed_date_ranges: Optional[list] = None
 ) -> int:
     """Pipeline web scraping con supporto date storiche
     
     Args:
         start_date: Data inizio per history mode (formato YYYY-MM-DD)
         end_date: Data fine per history mode (formato YYYY-MM-DD)
+        allowed_date_ranges: Lista opzionale di range da processare (es. ['monthly'])
         
     Se start_date/end_date sono fornite, raccoglie dati giorno per giorno.
     Altrimenti raccoglie solo i dati di oggi.
@@ -32,13 +34,25 @@ def run_web_flow(
     scheduler_config = SchedulerConfig.from_config(config)
     scheduler = SchedulerLoop(scheduler_config)
     
+    scheduler.set_log(log) # Assicura che lo scheduler usi il logger corretto
+    
     collector = CollectorWeb(scheduler=scheduler)
     collector.set_cache(cache)
     
     # Costruzione richieste
     device_reqs = collector.build_requests_with_real_ids()
+    
+    # Filtra per date_range se richiesto
+    if allowed_date_ranges and device_reqs:
+        original_count = len(device_reqs)
+        device_reqs = [
+            req for req in device_reqs 
+            if req.get('date_range') in allowed_date_ranges
+        ]
+        log.info(color.dim(f"   Filtro device attivi per range: {len(device_reqs)}/{original_count} (Ranges: {allowed_date_ranges})"))
+    
     if not device_reqs:
-        log.info("Nessun dispositivo abilitato - chiusura")
+        log.info("Nessun dispositivo abilitato (o nessuno corrisponde al filtro) - chiusura")
         return 0
     
     # Determina modalità e processa

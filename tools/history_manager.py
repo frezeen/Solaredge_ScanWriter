@@ -162,6 +162,23 @@ class HistoryManager:
                         self.log.warning(color.warning(f"   ⚠️ GME {month_data['label']} errore: {e}"))
                         gme_failed_count += 1
 
+                    # 1c. Web Flow (Monthly Devices) - SITE (e altri monthly)
+                    # Esegui per ogni mese per garantire storico completo dei device mensili
+                    try:
+                        self.log.info(color.dim(f"   🔄 Web flow (Monthly) per {month_data['label']}"))
+                        web_monthly_result = run_web_flow(
+                            self.log, self.cache, self.config,
+                            start_date=month_data['start'],
+                            end_date=month_data['end'],
+                            allowed_date_ranges=['monthly']
+                        )
+                        if web_monthly_result == 0:
+                            web_executed = True
+                            web_success = True
+                    except Exception as e:
+                        self.log.warning(color.warning(f"   ⚠️ Web Monthly {month_data['label']} errore: {e}"))
+                        web_failed = True
+
                     
                     # 2. Web Flow solo per gli ultimi 7 giorni (alla fine)
                     web_result = 0
