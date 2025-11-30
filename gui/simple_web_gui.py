@@ -584,34 +584,48 @@ class SimpleWebGUI:
             self.logger.info("="*50)
 
             # Log configurazione sistema per GUI (General tab)
+            # Log configurazione sistema per GUI (General tab)
+            from config.config_manager import get_config_manager
             try:
-                from config.config_manager import get_config_manager
                 cm = get_config_manager()
 
                 # Scheduler
-                sched = cm.get_scheduler_config()
-                self.logger.info(
-                    f"[SYSTEM] ⏱️  Scheduler: API={sched.api_delay_seconds}s, "
-                    f"Web={sched.web_delay_seconds}s, "
-                    f"RT={sched.realtime_delay_seconds}s, "
-                    f"GME={sched.gme_delay_seconds}s"
-                )
+                try:
+                    sched = cm.get_scheduler_config()
+                    self.logger.info(
+                        f"[SYSTEM] ⏱️  Scheduler: API={sched.api_delay_seconds}s, "
+                        f"Web={sched.web_delay_seconds}s, "
+                        f"RT={sched.realtime_delay_seconds}s, "
+                        f"GME={sched.gme_delay_seconds}s"
+                    )
+                except Exception as e:
+                    self.logger.warning(f"[SYSTEM] ⚠️ Errore log Scheduler: {e}")
 
                 # InfluxDB
-                influx = cm.get_influxdb_config()
-                self.logger.info(
-                    f"[SYSTEM] ✅ InfluxDB: {influx.url} (Buckets: {influx.bucket}, {influx.bucket_gme}, {influx.bucket_weather})"
-                )
+                try:
+                    influx = cm.get_influxdb_config()
+                    # Gestione sicura attributi opzionali
+                    bucket_gme = getattr(influx, 'bucket_gme', 'N/A')
+                    bucket_weather = getattr(influx, 'bucket_weather', 'N/A')
+                    
+                    self.logger.info(
+                        f"[SYSTEM] ✅ InfluxDB: {influx.url} (Buckets: {influx.bucket}, {bucket_gme}, {bucket_weather})"
+                    )
+                except Exception as e:
+                    self.logger.warning(f"[SYSTEM] ⚠️ Errore log InfluxDB: {e}")
 
                 # Web Server & GUI
-                self.logger.info(f"[SYSTEM] ✅ Web Server: http://{self.real_ip}:{bind_port}")
-                self.logger.info(f"[SYSTEM] ✅ GUI Dashboard: Inizializzata")
+                try:
+                    self.logger.info(f"[SYSTEM] ✅ Web Server: http://{self.real_ip}:{bind_port}")
+                    self.logger.info(f"[SYSTEM] ✅ GUI Dashboard: Inizializzata")
+                except Exception as e:
+                    self.logger.warning(f"[SYSTEM] ⚠️ Errore log Web/GUI: {e}")
 
                 # Cache
                 self.logger.info("[SYSTEM] ✅ Cache centralizzata inizializzata")
 
             except Exception as e:
-                self.logger.warning(f"Impossibile loggare config sistema: {e}")
+                self.logger.warning(f"Impossibile inizializzare config manager per log: {e}")
 
 
             # Avvia automaticamente il loop se richiesto
