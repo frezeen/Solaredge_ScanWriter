@@ -1239,12 +1239,13 @@
         "type": "influxdb",
         "uid": "ff27vpmruzxtsc"
       },
+      "description": "",
       "fieldConfig": {
         "defaults": {
           "color": {
+            "fixedColor": "light-yellow",
             "mode": "thresholds"
           },
-          "links": [],
           "mappings": [],
           "thresholds": {
             "mode": "absolute",
@@ -1266,21 +1267,22 @@
         "y": 12
       },
       "hideTimeOverride": true,
-      "id": 70,
+      "id": 66,
       "options": {
         "colorMode": "background",
         "graphMode": "none",
         "justifyMode": "center",
-        "orientation": "vertical",
+        "orientation": "auto",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
           "calcs": [],
-          "fields": "/.*/",
+          "fields": "/^_value$/",
+          "limit": 1,
           "values": false
         },
         "showPercentChange": false,
         "text": {},
-        "textMode": "value_and_name",
+        "textMode": "auto",
         "wideLayout": true
       },
       "pluginVersion": "12.3.0",
@@ -1290,12 +1292,12 @@
             "type": "influxdb",
             "uid": "ff27vpmruzxtsc"
           },
-          "query": "import \"timezone\"\r\nimport \"date\"\r\n// import \"strings\" // Non serve più se non usi strings.substring\r\n\r\noption location = timezone.location(name: \"Europe/Rome\")\r\n\r\ntoday_start = date.truncate(t: now(), unit: 1d)\r\n\r\nfrom(bucket: \"Solaredge_Realtime\")\r\n  |> range(start: today_start)\r\n  |> filter(fn: (r) =>\r\n      r._measurement == \"realtime\" and\r\n      ((r._field == \"Inverter\" and r.endpoint == \"Power Ac\") or\r\n       (r._field == \"Meter\" and r.endpoint == \"Power\"))\r\n  )\r\n  |> aggregateWindow(every: 5s, fn: mean, createEmpty: false)\r\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])\r\n  |> pivot(rowKey:[\"_time\"], columnKey: [\"_field\"], valueColumn: \"_value\")\r\n  |> map(fn: (r) => ({\r\n      _time: r._time,\r\n      Produzione: if exists r.Inverter then r.Inverter else 0.0,\r\n      Rete: if exists r.Meter then r.Meter else 0.0,\r\n      // Assumendo Meter Positivo = Export\r\n      Consumo: (if exists r.Inverter then r.Inverter else 0.0) - (if exists r.Meter then r.Meter else 0.0)\r\n  }))\r\n  |> filter(fn: (r) => r.Consumo > 0.0)\r\n  |> max(column: \"Consumo\")\r\n  |> map(fn: (r) => ({\r\n      ORARIO: \r\n        (if date.hour(t: r._time) < 10 then \"0\" else \"\") + string(v: date.hour(t: r._time)) + \":\" +\r\n        (if date.minute(t: r._time) < 10 then \"0\" else \"\") + string(v: date.minute(t: r._time)),\r\n      VALORE: r.Consumo\r\n  }))",
-          "refId": "Picco Consumo"
+          "query": "import \"timezone\"\r\nimport \"date\"\r\nimport \"array\"\r\n\r\noption location = timezone.location(name: \"Europe/Rome\")\r\n\r\nstart = date.truncate(t: now(), unit: 1d)\r\n\r\n// Produzione: ultimo - primo\r\ndata_prod = from(bucket: \"Solaredge_Realtime\")\r\n  |> range(start: start)\r\n  |> filter(fn: (r) =>\r\n      r._measurement == \"realtime\" and\r\n      r._field == \"Inverter\" and\r\n      r.endpoint == \"Energy Total\"\r\n  )\r\n  |> filter(fn: (r) => exists r._value)\r\n\r\nfirst_prod = data_prod |> first() |> findRecord(fn: (key) => true, idx: 0)\r\nlast_prod = data_prod |> last() |> findRecord(fn: (key) => true, idx: 0)\r\nprod_value = last_prod._value - first_prod._value\r\n\r\n// Import: ultimo - primo\r\ndata_imp = from(bucket: \"Solaredge_Realtime\")\r\n  |> range(start: start)\r\n  |> filter(fn: (r) =>\r\n      r._measurement == \"realtime\" and\r\n      r._field == \"Meter\" and\r\n      r.endpoint == \"Import Energy Active\"\r\n  )\r\n  |> filter(fn: (r) => exists r._value)\r\n\r\nfirst_imp = data_imp |> first() |> findRecord(fn: (key) => true, idx: 0)\r\nlast_imp = data_imp |> last() |> findRecord(fn: (key) => true, idx: 0)\r\nimp_value = last_imp._value - first_imp._value\r\n\r\n// Export: ultimo - primo\r\ndata_exp = from(bucket: \"Solaredge_Realtime\")\r\n  |> range(start: start)\r\n  |> filter(fn: (r) =>\r\n      r._measurement == \"realtime\" and\r\n      r._field == \"Meter\" and\r\n      r.endpoint == \"Export Energy Active\"\r\n  )\r\n  |> filter(fn: (r) => exists r._value)\r\n\r\nfirst_exp = data_exp |> first() |> findRecord(fn: (key) => true, idx: 0)\r\nlast_exp = data_exp |> last() |> findRecord(fn: (key) => true, idx: 0)\r\nexp_value = last_exp._value - first_exp._value\r\n\r\n// Consumo = Import + Produzione - Export\r\nconsumo_wh = imp_value + prod_value - exp_value\r\n\r\n// Output\r\narray.from(rows: [{\r\n  _time: now(),\r\n  _field: \"consumo_oggi_wh\",\r\n  _value: consumo_wh,\r\n  import_wh: imp_value,\r\n  produzione_wh: prod_value,\r\n  export_wh: exp_value\r\n}])\r\n  |> yield(name: \"consumo_totale_oggi_Wh\")",
+          "refId": "Consumo"
         }
       ],
       "timeFrom": "0d/d",
-      "title": "Picco di Consumo",
+      "title": "Consumo",
       "transparent": true,
       "type": "stat"
     },
@@ -1316,7 +1318,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "dark-green",
+                "color": "dark-red",
                 "value": 0
               }
             ]
@@ -1332,18 +1334,18 @@
         "y": 12
       },
       "hideTimeOverride": true,
-      "id": 69,
+      "id": 68,
       "options": {
         "colorMode": "background",
         "graphMode": "none",
-        "justifyMode": "center",
-        "orientation": "auto",
+        "justifyMode": "auto",
+        "orientation": "horizontal",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
           "calcs": [
             "last"
           ],
-          "fields": "/^Autoconsumo$/",
+          "fields": "/^_value$/",
           "limit": 1,
           "values": false
         },
@@ -1359,12 +1361,12 @@
             "type": "influxdb",
             "uid": "ff27vpmruzxtsc"
           },
-          "query": "import \"timezone\"\r\nimport \"date\"\r\nimport \"array\"\r\n\r\noption location = timezone.location(name: \"Europe/Rome\")\r\n\r\nstart = date.truncate(t: now(), unit: 1d)\r\nstop  = date.add(d: 1d, to: start)\r\n\r\n// Produzione: ultimo - primo\r\ndata_prod = from(bucket: \"Solaredge_Realtime\")\r\n  |> range(start: start, stop: stop)\r\n  |> filter(fn: (r) =>\r\n      r._measurement == \"realtime\" and\r\n      r._field == \"Inverter\" and\r\n      r.endpoint == \"Energy Total\" and\r\n      r.unit == \"Wh\"\r\n  )\r\n\r\nfirst_prod = data_prod |> first() |> findRecord(fn: (key) => true, idx: 0)\r\nlast_prod = data_prod |> last() |> findRecord(fn: (key) => true, idx: 0)\r\nprod_value = last_prod._value - first_prod._value\r\n\r\n// Export: ultimo - primo\r\ndata_exp = from(bucket: \"Solaredge_Realtime\")\r\n  |> range(start: start, stop: stop)\r\n  |> filter(fn: (r) =>\r\n      r._measurement == \"realtime\" and\r\n      r._field == \"Meter\" and\r\n      r.endpoint == \"Export Energy Active\" and\r\n      r.unit == \"Wh\"\r\n  )\r\n\r\nfirst_exp = data_exp |> first() |> findRecord(fn: (key) => true, idx: 0)\r\nlast_exp = data_exp |> last() |> findRecord(fn: (key) => true, idx: 0)\r\nexp_value = last_exp._value - first_exp._value\r\n\r\n// Autoconsumo = Produzione - Export\r\nautoconsumo = prod_value - exp_value\r\nautoconsumo_final = if autoconsumo < 0.0 then 0.0 else autoconsumo\r\n\r\n// Risultato\r\narray.from(rows: [{\r\n  _time: now(),\r\n  Autoconsumo: autoconsumo_final,\r\n  _field: \"autoconsumo_wh\"\r\n}])\r\n  |> yield(name: \"autoconsumo_wh\")",
-          "refId": "Autoconsumo"
+          "query": "import \"timezone\"\r\nimport \"date\"\r\nimport \"array\"\r\n\r\noption location = timezone.location(name: \"Europe/Rome\")\r\n\r\ntoday_start = date.truncate(t: now(), unit: 1d)\r\n\r\n// Ottieni prima e ultima lettura\r\ndata = from(bucket: \"Solaredge_Realtime\")\r\n  |> range(start: today_start)\r\n  |> filter(fn: (r) => r._measurement == \"realtime\")\r\n  |> filter(fn: (r) => r._field == \"Meter\")\r\n  |> filter(fn: (r) => r.endpoint == \"Import Energy Active\")\r\n  |> filter(fn: (r) => exists r._value)\r\n\r\nfirst_value = data\r\n  |> first()\r\n  |> findRecord(fn: (key) => true, idx: 0)\r\n\r\nlast_value = data\r\n  |> last()\r\n  |> findRecord(fn: (key) => true, idx: 0)\r\n\r\n// Calcola la differenza\r\narray.from(rows: [{\r\n  _time: now(),\r\n  _field: \"prelievo_oggi_kwh\",\r\n  _value: (last_value._value - first_value._value)\r\n}])\r\n",
+          "refId": "Prelievo"
         }
       ],
       "timeFrom": "0d/d",
-      "title": "Autoconsumo di oggi",
+      "title": "Prelievo",
       "transparent": true,
       "type": "stat"
     },
@@ -1999,13 +2001,12 @@
         "type": "influxdb",
         "uid": "ff27vpmruzxtsc"
       },
-      "description": "",
       "fieldConfig": {
         "defaults": {
           "color": {
-            "fixedColor": "light-yellow",
             "mode": "thresholds"
           },
+          "links": [],
           "mappings": [],
           "thresholds": {
             "mode": "absolute",
@@ -2027,22 +2028,21 @@
         "y": 15
       },
       "hideTimeOverride": true,
-      "id": 66,
+      "id": 70,
       "options": {
         "colorMode": "background",
         "graphMode": "none",
         "justifyMode": "center",
-        "orientation": "auto",
+        "orientation": "vertical",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
           "calcs": [],
-          "fields": "/^_value$/",
-          "limit": 1,
+          "fields": "/.*/",
           "values": false
         },
         "showPercentChange": false,
         "text": {},
-        "textMode": "auto",
+        "textMode": "value_and_name",
         "wideLayout": true
       },
       "pluginVersion": "12.3.0",
@@ -2052,12 +2052,12 @@
             "type": "influxdb",
             "uid": "ff27vpmruzxtsc"
           },
-          "query": "import \"timezone\"\r\nimport \"date\"\r\nimport \"array\"\r\n\r\noption location = timezone.location(name: \"Europe/Rome\")\r\n\r\nstart = date.truncate(t: now(), unit: 1d)\r\n\r\n// Produzione: ultimo - primo\r\ndata_prod = from(bucket: \"Solaredge_Realtime\")\r\n  |> range(start: start)\r\n  |> filter(fn: (r) =>\r\n      r._measurement == \"realtime\" and\r\n      r._field == \"Inverter\" and\r\n      r.endpoint == \"Energy Total\"\r\n  )\r\n  |> filter(fn: (r) => exists r._value)\r\n\r\nfirst_prod = data_prod |> first() |> findRecord(fn: (key) => true, idx: 0)\r\nlast_prod = data_prod |> last() |> findRecord(fn: (key) => true, idx: 0)\r\nprod_value = last_prod._value - first_prod._value\r\n\r\n// Import: ultimo - primo\r\ndata_imp = from(bucket: \"Solaredge_Realtime\")\r\n  |> range(start: start)\r\n  |> filter(fn: (r) =>\r\n      r._measurement == \"realtime\" and\r\n      r._field == \"Meter\" and\r\n      r.endpoint == \"Import Energy Active\"\r\n  )\r\n  |> filter(fn: (r) => exists r._value)\r\n\r\nfirst_imp = data_imp |> first() |> findRecord(fn: (key) => true, idx: 0)\r\nlast_imp = data_imp |> last() |> findRecord(fn: (key) => true, idx: 0)\r\nimp_value = last_imp._value - first_imp._value\r\n\r\n// Export: ultimo - primo\r\ndata_exp = from(bucket: \"Solaredge_Realtime\")\r\n  |> range(start: start)\r\n  |> filter(fn: (r) =>\r\n      r._measurement == \"realtime\" and\r\n      r._field == \"Meter\" and\r\n      r.endpoint == \"Export Energy Active\"\r\n  )\r\n  |> filter(fn: (r) => exists r._value)\r\n\r\nfirst_exp = data_exp |> first() |> findRecord(fn: (key) => true, idx: 0)\r\nlast_exp = data_exp |> last() |> findRecord(fn: (key) => true, idx: 0)\r\nexp_value = last_exp._value - first_exp._value\r\n\r\n// Consumo = Import + Produzione - Export\r\nconsumo_wh = imp_value + prod_value - exp_value\r\n\r\n// Output\r\narray.from(rows: [{\r\n  _time: now(),\r\n  _field: \"consumo_oggi_wh\",\r\n  _value: consumo_wh,\r\n  import_wh: imp_value,\r\n  produzione_wh: prod_value,\r\n  export_wh: exp_value\r\n}])\r\n  |> yield(name: \"consumo_totale_oggi_Wh\")",
-          "refId": "Consumo"
+          "query": "import \"timezone\"\r\nimport \"date\"\r\n// import \"strings\" // Non serve più se non usi strings.substring\r\n\r\noption location = timezone.location(name: \"Europe/Rome\")\r\n\r\ntoday_start = date.truncate(t: now(), unit: 1d)\r\n\r\nfrom(bucket: \"Solaredge_Realtime\")\r\n  |> range(start: today_start)\r\n  |> filter(fn: (r) =>\r\n      r._measurement == \"realtime\" and\r\n      ((r._field == \"Inverter\" and r.endpoint == \"Power Ac\") or\r\n       (r._field == \"Meter\" and r.endpoint == \"Power\"))\r\n  )\r\n  |> aggregateWindow(every: 5s, fn: mean, createEmpty: false)\r\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])\r\n  |> pivot(rowKey:[\"_time\"], columnKey: [\"_field\"], valueColumn: \"_value\")\r\n  |> map(fn: (r) => ({\r\n      _time: r._time,\r\n      Produzione: if exists r.Inverter then r.Inverter else 0.0,\r\n      Rete: if exists r.Meter then r.Meter else 0.0,\r\n      // Assumendo Meter Positivo = Export\r\n      Consumo: (if exists r.Inverter then r.Inverter else 0.0) - (if exists r.Meter then r.Meter else 0.0)\r\n  }))\r\n  |> filter(fn: (r) => r.Consumo > 0.0)\r\n  |> max(column: \"Consumo\")\r\n  |> map(fn: (r) => ({\r\n      ORARIO: \r\n        (if date.hour(t: r._time) < 10 then \"0\" else \"\") + string(v: date.hour(t: r._time)) + \":\" +\r\n        (if date.minute(t: r._time) < 10 then \"0\" else \"\") + string(v: date.minute(t: r._time)),\r\n      VALORE: r.Consumo\r\n  }))",
+          "refId": "Picco Consumo"
         }
       ],
       "timeFrom": "0d/d",
-      "title": "Consumo",
+      "title": "Picco di Consumo",
       "transparent": true,
       "type": "stat"
     },
@@ -2078,7 +2078,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "dark-red",
+                "color": "dark-green",
                 "value": 0
               }
             ]
@@ -2094,18 +2094,18 @@
         "y": 15
       },
       "hideTimeOverride": true,
-      "id": 68,
+      "id": 69,
       "options": {
         "colorMode": "background",
         "graphMode": "none",
-        "justifyMode": "auto",
-        "orientation": "horizontal",
+        "justifyMode": "center",
+        "orientation": "auto",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
           "calcs": [
             "last"
           ],
-          "fields": "/^_value$/",
+          "fields": "/^Autoconsumo$/",
           "limit": 1,
           "values": false
         },
@@ -2121,12 +2121,12 @@
             "type": "influxdb",
             "uid": "ff27vpmruzxtsc"
           },
-          "query": "import \"timezone\"\r\nimport \"date\"\r\nimport \"array\"\r\n\r\noption location = timezone.location(name: \"Europe/Rome\")\r\n\r\nstart = date.truncate(t: now(), unit: 1d)\r\n\r\n// Produzione: ultimo - primo\r\ndata_prod = from(bucket: \"Solaredge_Realtime\")\r\n  |> range(start: start)\r\n  |> filter(fn: (r) =>\r\n      r._measurement == \"realtime\" and\r\n      r._field == \"Inverter\" and\r\n      r.endpoint == \"Energy Total\")\r\n  |> filter(fn: (r) => exists r._value)\r\n\r\nfirst_prod = data_prod |> first() |> findRecord(fn: (key) => true, idx: 0)\r\nlast_prod = data_prod |> last() |> findRecord(fn: (key) => true, idx: 0)\r\nprod_value = last_prod._value - first_prod._value\r\n\r\n// Import: ultimo - primo\r\ndata_imp = from(bucket: \"Solaredge_Realtime\")\r\n  |> range(start: start)\r\n  |> filter(fn: (r) =>\r\n      r._measurement == \"realtime\" and\r\n      r._field == \"Meter\" and\r\n      r.endpoint == \"Import Energy Active\")\r\n  |> filter(fn: (r) => exists r._value)\r\n\r\nfirst_imp = data_imp |> first() |> findRecord(fn: (key) => true, idx: 0)\r\nlast_imp = data_imp |> last() |> findRecord(fn: (key) => true, idx: 0)\r\nimp_value = last_imp._value - first_imp._value\r\n\r\n// Export: ultimo - primo\r\ndata_exp = from(bucket: \"Solaredge_Realtime\")\r\n  |> range(start: start)\r\n  |> filter(fn: (r) =>\r\n      r._measurement == \"realtime\" and\r\n      r._field == \"Meter\" and\r\n      r.endpoint == \"Export Energy Active\")\r\n  |> filter(fn: (r) => exists r._value)\r\n\r\nfirst_exp = data_exp |> first() |> findRecord(fn: (key) => true, idx: 0)\r\nlast_exp = data_exp |> last() |> findRecord(fn: (key) => true, idx: 0)\r\nexp_value = last_exp._value - first_exp._value\r\n\r\n// Calcoli finali\r\nconsumo_wh = imp_value + prod_value - exp_value\r\nprelievo_wh = imp_value\r\nperc_prelievo = if consumo_wh > 0.0 then (prelievo_wh / consumo_wh) * 100.0 else 0.0\r\n\r\n// Output\r\narray.from(rows: [{\r\n  _time: now(),\r\n  _field: \"percentuale_prelievo\",\r\n  _value: perc_prelievo\r\n}])\r\n",
-          "refId": "Prelievo"
+          "query": "import \"timezone\"\r\nimport \"date\"\r\nimport \"array\"\r\n\r\noption location = timezone.location(name: \"Europe/Rome\")\r\n\r\nstart = date.truncate(t: now(), unit: 1d)\r\nstop  = date.add(d: 1d, to: start)\r\n\r\n// Produzione: ultimo - primo\r\ndata_prod = from(bucket: \"Solaredge_Realtime\")\r\n  |> range(start: start, stop: stop)\r\n  |> filter(fn: (r) =>\r\n      r._measurement == \"realtime\" and\r\n      r._field == \"Inverter\" and\r\n      r.endpoint == \"Energy Total\" and\r\n      r.unit == \"Wh\"\r\n  )\r\n\r\nfirst_prod = data_prod |> first() |> findRecord(fn: (key) => true, idx: 0)\r\nlast_prod = data_prod |> last() |> findRecord(fn: (key) => true, idx: 0)\r\nprod_value = last_prod._value - first_prod._value\r\n\r\n// Export: ultimo - primo\r\ndata_exp = from(bucket: \"Solaredge_Realtime\")\r\n  |> range(start: start, stop: stop)\r\n  |> filter(fn: (r) =>\r\n      r._measurement == \"realtime\" and\r\n      r._field == \"Meter\" and\r\n      r.endpoint == \"Export Energy Active\" and\r\n      r.unit == \"Wh\"\r\n  )\r\n\r\nfirst_exp = data_exp |> first() |> findRecord(fn: (key) => true, idx: 0)\r\nlast_exp = data_exp |> last() |> findRecord(fn: (key) => true, idx: 0)\r\nexp_value = last_exp._value - first_exp._value\r\n\r\n// Autoconsumo = Produzione - Export\r\nautoconsumo = prod_value - exp_value\r\nautoconsumo_final = if autoconsumo < 0.0 then 0.0 else autoconsumo\r\n\r\n// Risultato\r\narray.from(rows: [{\r\n  _time: now(),\r\n  Autoconsumo: autoconsumo_final,\r\n  _field: \"autoconsumo_wh\"\r\n}])\r\n  |> yield(name: \"autoconsumo_wh\")",
+          "refId": "Autoconsumo"
         }
       ],
       "timeFrom": "0d/d",
-      "title": "Prelievo",
+      "title": "Autoconsumo",
       "transparent": true,
       "type": "stat"
     },
@@ -5679,8 +5679,8 @@
         },
         "showPercentChange": false,
         "text": {
-          "titleSize": 27,
-          "valueSize": 27
+          "titleSize": 20,
+          "valueSize": 20
         },
         "textMode": "value_and_name",
         "wideLayout": true
@@ -5883,6 +5883,6 @@
   "timezone": "",
   "title": "Solaredge 3.0",
   "uid": "afb91a6f-d8f7-43ae-8a98-67eab1bb4baa",
-  "version": 536,
+  "version": 549,
   "weekStart": "monday"
 }
