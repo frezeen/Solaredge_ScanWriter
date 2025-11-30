@@ -48,7 +48,7 @@ class SimpleWebGUI:
         from gui.core.error_handler import UnifiedErrorHandler
         
         self.config_handler = ConfigHandler()
-        self.state_manager = StateManager(max_log_buffer=1000, max_runs_per_flow=3)
+        self.state_manager = StateManager(max_log_buffer=1000)
         self.unified_toggle_handler = UnifiedToggleHandler(auto_update_source_callback=self._auto_update_source_enabled)
         self.error_handler = UnifiedErrorHandler(self.logger)
         
@@ -372,14 +372,10 @@ class SimpleWebGUI:
             
             # Delega a StateManager
             filtered_logs = self.state_manager.get_filtered_logs(flow_filter, limit)
-            run_counts = self.state_manager.get_run_counts()
-            
             return web.json_response({
                 "logs": filtered_logs,
                 "total": len(filtered_logs),
-                "run_counts": run_counts,
-                "flow_filter": flow_filter,
-                "max_runs_per_flow": self.state_manager.max_runs_per_flow
+                "flow_filter": flow_filter
             })
             
         except Exception as e:
