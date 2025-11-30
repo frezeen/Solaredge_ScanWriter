@@ -85,19 +85,7 @@ class InfluxWriter:
             # Note: write_api gestisce internamente batching e retry
             self._write_api = self._client.write_api(write_options=write_options)
             
-            # Log inizializzazione solo la prima volta (evita spam nei flow)
-            if not InfluxWriter._initialized_once:
-                self._log.info(
-                    f"✅ InfluxWriter inizializzato (Singleton) - "
-                    f"URL: {self._influx_config.url}, "
-                    f"Org: {self._influx_config.org}, "
-                    f"Bucket principale: {self._influx_config.bucket}, "
-                    f"Bucket realtime: {self._influx_config.bucket_realtime}, "
-                    f"Bucket GME: {self._influx_config.bucket_gme}, "
-                    f"Gzip: {self._influx_config.enable_gzip}, "
-                    f"Precision: {self._influx_config.write_precision}"
-                )
-                InfluxWriter._initialized_once = True
+
             
         except Exception as e:
             raise RuntimeError(f"InfluxWriter: errore inizializzazione - {e}")
