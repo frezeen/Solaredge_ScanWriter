@@ -607,11 +607,11 @@ class SimpleWebGUI:
                     gme_interval = int(os.getenv('LOOP_GME_INTERVAL_MINUTES', '1440'))
                     
                     self.logger.info(
-                        f"[SYSTEM] ⏱️  Rate limiters configurati (API: {sched.api_delay_seconds}s, "
+                        f"[SYSTEM] ⏱️  Scheduler Rate configurato (API: {sched.api_delay_seconds}s, "
                         f"Web: {sched.web_delay_seconds}s, Realtime: {sched.realtime_delay_seconds}s, GME: {sched.gme_delay_seconds}s)"
                     )
                     self.logger.info(
-                        f"[SYSTEM] 🔄 Loop intervals configurati (API: {api_interval}min, Web: {web_interval}min, "
+                        f"[SYSTEM] 🔄 Scheduler Loop configurato (API: {api_interval}min, Web: {web_interval}min, "
                         f"Realtime: {realtime_interval}s, GME: {gme_interval}min)"
                     )
                 except Exception as e:
