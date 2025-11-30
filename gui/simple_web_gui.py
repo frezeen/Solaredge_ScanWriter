@@ -578,7 +578,7 @@ class SimpleWebGUI:
             self.logger.info(f"[GUI] GUI Web avviata su: http://{self.real_ip}:{bind_port}")
 
             self.logger.info("="*50)
-            self.logger.info("🚀 SOLAREDGE DASHBOARD MODERNA")
+            self.logger.info("🚀 SOLAREDGE SCANWRITER")
             self.logger.info(f"   URL: http://{self.real_ip}:{bind_port}")
             self.logger.info(f"   Config: {self.config_file}")
             self.logger.info("="*50)
@@ -588,6 +588,16 @@ class SimpleWebGUI:
             from config.config_manager import get_config_manager
             try:
                 cm = get_config_manager()
+                
+                # Startup banner
+                self.logger.info("[SYSTEM] " + "="*50)
+                self.logger.info("[SYSTEM] 🚀 SOLAREDGE SCANWRITER")
+                self.logger.info(f"[SYSTEM]    URL: http://{self.real_ip}:{bind_port}")
+                self.logger.info(f"[SYSTEM]    Config: {self.config_file}")
+                self.logger.info("[SYSTEM] " + "="*50)
+                
+                # Configuration
+                self.logger.info(f"[SYSTEM] ⚙️  Configurazione caricata da {self.config_file} (YAML + variabili d'ambiente)")
 
                 # Scheduler
                 try:
