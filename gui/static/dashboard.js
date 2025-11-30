@@ -1414,6 +1414,11 @@ async function clearLogs() {
     try {
         await apiPost('/api/loop/logs/clear');
 
+        // Clear local cache immediately
+        logCache.logs = [];
+        logCache.byFlow = indexLogs([]);
+        logCache.lastUpdate = Date.now();
+
         const container = $('#logsContent');
         if (container) {
             setInnerHTML(container, '<div class="log-entry info"><span class="log-message">Log puliti - in attesa di nuovi log...</span></div>');
