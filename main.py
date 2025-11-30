@@ -84,11 +84,11 @@ def setup_logging(active_mode: str, config: Dict[str, Any]) -> None:
     logging_config = config.get('logging', {})
     os.environ["LOG_LEVEL"] = logging_config.get('level', 'INFO')
     os.environ["LOG_DIR"] = logging_config.get('log_directory', 'logs')
-    
+
     # Determina il file di log
     mode_conf = MODES.get(active_mode, {})
     log_file = os.getenv(mode_conf.get('log_env', ''), mode_conf.get('default_log', 'app.log'))
-    
+
     if logging_config.get('file_logging', True) and log_file:
         configure_logging(log_file=log_file, script_name="main")
     else:
@@ -100,33 +100,35 @@ def main() -> int:
         description="SolarEdge Data Collector",
         epilog="Senza argomenti: avvia GUI Dashboard con loop in modalita' stop"
     )
-    
+
     # Generazione dinamica degli argomenti
     grp = ap.add_mutually_exclusive_group(required=False)
     for mode, conf in MODES.items():
         if mode == 'gui': continue # Non aggiungere flag per gui (è default)
         grp.add_argument(f'--{mode}', action='store_true', help=conf['help'])
-        
+
     args = ap.parse_args()
-    
+
     # Caricamento configurazione
     config_path = os.getenv('CONFIG_PATH', 'config/main.yaml')
     config_manager = get_config_manager(config_path)
     config = config_manager.get_raw_config()
-    
+
     # Setup Logging
     active_mode = get_active_mode(args)
     setup_logging(active_mode, config)
     log = get_logger("main")
-    
+    log.info("[SYSTEM] ✅ Config manager caricato")
+
     # Inizializzazione Cache
     cache = CacheManager()
-    
+    log.info("[SYSTEM] ✅ Cache manager inizializzato")
+
     try:
         # Esecuzione dinamica handler
         handler = MODES[active_mode]['handler']
         return handler(log, cache, config)
-            
+
     except KeyboardInterrupt:
         log.info(color.warning("👋 Uscita pulita richiesta dall'utente"))
         return 0

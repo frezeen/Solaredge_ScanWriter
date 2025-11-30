@@ -21,7 +21,7 @@ class ServerConfig:
 
 class WebServer:
     """Server web dedicato - Single Responsibility"""
-    
+
     def __init__(self, config: ServerConfig, route_handler):
         self.config = config
         self.route_handler = route_handler
@@ -41,13 +41,13 @@ class WebServer:
         try:
             self.runner = web.AppRunner(self.create_app())
             await self.runner.setup()
-            
+
             self.site = web.TCPSite(self.runner, self.config.host, self.config.port)
             await self.site.start()
-            
+
             self.logger.info(f"Server avviato su {self.config.host}:{self.config.port}")
             return self.runner, self.site
-            
+
         except Exception as e:
             self.logger.error(f"Errore avvio server: {e}")
             raise

@@ -15,17 +15,17 @@ if ($Help) {
 
 function Write-ColorOutput {
     param([string]$Message, [string]$Color = "White")
-    
+
     $colorMap = @{
         "Red" = "Red"; "Green" = "Green"; "Yellow" = "Yellow"
         "Blue" = "Blue"; "Magenta" = "Magenta"; "Cyan" = "Cyan"; "White" = "White"
     }
-    
+
     $finalColor = $colorMap[$Color]
     if (-not $finalColor) {
         $finalColor = "White"
     }
-    
+
     Write-Host $Message -ForegroundColor $finalColor
 }
 
@@ -39,15 +39,15 @@ $archReal = [System.Environment]::GetEnvironmentVariable("PROCESSOR_ARCHITEW6432
 $realArch = if ($archReal) { $archReal } else { $arch }
 
 switch ($realArch) {
-    "AMD64" { 
+    "AMD64" {
         $dockerArch = "linux/amd64"
         $archName = "AMD64"
     }
-    "ARM64" { 
+    "ARM64" {
         $dockerArch = "linux/arm64"
         $archName = "ARM64"
     }
-    default { 
+    default {
         $dockerArch = "linux/amd64"
         $archName = "AMD64 (default)"
     }
@@ -109,16 +109,16 @@ try {
     } catch {
         $buildxAvailable = $false
     }
-    
+
     if ($buildxAvailable) {
         Write-ColorOutput "Using Docker Buildx for multi-platform build..." "Blue"
-        
+
         # Create builder if needed
         $builders = docker buildx ls 2>$null
         if (-not ($builders -match "solaredge-builder")) {
             docker buildx create --name solaredge-builder --use --bootstrap 2>$null
         }
-        
+
         # Try buildx build
         try {
             Write-ColorOutput "Running: docker buildx build --platform $dockerArch --tag solaredge-scanwriter:latest --load ." "Blue"
@@ -202,14 +202,14 @@ try {
     } else {
         Write-ColorOutput "Services started successfully" "Green"
     }
-    
+
     # Wait for services to be ready
     Write-ColorOutput "Waiting for services to be ready..." "Blue"
     Start-Sleep -Seconds 15
-    
+
     # Configure Grafana automatically
     Write-ColorOutput "Configuring Grafana..." "Blue"
-    
+
     # Wait for Grafana to be ready
     $grafanaReady = $false
     for ($i = 1; $i -le 30; $i++) {
@@ -224,7 +224,7 @@ try {
         }
         Start-Sleep -Seconds 2
     }
-    
+
     if ($grafanaReady) {
         # Configure Sun and Moon data source
         Write-ColorOutput "Configuring Sun and Moon data source..." "Blue"
@@ -238,13 +238,13 @@ try {
                     longitude = 14.3413
                 }
             } | ConvertTo-Json -Depth 3
-            
+
             $credentials = [System.Convert]::ToBase64String([System.Text.Encoding]::ASCII.GetBytes("admin:admin"))
             $headers = @{
                 "Authorization" = "Basic $credentials"
                 "Content-Type" = "application/json"
             }
-            
+
             $sunMoonResponse = Invoke-RestMethod -Uri "http://localhost:3000/api/datasources" -Method Post -Body $sunMoonData -Headers $headers -ErrorAction SilentlyContinue
             if ($sunMoonResponse.id) {
                 Write-ColorOutput "Sun and Moon data source configured" "Green"
@@ -252,17 +252,17 @@ try {
         } catch {
             Write-ColorOutput "Warning: Could not configure Sun and Moon data source" "Yellow"
         }
-        
+
         # Get data source UIDs and fix dashboard
         Start-Sleep -Seconds 5
-        
+
         $dataSourcesList = Invoke-RestMethod -Uri "http://localhost:3000/api/datasources" -Headers $headers -ErrorAction Continue
         $influxUID = ($dataSourcesList | Where-Object { $_.name -eq "Solaredge" }).uid
         $sunMoonUID = ($dataSourcesList | Where-Object { $_.name -eq "Sun and Moon" }).uid
-        
+
         if ($influxUID) {
                 Write-ColorOutput "Importing dashboard with correct UIDs..." "Blue"
-                
+
                 # Replicate EXACTLY what Linux script does using jq in container
                 if (Test-Path "grafana/dashboard-solaredge.json") {
                     try {
@@ -291,31 +291,31 @@ jq -n --slurpfile dashboard `$TEMP_DASHBOARD '{dashboard: `$dashboard[0], overwr
 # Import dashboard using curl (exactly like Linux script)
 if [[ -f `$IMPORT_PAYLOAD ]]; then
     IMPORT_RESPONSE=`$(curl -s -X POST http://grafana:3000/api/dashboards/db -u admin:admin -H 'Content-Type: application/json' -d @`$IMPORT_PAYLOAD)
-    
+
     if echo "`$IMPORT_RESPONSE" | grep -q '"status":"success"'; then
         echo 'SUCCESS'
     else
         echo 'FAILED'
     fi
-    
+
     rm -f `$IMPORT_PAYLOAD `$TEMP_DASHBOARD
 else
     echo 'FAILED'
 fi
 "@
-                        
+
                         # Write script with Unix line endings and execute
                         $importResult = $bashScript | docker exec -i solaredge-scanwriter bash -c "cat | sed 's/\r$//' | bash"
-                        
+
                         # Cleanup
                         docker exec solaredge-scanwriter rm -f /tmp/import-dashboard.sh 2>$null
-                        
+
                         if ($importResult -match "SUCCESS") {
                             Write-ColorOutput "Dashboard imported successfully" "Green"
                         } else {
                             Write-ColorOutput "Dashboard import failed. Result: $importResult" "Red"
                         }
-                        
+
                     } catch {
                         Write-ColorOutput "Warning: Could not import dashboard - $($_.Exception.Message)" "Yellow"
                     }
@@ -324,7 +324,7 @@ fi
                 Write-ColorOutput "DEBUG: No InfluxDB UID found, skipping dashboard import" "Yellow"
             }
     }
-    
+
     # Generate web endpoints only if not exists (preserve user customizations)
     if (-not (Test-Path "config/sources/web_endpoints.yaml")) {
         Write-ColorOutput "Generating web endpoints (first time)..." "Blue"
@@ -337,7 +337,7 @@ fi
     } else {
         Write-ColorOutput "Web endpoints already exist (preserved)" "Green"
     }
-    
+
     Write-Host ""
     Write-ColorOutput "Update completed!" "Green"
     Write-Host ""
@@ -351,7 +351,7 @@ fi
     Write-Host "   config/sources/*.yaml - Your custom endpoints" -ForegroundColor Yellow
     Write-Host "   Docker volumes - All your data (InfluxDB, Grafana, logs)" -ForegroundColor Yellow
     Write-Host ""
-    
+
 } catch {
     Write-ColorOutput "Failed to start services: $($_.Exception.Message)" "Red"
     exit 1

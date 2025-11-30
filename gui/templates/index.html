@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="it">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -8,10 +9,11 @@
     <link rel="stylesheet" href="/static/style.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/js-yaml@4.1.0/dist/js-yaml.min.js"></script>
-    
+
     <!-- Carica dom-utils PRIMA per avere $ e $$ disponibili -->
     <script src="/static/dom-utils.js"></script>
 </head>
+
 <body>
     <div class="dashboard">
         <!-- HEADER -->
@@ -23,7 +25,8 @@
                 </div>
                 <div class="header-stats">
                     <div class="header-updates">
-                        <button class="btn btn-success btn-sm" onclick="updateChecker.runUpdate()" id="runUpdateBtn" title="Esegui aggiornamento">
+                        <button class="btn btn-success btn-sm" onclick="updateChecker.runUpdate()" id="runUpdateBtn"
+                            title="Esegui aggiornamento">
                             ⬆️ Esegui Aggiornamento
                         </button>
                     </div>
@@ -82,7 +85,7 @@
                     <h2>🌐 API Endpoints</h2>
                     <p>Configura gli endpoint dell'API REST di SolarEdge</p>
                 </div>
-                
+
                 <!-- API Categories -->
                 <div class="api-categories" id="apiCategories">
                     <button class="category-btn active" data-category="all">
@@ -106,7 +109,7 @@
                         Flusso
                     </button>
                 </div>
-                
+
                 <div class="endpoints-grid" id="endpointsGrid">
                     <!-- Endpoints will be loaded here -->
                 </div>
@@ -118,7 +121,7 @@
                     <h2>⚡ Modbus Realtime</h2>
                     <p>Configura i dispositivi Modbus TCP per dati realtime</p>
                 </div>
-                
+
                 <!-- Modbus Categories -->
                 <div class="modbus-categories" id="modbusCategories">
                     <button class="category-btn active" data-category="all">
@@ -138,7 +141,7 @@
                         Batterie
                     </button>
                 </div>
-                
+
                 <div class="modbus-grid" id="modbusGrid">
                     <!-- Modbus devices will be loaded here -->
                 </div>
@@ -150,7 +153,7 @@
                     <h2>💰 GME Prezzi Energia</h2>
                     <p>Abilita raccolta prezzi PUN dal mercato elettrico italiano</p>
                 </div>
-                
+
                 <div class="gme-card">
                     <div class="gme-header">
                         <div class="gme-info">
@@ -162,7 +165,7 @@
                             <span class="toggle-slider"></span>
                         </label>
                     </div>
-                    
+
                     <div class="gme-details">
                         <div class="gme-feature">
                             <span class="feature-icon">💵</span>
@@ -186,12 +189,13 @@
                             </div>
                         </div>
                     </div>
-                    
+
                     <div class="gme-config">
                         <p><strong>Configurazione:</strong> Imposta credenziali GME in <code>.env</code></p>
                         <pre>GME_USERNAME=your_username
 GME_PASSWORD=your_password</pre>
-                        <p class="gme-note">ℹ️ Richiedi credenziali su <a href="https://www.mercatoelettrico.org" target="_blank">mercatoelettrico.org</a></p>
+                        <p class="gme-note">ℹ️ Richiedi credenziali su <a href="https://www.mercatoelettrico.org"
+                                target="_blank">mercatoelettrico.org</a></p>
                     </div>
                 </div>
             </section>
@@ -202,7 +206,7 @@ GME_PASSWORD=your_password</pre>
                     <h2>🔄 Loop Monitor</h2>
                     <p>Monitoraggio in tempo reale del loop 24/7</p>
                 </div>
-                
+
                 <!-- Loop Status -->
                 <div class="loop-status-container" id="loopStatusContainer">
                     <div class="status-card">
@@ -247,7 +251,7 @@ GME_PASSWORD=your_password</pre>
                         </div>
                     </div>
                 </div>
-                
+
                 <!-- Log Monitor con Tab -->
                 <div class="logs-container">
                     <div class="logs-header">
@@ -268,13 +272,15 @@ GME_PASSWORD=your_password</pre>
                             <button class="log-tab" data-flow="gme" onclick="switchLogTab('gme')">
                                 <span class="tab-icon">💰</span> GME
                             </button>
-                            <button class="log-tab" data-flow="general" onclick="switchLogTab('general')">
+                            <button class="log-tab" data-flow="sistema" onclick="switchLogTab('sistema')">
                                 <span class="tab-icon">ℹ️</span> Sistema
                             </button>
                         </div>
                         <div class="logs-controls">
-                            <button class="btn btn-success btn-sm" onclick="startLoop()" id="startBtn">▶️ Start Loop</button>
-                            <button class="btn btn-danger btn-sm" onclick="stopLoop()" id="stopBtn">⏹️ Stop Loop</button>
+                            <button class="btn btn-success btn-sm" onclick="startLoop()" id="startBtn">▶️ Start
+                                Loop</button>
+                            <button class="btn btn-danger btn-sm" onclick="stopLoop()" id="stopBtn">⏹️ Stop
+                                Loop</button>
                             <button class="btn btn-secondary btn-sm" onclick="clearLogs()">🗑️ Pulisci</button>
                             <button class="btn btn-secondary btn-sm" onclick="toggleAutoScroll()" id="autoScrollBtn">
                                 📌 Auto-scroll: ON
@@ -336,4 +342,5 @@ GME_PASSWORD=your_password</pre>
     <script src="/static/updates-checker.js"></script>
     <script src="/static/dashboard.js"></script>
 </body>
+
 </html>

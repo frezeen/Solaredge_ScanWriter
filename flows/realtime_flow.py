@@ -11,32 +11,32 @@ def run_realtime_flow(log: Logger, cache: CacheManager, config: Dict[str, Any]) 
     """Pipeline realtime: collector → parser → filtro → writer (coerente con altri flussi)"""
     log.info("[FLOW:REALTIME:START]")
     log.info(color.bold("🚀 Avvio flusso realtime"))
-    
+
     try:
         # Step 1: Collector - raccolta dati raw (dizionario)
         collector = RealtimeCollector()
         raw_data = collector.collect_raw_data()
-        
+
         if not raw_data:
             log.error("Collector non ha restituito dati raw")
             return 1
-        
+
         log.info("✅ Collector: dati raw raccolti")
-        
+
         # Step 2: Parser - elabora dati raw → struttura dati
         parser = RealtimeParser()
         structured_points = parser.parse_raw_data(raw_data)
-        
+
         if not structured_points:
             log.warning("Parser non ha generato punti strutturati")
             return 1
-        
+
         log.info(f"✅ Parser: generati {len(structured_points)} punti strutturati")
-        
+
         # Step 3: Filtro - validazione punti strutturati (coerente con altri flussi)
         filtered_points = filter_structured_points(structured_points)
         log.info(f"✅ Filtro: validati {len(filtered_points)}/{len(structured_points)} punti")
-        
+
         # Step 4: Writer - storage diretto (coerente con altri flussi)
         if filtered_points:
             with InfluxWriter() as writer:
@@ -45,10 +45,10 @@ def run_realtime_flow(log: Logger, cache: CacheManager, config: Dict[str, Any]) 
             log.warning("Nessun punto valido da scrivere")
             log.info("[FLOW:REALTIME:STOP]")
             return 1
-        
+
         log.info("[FLOW:REALTIME:STOP]")
         return 0
-        
+
     except KeyboardInterrupt:
         log.info("🛑 Interruzione utente durante raccolta realtime")
         raise
