@@ -89,6 +89,8 @@ class InfluxDBConfig:
     jitter_interval_ms: int = 2000
     retry_interval_ms: int = 5000
     max_retries: int = 5
+    enable_gzip: bool = True
+    write_precision: str = 's'
 
 
 class ConfigManager:
@@ -240,7 +242,9 @@ class ConfigManager:
             flush_interval_ms=int(os.environ.get('INFLUX_FLUSH_INTERVAL_MS', '10000')),
             jitter_interval_ms=int(os.environ.get('INFLUX_JITTER_INTERVAL_MS', '2000')),
             retry_interval_ms=int(os.environ.get('INFLUX_RETRY_INTERVAL_MS', '5000')),
-            max_retries=int(os.environ.get('INFLUX_MAX_RETRIES', '5'))
+            max_retries=int(os.environ.get('INFLUX_MAX_RETRIES', '5')),
+            enable_gzip=os.environ.get('INFLUX_ENABLE_GZIP', 'true').lower() == 'true',
+            write_precision=os.environ.get('INFLUX_WRITE_PRECISION', 's')
         )
     
     def get_realtime_config(self) -> RealtimeConfig:
