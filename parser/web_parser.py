@@ -135,25 +135,29 @@ def _convert_raw_point_to_influx_point(raw_point: Dict[str, Any]) -> Point | Non
         _log.debug(f"Errore conversione punto: {e}")
         return None
 
-def _get_category_from_config(measurement_type: str, device_id: str, config: Dict[str, Any]) -> str:
-    """Estrae category dal YAML config basata su measurement_type e device_id."""
+def _get_endpoint_info(measurement_type: str, device_id: str, config: Dict[str, Any]) -> tuple[str, str]:
+    """Estrae category e date_range dal YAML config."""
     web_endpoints = config.get('sources', {}).get('web_scraping', {}).get('endpoints', {})
-    _log.debug(f"🔍 Cercando categoria per device_id: '{device_id}', measurement: '{measurement_type}'")
+    _log.debug(f"🔍 Cercando info per device_id: '{device_id}', measurement: '{measurement_type}'")
+    
     for endpoint_name, endpoint_config in web_endpoints.items():
         if isinstance(endpoint_config, dict):
             endpoint_device_id = str(endpoint_config.get('device_id', ''))
             if endpoint_device_id == device_id:
                 category = endpoint_config.get('category', 'Info')
-                _log.debug(f"✅ Trovata categoria per {device_id}: {category}")
-                return category
+                date_range = endpoint_config.get('date_range', 'daily')
+                _log.debug(f"✅ Trovato endpoint per {device_id}: cat={category}, range={date_range}")
+                return category, date_range
+                
     # Diagnostica avanzata per mancata corrispondenza
     available_ids = [str(cfg.get('device_id', '')) for cfg in web_endpoints.values() if isinstance(cfg, dict)]
-    _log.warning(f"❌ CATEGORY MISSING: device_id='{device_id}' non trovato in {len(web_endpoints)} endpoints.")
+    _log.warning(f"❌ INFO MISSING: device_id='{device_id}' non trovato in {len(web_endpoints)} endpoints.")
     if available_ids:
         _log.warning(f"   Primi 3 ID disponibili: {available_ids[:3]}")
         if device_id in available_ids:
             _log.warning("   ⚠️ L'ID è presente nella lista ma il match è fallito! Verifica spazi o caratteri invisibili.")
-    return 'Info'
+            
+    return 'Info', 'daily'
 
 def parse_web(measurements_raw: Dict[str, Any], config: Dict[str, Any] = None) -> List[Union[Point, Dict[str, Any]]]:
     """Trasforma misure raw web in InfluxDB Points filtrati.
@@ -170,13 +174,32 @@ def parse_web(measurements_raw: Dict[str, Any], config: Dict[str, Any] = None) -
         if device_info is None:
             continue
         device_id, device_type, measurement_type, unit_type, measurements = device_info
+        
+        # Recupera info configurazione una volta per device
+        category, date_range = _get_endpoint_info(measurement_type, device_id, config)
+        
         for m in measurements:
             if not isinstance(m, dict):
                 continue
-            ts_ms = _convert_timestamp(m.get("time"))
+            
+            time_raw = m.get("time")
+            ts_ms = _convert_timestamp(time_raw)
+            
             if ts_ms is None or ts_ms <= 0:
                 continue
-            category = _get_category_from_config(measurement_type, device_id, config)
+                
+            # FIX DUPLICAZIONE DATI GIORNALIERI
+            # Se il range è 'monthly' (dati giornalieri), forziamo il timestamp a Mezzanotte UTC.
+            if date_range == 'monthly' and isinstance(time_raw, str):
+                try:
+                    # Estrae solo la data YYYY-MM-DD
+                    date_part = time_raw[:10]
+                    # Crea datetime a mezzanotte UTC
+                    dt_utc = datetime.strptime(date_part, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+                    ts_ms = int(dt_utc.timestamp() * 1000)
+                except Exception:
+                    pass
+
             raw_point = _create_raw_point(
                 device_id,
                 device_type,

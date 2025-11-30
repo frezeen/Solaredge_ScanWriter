@@ -170,6 +170,74 @@ This ensures high-resolution devices (Optimizers) have a short but detailed hist
 
 ---
 
+## InfluxDB Data Model (Web)
+
+The web‑scraping flow writes points to the **main InfluxDB bucket** (configured in `config/influx.yaml`). The schema is defined in `parser/web_parser.py` and the metric names are defined in `config/sources/web_endpoints.yaml`.
+
+### Schema Structure
+
+- **Measurement**: `web`
+- **Tags**:
+  - `endpoint`: The metric name as defined in `web_endpoints.yaml`. Common values for `SITE` are:
+    - `PRODUCTION_ENERGY` (Produzione)
+    - `IMPORT_ENERGY` (Prelievo)
+    - `EXPORT_ENERGY` (Immissione)
+  - `device_id`: The unique identifier of the device.
+  - `unit`: The unit of measurement (e.g. `Wh`).
+  - **Note**: `device_type` is **NOT** stored as a tag. You must identify the device type by the **Field Key** (Category).
+- **Fields**:
+  - **Key**: The `category` derived from configuration (e.g. `Site`, `Inverter`, `Optimizer`, `Meter`).
+  - **Value**: The numeric value (float).
+- **Timestamp (`_time`)**: The date of the measurement.
+
+### Example Point (JSON representation)
+```json
+{
+  "measurement": "web",
+  "tags": {
+    "endpoint": "PRODUCTION_ENERGY",
+    "device_id": "2489781",
+    "unit": "Wh"
+  },
+  "fields": {
+    "Site": 124567.0
+  },
+  "time": "2025-01-15T00:00:00Z"
+}
+```
+
+### Querying the data
+To retrieve monthly totals for the site, filter by `_field == "Site"` and pivot on the `endpoint` tag. Note that you may need to calculate Consumption and SelfConsumption if they are not provided directly.
+
+**Example Query (Production Only):**
+```flux
+from(bucket: "Solaredge")
+  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)
+  |> filter(fn: (r) => r["_measurement"] == "web")
+  |> filter(fn: (r) => r["_field"] == "Site")
+  |> filter(fn: (r) => r["endpoint"] == "PRODUCTION_ENERGY")
+  |> aggregateWindow(every: 1mo, fn: sum, createEmpty: true)
+  |> fill(value: 0.0)
+  |> yield(name: "Produzione")
+```
+
+**Example Query (All Metrics + Calculations):**
+```flux
+from(bucket: "Solaredge")
+  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)
+  |> filter(fn: (r) => r["_measurement"] == "web" and r["_field"] == "Site")
+  |> filter(fn: (r) => r["endpoint"] == "PRODUCTION_ENERGY" or r["endpoint"] == "IMPORT_ENERGY" or r["endpoint"] == "EXPORT_ENERGY")
+  |> aggregateWindow(every: 1mo, fn: sum, createEmpty: true)
+  |> pivot(rowKey: ["_time"], columnKey: ["endpoint"], valueColumn: "_value")
+  |> map(fn: (r) => ({ r with 
+      Produzione: r.PRODUCTION_ENERGY,
+      Prelievo: r.IMPORT_ENERGY,
+      Immissione: r.EXPORT_ENERGY,
+      Consumo: r.PRODUCTION_ENERGY + r.IMPORT_ENERGY - r.EXPORT_ENERGY,
+      Autoconsumo: r.PRODUCTION_ENERGY - r.EXPORT_ENERGY
+  }))
+```
+
 ## API Endpoint Details
 
 ### Tree Endpoint
