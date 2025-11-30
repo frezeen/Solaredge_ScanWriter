@@ -237,49 +237,53 @@ if date_range == 'monthly' and isinstance(time_raw, str):
 This query uses a `timeShift(12h)` strategy to safely handle monthly aggregations. By shifting timestamps to noon before aggregation, we avoid boundary issues where midnight data might fall into the previous month.
 
 ```flux
-import "timezone"
 import "date"
+import "join"
+import "timezone"
 
 option location = timezone.location(name: "Europe/Rome")
 
-startOfYear = date.truncate(t: now(), unit: 1y)
-endOfYear = date.add(d: 1y, to: startOfYear)
-
-from(bucket: "Solaredge")
-  |> range(start: startOfYear, stop: endOfYear)
-  |> filter(fn: (r) => r["_measurement"] == "web" and r["_field"] == "Site")
+// 1. Immissione mensile (energia venduta alla rete)
+immissione = from(bucket: "Solaredge")
+  |> range(start: 0)
   |> filter(fn: (r) => 
-      r["endpoint"] == "PRODUCTION_ENERGY" or 
-      r["endpoint"] == "IMPORT_ENERGY" or 
-      r["endpoint"] == "EXPORT_ENERGY"
+      r._measurement == "web" and 
+      r._field == "Site" and 
+      r.endpoint == "EXPORT_ENERGY"
   )
-  
-  // CRITICAL: Shift time forward by 12 hours (to noon) before aggregation.
-  // This ensures that data at 00:00:00 lands safely in the correct month,
-  // avoiding boundary issues with timezone shifts.
-  // Note: We apply this directly to the raw data without prior daily aggregation
-  // because the parser already ensures one point per day at midnight UTC.
-  |> timeShift(duration: 12h)
-  
-  // Standard monthly aggregation
-  |> aggregateWindow(every: 1mo, fn: sum, createEmpty: true)
-  
-  // Shift time back (optional, for correct visual timestamp)
-  |> timeShift(duration: -12h)
-  
-  |> fill(value: 0.0)
-  |> pivot(rowKey: ["_time"], columnKey: ["endpoint"], valueColumn: "_value")
-  
-  |> map(fn: (r) => ({ r with 
-      Produzione: r.PRODUCTION_ENERGY,
-      Prelievo: r.IMPORT_ENERGY,
-      Immissione: r.EXPORT_ENERGY,
-      Consumo: r.PRODUCTION_ENERGY + r.IMPORT_ENERGY - r.EXPORT_ENERGY,
-      Autoconsumo: r.PRODUCTION_ENERGY - r.EXPORT_ENERGY
+  |> aggregateWindow(every: 1mo, fn: sum, location: location, timeSrc: "_start")
+  |> map(fn: (r) => ({
+      _time: r._time,
+      year: string(v: date.year(t: r._time)),
+      month: string(v: date.month(t: r._time)),
+      immissione_wh: r._value
   }))
-  
-  |> drop(columns: ["PRODUCTION_ENERGY", "IMPORT_ENERGY", "EXPORT_ENERGY", "_start", "_stop", "_measurement", "device_id", "unit", "_field"])
-  |> filter(fn: (r) => r._time < endOfYear)
+  |> group()
+
+// 2. PUN mensile
+pun = from(bucket: "GME")
+  |> range(start: 0)
+  |> filter(fn: (r) => r._measurement == "gme_monthly_avg" and r._field == "pun_kwh_avg")
+  |> map(fn: (r) => ({
+      _time: r._time,
+      year: r.year,
+      month: string(v: date.month(t: r._time)),
+      pun: r._value
+  }))
+  |> group()
+
+// 3. Join, calcola rimborso e somma totale
+join.inner(
+  left: immissione,
+  right: pun,
+  on: (l, r) => l.year == r.year and l.month == r.month,
+  as: (l, r) => ({
+    _time: l._time,
+    _value: (l.immissione_wh / 1000.0) * r.pun
+  })
+)
+  |> sum()
+  |> map(fn: (r) => ({"Rimborsi Immissione": r._value}))
 ```
 
 #### Query for Previous Year

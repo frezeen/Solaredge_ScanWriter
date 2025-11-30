@@ -3633,6 +3633,7 @@
         "x": 0,
         "y": 44
       },
+      "hideTimeOverride": true,
       "id": 72,
       "options": {
         "barRadius": 0,
@@ -3669,10 +3670,11 @@
             "uid": "ff27vpmruzxtsc"
           },
           "hide": false,
-          "query": "import \"timezone\"\r\nimport \"date\"\r\n\r\noption location = timezone.location(name: \"Europe/Rome\")\r\n\r\nstartOfYear = date.truncate(t: now(), unit: 1y)\r\nendOfYear = date.add(d: 1y, to: startOfYear)\r\n\r\nfrom(bucket: \"Solaredge\")\r\n  |> range(start: startOfYear, stop: endOfYear)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"web\" and r[\"_field\"] == \"Site\")\r\n  |> filter(fn: (r) => \r\n      r[\"endpoint\"] == \"PRODUCTION_ENERGY\" or \r\n      r[\"endpoint\"] == \"IMPORT_ENERGY\" or \r\n      r[\"endpoint\"] == \"EXPORT_ENERGY\"\r\n  )\r\n  \r\n  // TRUCCO: Spostiamo il tempo avanti di 12 ore PRIMA di aggregare.\r\n  // Siccome i tuoi dati sono a mezzanotte (00:00), questo li porta a mezzogiorno (12:00).\r\n  // Così siamo sicuri che il 1° Marzo resti il 1° Marzo anche con piccoli shift di fuso orario.\r\n  |> timeShift(duration: 12h)\r\n  \r\n  |> aggregateWindow(every: 1mo, fn: sum, createEmpty: true)\r\n  \r\n  // Riportiamo il tempo indietro per visualizzarlo correttamente (opzionale, ma pulito)\r\n  |> timeShift(duration: -12h)\r\n  \r\n  |> fill(value: 0.0)\r\n  |> pivot(rowKey: [\"_time\"], columnKey: [\"endpoint\"], valueColumn: \"_value\")\r\n  \r\n  |> map(fn: (r) => ({ r with \r\n      Produzione: r.PRODUCTION_ENERGY,\r\n      Prelievo: r.IMPORT_ENERGY,\r\n      Immissione: r.EXPORT_ENERGY,\r\n      Consumo: r.PRODUCTION_ENERGY + r.IMPORT_ENERGY - r.EXPORT_ENERGY,\r\n      Autoconsumo: r.PRODUCTION_ENERGY - r.EXPORT_ENERGY\r\n  }))\r\n  \r\n  |> drop(columns: [\"PRODUCTION_ENERGY\", \"IMPORT_ENERGY\", \"EXPORT_ENERGY\", \"_start\", \"_stop\", \"_measurement\", \"device_id\", \"unit\", \"_field\"])\r\n  |> filter(fn: (r) => r._time < endOfYear)",
+          "query": "import \"timezone\"\r\nimport \"date\"\r\n\r\noption location = timezone.location(name: \"Europe/Rome\")\r\n\r\n// Usa il time range selezionato in Grafana\r\n// Puoi usare \"Last 1 year\" oppure selezionare un range custom\r\nstartOfPeriod = date.truncate(t: v.timeRangeStart, unit: 1y)\r\nendOfPeriod = date.add(d: 1y, to: startOfPeriod)\r\n\r\nfrom(bucket: \"Solaredge\")\r\n  |> range(start: startOfPeriod, stop: endOfPeriod)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"web\" and r[\"_field\"] == \"Site\")\r\n  |> filter(fn: (r) => \r\n      r[\"endpoint\"] == \"PRODUCTION_ENERGY\" or \r\n      r[\"endpoint\"] == \"IMPORT_ENERGY\" or \r\n      r[\"endpoint\"] == \"EXPORT_ENERGY\"\r\n  )\r\n  \r\n  // Aggreghiamo per mese usando il fuso orario configurato\r\n  |> aggregateWindow(\r\n      every: 1mo, \r\n      fn: sum, \r\n      createEmpty: true,\r\n      timeSrc: \"_start\",\r\n      location: location\r\n  )\r\n  \r\n  // Riempiamo eventuali valori mancanti con zero\r\n  |> fill(value: 0.0)\r\n  \r\n  // Trasformiamo da formato lungo a formato largo\r\n  |> pivot(rowKey: [\"_time\"], columnKey: [\"endpoint\"], valueColumn: \"_value\")\r\n  \r\n  // Gestiamo eventuali valori null dopo il pivot\r\n  |> map(fn: (r) => ({ r with \r\n      prod: if exists r.PRODUCTION_ENERGY then r.PRODUCTION_ENERGY else 0.0,\r\n      imp: if exists r.IMPORT_ENERGY then r.IMPORT_ENERGY else 0.0,\r\n      exp: if exists r.EXPORT_ENERGY then r.EXPORT_ENERGY else 0.0\r\n  }))\r\n  \r\n  // Calcoliamo le metriche derivate\r\n  |> map(fn: (r) => ({ \r\n      _time: r._time,\r\n      Produzione: r.prod,\r\n      Prelievo: r.imp,\r\n      Immissione: r.exp,\r\n      Consumo: r.prod + r.imp - r.exp,\r\n      Autoconsumo: r.prod - r.exp\r\n  }))\r\n  \r\n  // Filtriamo solo i dati entro il periodo selezionato\r\n  |> filter(fn: (r) => r._time < endOfPeriod)",
           "refId": "Statistiche Anno Corrente"
         }
       ],
+      "timeShift": "0y/y",
       "title": "Produzione - Consumo - Autoconsumo - Prelievo - Immissione (Anno Corrente)",
       "transformations": [
         {
@@ -4242,6 +4244,7 @@
               "mode": "off"
             }
           },
+          "decimals": 2,
           "mappings": [],
           "thresholds": {
             "mode": "absolute",
@@ -4381,7 +4384,7 @@
             "uid": "ff27vpmruzxtsc"
           },
           "hide": false,
-          "query": "import \"timezone\"\r\nimport \"date\"\r\n\r\noption location = timezone.location(name: \"Europe/Rome\")\r\n\r\n// Calcola l'inizio e la fine dell'anno SCORSO\r\nstartOfLastYear = date.add(d: -1y, to: date.truncate(t: now(), unit: 1y))\r\nendOfLastYear = date.truncate(t: now(), unit: 1y)\r\n\r\nfrom(bucket: \"Solaredge\")\r\n  |> range(start: startOfLastYear, stop: endOfLastYear)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"web\" and r[\"_field\"] == \"Site\")\r\n  |> filter(fn: (r) => \r\n      r[\"endpoint\"] == \"PRODUCTION_ENERGY\" or \r\n      r[\"endpoint\"] == \"IMPORT_ENERGY\" or \r\n      r[\"endpoint\"] == \"EXPORT_ENERGY\"\r\n  )\r\n  \r\n  // STRATEGIA ROBUSTA: Sposta a mezzogiorno -> Aggrega -> Riporta indietro\r\n  // Senza deduplicazione giornaliera intermedia che causava problemi\r\n  |> timeShift(duration: 12h)\r\n  \r\n  |> aggregateWindow(every: 1mo, fn: sum, createEmpty: true)\r\n  \r\n  |> timeShift(duration: -12h)\r\n  \r\n  |> fill(value: 0.0)\r\n  |> pivot(rowKey: [\"_time\"], columnKey: [\"endpoint\"], valueColumn: \"_value\")\r\n  \r\n  |> map(fn: (r) => ({ r with \r\n      Produzione: r.PRODUCTION_ENERGY,\r\n      Prelievo: r.IMPORT_ENERGY,\r\n      Immissione: r.EXPORT_ENERGY,\r\n      Consumo: r.PRODUCTION_ENERGY + r.IMPORT_ENERGY - r.EXPORT_ENERGY,\r\n      Autoconsumo: r.PRODUCTION_ENERGY - r.EXPORT_ENERGY\r\n  }))\r\n  \r\n  |> drop(columns: [\"PRODUCTION_ENERGY\", \"IMPORT_ENERGY\", \"EXPORT_ENERGY\", \"_start\", \"_stop\", \"_measurement\", \"device_id\", \"unit\", \"_field\"])\r\n  |> filter(fn: (r) => r._time < endOfLastYear)",
+          "query": "import \"timezone\"\r\nimport \"date\"\r\n\r\noption location = timezone.location(name: \"Europe/Rome\")\r\n\r\n// Usa il time range selezionato in Grafana\r\n// Puoi usare \"Last 1 year\" oppure selezionare un range custom\r\nstartOfPeriod = date.truncate(t: v.timeRangeStart, unit: 1y)\r\nendOfPeriod = date.add(d: 1y, to: startOfPeriod)\r\n\r\nfrom(bucket: \"Solaredge\")\r\n  |> range(start: startOfPeriod, stop: endOfPeriod)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"web\" and r[\"_field\"] == \"Site\")\r\n  |> filter(fn: (r) => \r\n      r[\"endpoint\"] == \"PRODUCTION_ENERGY\" or \r\n      r[\"endpoint\"] == \"IMPORT_ENERGY\" or \r\n      r[\"endpoint\"] == \"EXPORT_ENERGY\"\r\n  )\r\n  \r\n  // Aggreghiamo per mese usando il fuso orario configurato\r\n  |> aggregateWindow(\r\n      every: 1mo, \r\n      fn: sum, \r\n      createEmpty: true,\r\n      timeSrc: \"_start\",\r\n      location: location\r\n  )\r\n  \r\n  // Riempiamo eventuali valori mancanti con zero\r\n  |> fill(value: 0.0)\r\n  \r\n  // Trasformiamo da formato lungo a formato largo\r\n  |> pivot(rowKey: [\"_time\"], columnKey: [\"endpoint\"], valueColumn: \"_value\")\r\n  \r\n  // Gestiamo eventuali valori null dopo il pivot\r\n  |> map(fn: (r) => ({ r with \r\n      prod: if exists r.PRODUCTION_ENERGY then r.PRODUCTION_ENERGY else 0.0,\r\n      imp: if exists r.IMPORT_ENERGY then r.IMPORT_ENERGY else 0.0,\r\n      exp: if exists r.EXPORT_ENERGY then r.EXPORT_ENERGY else 0.0\r\n  }))\r\n  \r\n  // Calcoliamo le metriche derivate\r\n  |> map(fn: (r) => ({ \r\n      _time: r._time,\r\n      Produzione: r.prod,\r\n      Prelievo: r.imp,\r\n      Immissione: r.exp,\r\n      Consumo: r.prod + r.imp - r.exp,\r\n      Autoconsumo: r.prod - r.exp\r\n  }))\r\n  \r\n  // Filtriamo solo i dati entro il periodo selezionato\r\n  |> filter(fn: (r) => r._time < endOfPeriod)",
           "refId": "Anno Precedente"
         }
       ],
@@ -5014,7 +5017,7 @@
             "type": "influxdb",
             "uid": "ff27vpmruzxtsc"
           },
-          "query": "import \"timezone\"\r\nimport \"date\"\r\n\r\noption location = timezone.location(name: \"Europe/Rome\")\r\n\r\n// CAMBIA QUI LA METRICA DA CONFRONTARE:\r\n// PRODUCTION_ENERGY, IMPORT_ENERGY, EXPORT_ENERGY, ecc.\r\ntarget_metric = \"PRODUCTION_ENERGY\"\r\n\r\nfrom(bucket: \"Solaredge\")\r\n  // Prendi tutto lo storico\r\n  |> range(start: 0, stop: now())\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"web\" and r[\"_field\"] == \"Site\")\r\n  |> filter(fn: (r) => r[\"endpoint\"] == target_metric)\r\n  \r\n  // 1. Deduplicazione (Standard Web)\r\n  |> aggregateWindow(every: 1d, fn: last, createEmpty: false)\r\n  \r\n  // 2. TimeShift di sicurezza (Standard Web)\r\n  |> timeShift(duration: 12h)\r\n  \r\n  // 3. Estrai Anno e Mese\r\n  |> map(fn: (r) => ({ \r\n      r with \r\n      year: string(v: date.year(t: r._time)),\r\n      month: date.month(t: r._time)\r\n  }))\r\n  \r\n  // 4. Raggruppa e Somma\r\n  |> group(columns: [\"year\", \"month\"])\r\n  |> sum(column: \"_value\")\r\n  \r\n  // 5. Mappa i nomi dei mesi\r\n  |> map(fn: (r) => ({\r\n      r with\r\n      month_name: if r.month == 1 then \"Gennaio\"\r\n        else if r.month == 2 then \"Febbraio\"\r\n        else if r.month == 3 then \"Marzo\"\r\n        else if r.month == 4 then \"Aprile\"\r\n        else if r.month == 5 then \"Maggio\"\r\n        else if r.month == 6 then \"Giugno\"\r\n        else if r.month == 7 then \"Luglio\"\r\n        else if r.month == 8 then \"Agosto\"\r\n        else if r.month == 9 then \"Settembre\"\r\n        else if r.month == 10 then \"Ottobre\"\r\n        else if r.month == 11 then \"Novembre\"\r\n        else \"Dicembre\"\r\n  }))\r\n  \r\n  // 6. Pivot per avere gli anni come colonne\r\n  |> group()\r\n  |> pivot(rowKey: [\"month\", \"month_name\"], columnKey: [\"year\"], valueColumn: \"_value\")\r\n  |> sort(columns: [\"month\"])\r\n  |> drop(columns: [\"month\"])",
+          "query": "import \"timezone\"\r\nimport \"date\"\r\n\r\noption location = timezone.location(name: \"Europe/Rome\")\r\n\r\n// CAMBIA QUI LA METRICA DA CONFRONTARE:\r\n// PRODUCTION_ENERGY, IMPORT_ENERGY, EXPORT_ENERGY, ecc.\r\ntarget_metric = \"PRODUCTION_ENERGY\"\r\n\r\nfrom(bucket: \"Solaredge\")\r\n  // Prendi tutto lo storico\r\n  |> range(start: 0, stop: now())\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"web\" and r[\"_field\"] == \"Site\")\r\n  |> filter(fn: (r) => r[\"endpoint\"] == target_metric)\r\n  \r\n  // Aggregazione mensile con fuso orario corretto\r\n  |> aggregateWindow(\r\n      every: 1mo, \r\n      fn: sum, \r\n      createEmpty: false,\r\n      timeSrc: \"_start\",\r\n      location: location\r\n  )\r\n  \r\n  // Estrai Anno e Mese dal timestamp aggregato\r\n  |> map(fn: (r) => ({ \r\n      r with \r\n      year: string(v: date.year(t: r._time)),\r\n      month: date.month(t: r._time)\r\n  }))\r\n  \r\n  // Mappa i nomi dei mesi\r\n  |> map(fn: (r) => ({\r\n      r with\r\n      month_name: if r.month == 1 then \"Gennaio\"\r\n        else if r.month == 2 then \"Febbraio\"\r\n        else if r.month == 3 then \"Marzo\"\r\n        else if r.month == 4 then \"Aprile\"\r\n        else if r.month == 5 then \"Maggio\"\r\n        else if r.month == 6 then \"Giugno\"\r\n        else if r.month == 7 then \"Luglio\"\r\n        else if r.month == 8 then \"Agosto\"\r\n        else if r.month == 9 then \"Settembre\"\r\n        else if r.month == 10 then \"Ottobre\"\r\n        else if r.month == 11 then \"Novembre\"\r\n        else \"Dicembre\"\r\n  }))\r\n  \r\n  // Pivot per avere gli anni come colonne\r\n  |> group()\r\n  |> pivot(rowKey: [\"month\", \"month_name\"], columnKey: [\"year\"], valueColumn: \"_value\")\r\n  |> sort(columns: [\"month\"])\r\n  |> drop(columns: [\"month\"])",
           "rawQuery": true,
           "refId": "A"
         }
@@ -5425,7 +5428,7 @@
               }
             ]
           },
-          "unit": "kwatth"
+          "unit": "watth"
         },
         "overrides": [
           {
@@ -5514,6 +5517,40 @@
                 "value": "kwatth"
               }
             ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "% Autoconsumo"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": ""
+              },
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "dark-green",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "% Prelievo"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "dark-red",
+                  "mode": "fixed"
+                }
+              }
+            ]
           }
         ]
       },
@@ -5554,7 +5591,7 @@
             "uid": "ff27vpmruzxtsc"
           },
           "hide": false,
-          "query": "import \"timezone\"\r\n\r\noption location = timezone.location(name: \"Europe/Rome\")\r\n\r\n// Fattore emissioni: 0.4 kg CO2 per kWh prodotto\r\nemission_factor_kg_per_kwh = 0.4\r\n\r\n// OTTIMIZZAZIONE: Una sola query invece di 4, poi pivot\r\ndata = from(bucket: \"Solaredge\")\r\n  |> range(start: 2021-09-01T00:00:00Z)  // Data installazione impianto invece di 0\r\n  |> filter(fn: (r) => \r\n      r._measurement == \"api\" and \r\n      r._field == \"Meter\" and \r\n      r.endpoint == \"site_energy_details\" and\r\n      (r.metric == \"Production\" or r.metric == \"FeedIn\" or r.metric == \"Purchased\" or r.metric == \"Consumption\")\r\n  )\r\n  |> filter(fn: (r) => exists r._value)\r\n  |> group(columns: [\"metric\"])\r\n  |> sum(column: \"_value\")\r\n  |> map(fn: (r) => ({r with _value: r._value / 1000.0}))  // Converti a kWh\r\n  |> group()\r\n  |> pivot(rowKey: [], columnKey: [\"metric\"], valueColumn: \"_value\")\r\n\r\n// Calcola derivati\r\ndata\r\n  |> map(fn: (r) => ({\r\n      Produzione: r.Production,\r\n      Immissione: r.FeedIn,\r\n      Prelievo: r.Purchased,\r\n      Consumo: r.Consumption,\r\n      Autoconsumo: r.Consumption - r.Purchased,\r\n      \"Emissioni CO2 Evitate\": r.Production * emission_factor_kg_per_kwh\r\n  }))\r\n",
+          "query": "emission_factor_kg_per_kwh = 0.4\r\n\r\nfrom(bucket: \"Solaredge\")\r\n  |> range(start: 2021-09-01T00:00:00Z)\r\n  |> filter(fn: (r) => \r\n      r._measurement == \"web\" and \r\n      r._field == \"Site\" and\r\n      (r.endpoint == \"PRODUCTION_ENERGY\" or \r\n       r.endpoint == \"EXPORT_ENERGY\" or \r\n       r.endpoint == \"IMPORT_ENERGY\")\r\n  )\r\n  |> aggregateWindow(every: 1d, fn: last, createEmpty: false)\r\n  |> group(columns: [\"endpoint\"])\r\n  |> sum()\r\n  |> map(fn: (r) => ({r with dummy: \"total\"}))\r\n  |> pivot(rowKey: [\"dummy\"], columnKey: [\"endpoint\"], valueColumn: \"_value\")\r\n  |> map(fn: (r) => {\r\n      prod = r.PRODUCTION_ENERGY\r\n      imp = r.IMPORT_ENERGY\r\n      exp = r.EXPORT_ENERGY\r\n      \r\n      return {\r\n          Produzione: prod,\r\n          Immissione: exp,\r\n          Prelievo: imp,\r\n          Consumo: (prod + imp - exp) / 1000.0,\r\n          Autoconsumo: prod - exp,\r\n          \"Emissioni CO2 Evitate\": (prod / 1000.0) * emission_factor_kg_per_kwh,\r\n          \"% Autoconsumo\": ((prod - exp) / (prod + imp - exp)) * 100.0,\r\n          \"% Prelievo\": (imp / (prod + imp - exp)) * 100.0\r\n      }\r\n  })",
           "refId": "Statistiche"
         }
       ],
@@ -5567,6 +5604,8 @@
             "excludeByName": {},
             "includeByName": {},
             "indexByName": {
+              "% Autoconsumo": 6,
+              "% Prelievo": 7,
               "Autoconsumo": 2,
               "Consumo": 1,
               "Emissioni CO2 Evitate": 5,
@@ -5612,7 +5651,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "Costo Prelievo Con Fotovoltaico"
+              "options": "Spesa Prelievo Con Fotovoltaico"
             },
             "properties": [
               {
@@ -5648,7 +5687,7 @@
               {
                 "id": "color",
                 "value": {
-                  "fixedColor": "green",
+                  "fixedColor": "dark-green",
                   "mode": "fixed"
                 }
               }
@@ -5689,7 +5728,7 @@
             "uid": "ff27vpmruzxtsc"
           },
           "hide": false,
-          "query": "import \"timezone\"\r\nimport \"date\"\r\nimport \"join\"\r\n\r\noption location = timezone.location(name: \"Europe/Rome\")\r\n\r\n// 1. Consumo mensile\r\nconsumo = from(bucket: \"Solaredge\")\r\n  |> range(start: 0)\r\n  |> filter(fn: (r) => r._measurement == \"api\" and r._field == \"Meter\" and r.endpoint == \"site_energy_details\" and r.metric == \"Consumption\")\r\n  |> aggregateWindow(every: 1mo, fn: sum, createEmpty: false)\r\n  |> group()\r\n  |> map(fn: (r) => ({_time: r._time, year: string(v: date.year(t: r._time)), month: string(v: date.month(t: r._time)), consumo_wh: r._value}))\r\n\r\n// 2. PUN mensile\r\npun = from(bucket: \"GME\")\r\n  |> range(start: 0)\r\n  |> filter(fn: (r) => r._measurement == \"gme_monthly_avg\" and r._field == \"pun_kwh_avg\")\r\n  |> group()\r\n  |> map(fn: (r) => ({_time: r._time, year: r.year, month: string(v: date.month(t: r._time)), pun: r._value}))\r\n\r\n// 3. Join, calcola costo e somma totale\r\njoin.inner(\r\n  left: consumo,\r\n  right: pun,\r\n  on: (l, r) => l.year == r.year and l.month == r.month,\r\n  as: (l, r) => ({\r\n    _time: l._time,\r\n    \"Costo Senza Fotovoltaico\": (l.consumo_wh / 1000.0) * r.pun\r\n  })\r\n)\r\n  |> sum(column: \"Costo Senza Fotovoltaico\")\r\n",
+          "query": "import \"date\"\r\nimport \"join\"\r\nimport \"timezone\"\r\n\r\noption location = timezone.location(name: \"Europe/Rome\")\r\n\r\n// 1. Consumo mensile da Site\r\nconsumo = from(bucket: \"Solaredge\")\r\n  |> range(start: 0)\r\n  |> filter(fn: (r) => \r\n      r._measurement == \"web\" and \r\n      r._field == \"Site\" and\r\n      (r.endpoint == \"PRODUCTION_ENERGY\" or \r\n       r.endpoint == \"IMPORT_ENERGY\" or \r\n       r.endpoint == \"EXPORT_ENERGY\")\r\n  )\r\n  |> aggregateWindow(every: 1mo, fn: sum, location: location, timeSrc: \"_start\")\r\n  |> pivot(rowKey: [\"_time\"], columnKey: [\"endpoint\"], valueColumn: \"_value\")\r\n  |> map(fn: (r) => ({\r\n      _time: r._time,\r\n      year: string(v: date.year(t: r._time)),\r\n      month: string(v: date.month(t: r._time)),\r\n      consumo_wh: r.PRODUCTION_ENERGY + r.IMPORT_ENERGY - r.EXPORT_ENERGY\r\n  }))\r\n  |> group()\r\n\r\n// 2. PUN mensile\r\npun = from(bucket: \"GME\")\r\n  |> range(start: 0)\r\n  |> filter(fn: (r) => r._measurement == \"gme_monthly_avg\" and r._field == \"pun_kwh_avg\")\r\n  |> map(fn: (r) => ({\r\n      _time: r._time,\r\n      year: r.year,\r\n      month: string(v: date.month(t: r._time)),\r\n      pun: r._value\r\n  }))\r\n  |> group()\r\n\r\n// 3. Join e calcolo costo totale\r\njoin.inner(\r\n  left: consumo,\r\n  right: pun,\r\n  on: (l, r) => l.year == r.year and l.month == r.month,\r\n  as: (l, r) => ({\r\n    _time: l._time,\r\n    _value: (l.consumo_wh / 1000.0) * r.pun\r\n  })\r\n)\r\n  |> sum()\r\n  |> map(fn: (r) => ({\"Spesa Senza Fotovoltaico\": r._value}))",
           "refId": "Costo Senza Fotovoltaico"
         },
         {
@@ -5698,7 +5737,7 @@
             "uid": "ff27vpmruzxtsc"
           },
           "hide": false,
-          "query": "import \"timezone\"\r\nimport \"date\"\r\nimport \"join\"\r\n\r\noption location = timezone.location(name: \"Europe/Rome\")\r\n\r\n// 1. Prelievo mensile (energia acquistata dalla rete)\r\nprelievo = from(bucket: \"Solaredge\")\r\n  |> range(start: 0)\r\n  |> filter(fn: (r) => r._measurement == \"api\" and r._field == \"Meter\" and r.endpoint == \"site_energy_details\" and r.metric == \"Purchased\")\r\n  |> aggregateWindow(every: 1mo, fn: sum, createEmpty: false)\r\n  |> group()\r\n  |> map(fn: (r) => ({_time: r._time, year: string(v: date.year(t: r._time)), month: string(v: date.month(t: r._time)), prelievo_wh: r._value}))\r\n\r\n// 2. PUN mensile\r\npun = from(bucket: \"GME\")\r\n  |> range(start: 0)\r\n  |> filter(fn: (r) => r._measurement == \"gme_monthly_avg\" and r._field == \"pun_kwh_avg\")\r\n  |> group()\r\n  |> map(fn: (r) => ({_time: r._time, year: r.year, month: string(v: date.month(t: r._time)), pun: r._value}))\r\n\r\n// 3. Join, calcola costo e somma totale\r\njoin.inner(\r\n  left: prelievo,\r\n  right: pun,\r\n  on: (l, r) => l.year == r.year and l.month == r.month,\r\n  as: (l, r) => ({\r\n    _time: l._time,\r\n    \"Costo Prelievo Con Fotovoltaico\": (l.prelievo_wh / 1000.0) * r.pun\r\n  })\r\n)\r\n  |> sum(column: \"Costo Prelievo Con Fotovoltaico\")\r\n",
+          "query": "import \"date\"\r\nimport \"join\"\r\nimport \"timezone\"\r\n\r\noption location = timezone.location(name: \"Europe/Rome\")\r\n\r\n// 1. Prelievo mensile da Site\r\nprelievo = from(bucket: \"Solaredge\")\r\n  |> range(start: 0)\r\n  |> filter(fn: (r) => \r\n      r._measurement == \"web\" and \r\n      r._field == \"Site\" and\r\n      r.endpoint == \"IMPORT_ENERGY\"\r\n  )\r\n  |> aggregateWindow(every: 1mo, fn: sum, location: location, timeSrc: \"_start\")\r\n  |> map(fn: (r) => ({\r\n      _time: r._time,\r\n      year: string(v: date.year(t: r._time)),\r\n      month: string(v: date.month(t: r._time)),\r\n      prelievo_wh: r._value\r\n  }))\r\n  |> group()\r\n\r\n// 2. PUN mensile\r\npun = from(bucket: \"GME\")\r\n  |> range(start: 0)\r\n  |> filter(fn: (r) => r._measurement == \"gme_monthly_avg\" and r._field == \"pun_kwh_avg\")\r\n  |> map(fn: (r) => ({\r\n      _time: r._time,\r\n      year: r.year,\r\n      month: string(v: date.month(t: r._time)),\r\n      pun: r._value\r\n  }))\r\n  |> group()\r\n\r\n// 3. Join e calcolo costo totale\r\njoin.inner(\r\n  left: prelievo,\r\n  right: pun,\r\n  on: (l, r) => l.year == r.year and l.month == r.month,\r\n  as: (l, r) => ({\r\n    _time: l._time,\r\n    _value: (l.prelievo_wh / 1000.0) * r.pun\r\n  })\r\n)\r\n  |> sum()\r\n  |> map(fn: (r) => ({\"Spesa Prelievo Con Fotovoltaico\": r._value}))",
           "refId": "Costo Con Fotovoltaico"
         },
         {
@@ -5707,7 +5746,7 @@
             "uid": "ff27vpmruzxtsc"
           },
           "hide": false,
-          "query": "import \"timezone\"\r\nimport \"date\"\r\nimport \"join\"\r\n\r\noption location = timezone.location(name: \"Europe/Rome\")\r\n\r\n// 1. Immissione mensile (energia venduta alla rete)\r\nimmissione = from(bucket: \"Solaredge\")\r\n  |> range(start: 0)\r\n  |> filter(fn: (r) => r._measurement == \"api\" and r._field == \"Meter\" and r.endpoint == \"site_energy_details\" and r.metric == \"FeedIn\")\r\n  |> aggregateWindow(every: 1mo, fn: sum, createEmpty: false)\r\n  |> group()\r\n  |> map(fn: (r) => ({_time: r._time, year: string(v: date.year(t: r._time)), month: string(v: date.month(t: r._time)), immissione_wh: r._value}))\r\n\r\n// 2. PUN mensile\r\npun = from(bucket: \"GME\")\r\n  |> range(start: 0)\r\n  |> filter(fn: (r) => r._measurement == \"gme_monthly_avg\" and r._field == \"pun_kwh_avg\")\r\n  |> group()\r\n  |> map(fn: (r) => ({_time: r._time, year: r.year, month: string(v: date.month(t: r._time)), pun: r._value}))\r\n\r\n// 3. Join, calcola rimborso e somma totale\r\njoin.inner(\r\n  left: immissione,\r\n  right: pun,\r\n  on: (l, r) => l.year == r.year and l.month == r.month,\r\n  as: (l, r) => ({\r\n    _time: l._time,\r\n    \"Rimborsi Immissione\": (l.immissione_wh / 1000.0) * r.pun\r\n  })\r\n)\r\n  |> sum(column: \"Rimborsi Immissione\")\r\n",
+          "query": "import \"date\"\r\nimport \"join\"\r\nimport \"timezone\"\r\n\r\noption location = timezone.location(name: \"Europe/Rome\")\r\n\r\n// 1. Immissione mensile (energia venduta alla rete)\r\n//    Sorgente: Web Scraping (Site) -> EXPORT_ENERGY\r\nimmissione = from(bucket: \"Solaredge\")\r\n  |> range(start: 0)\r\n  |> filter(fn: (r) => \r\n      r._measurement == \"web\" and \r\n      r._field == \"Site\" and \r\n      r.endpoint == \"EXPORT_ENERGY\"\r\n  )\r\n  |> aggregateWindow(every: 1mo, fn: sum, location: location, timeSrc: \"_start\")\r\n  |> map(fn: (r) => ({\r\n      _time: r._time,\r\n      year: string(v: date.year(t: r._time)),\r\n      month: string(v: date.month(t: r._time)),\r\n      immissione_wh: r._value\r\n  }))\r\n  |> group()\r\n\r\n// 2. PUN mensile\r\npun = from(bucket: \"GME\")\r\n  |> range(start: 0)\r\n  |> filter(fn: (r) => r._measurement == \"gme_monthly_avg\" and r._field == \"pun_kwh_avg\")\r\n  |> map(fn: (r) => ({\r\n      _time: r._time,\r\n      year: r.year,\r\n      month: string(v: date.month(t: r._time)),\r\n      pun: r._value\r\n  }))\r\n  |> group()\r\n\r\n// 3. Join, calcola rimborso e somma totale\r\njoin.inner(\r\n  left: immissione,\r\n  right: pun,\r\n  on: (l, r) => l.year == r.year and l.month == r.month,\r\n  as: (l, r) => ({\r\n    _time: l._time,\r\n    _value: (l.immissione_wh / 1000.0) * r.pun\r\n  })\r\n)\r\n  |> sum()\r\n  |> map(fn: (r) => ({\"Rimborsi Immissione\": r._value}))",
           "refId": "Rimborsi Immissione"
         },
         {
@@ -5742,6 +5781,6 @@
   "timezone": "",
   "title": "Solaredge 3.0",
   "uid": "afb91a6f-d8f7-43ae-8a98-67eab1bb4baa",
-  "version": 485,
+  "version": 509,
   "weekStart": "monday"
 }

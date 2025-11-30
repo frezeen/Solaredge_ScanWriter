@@ -25,13 +25,18 @@ class StateManager:
         self.log_buffer = deque(maxlen=max_log_buffer)
 
         # Flow runs tracking - logs raggruppati per flow type
-        self.flow_runs: Dict[str, List[dict]] = {
-            'api': [],
-            'web': [],
-            'realtime': [],
-            'gme': [],
-            'sistema': []  # System initialization and critical errors
+        # Ogni flow ha una deque di liste (runs), max 3 run
+        self.flow_runs: Dict[str, deque] = {
+            'api': deque(maxlen=3),
+            'web': deque(maxlen=3),
+            'realtime': deque(maxlen=3),
+            'gme': deque(maxlen=3),
+            'sistema': deque(maxlen=1)  # Sistema ha solo una "run" continua
         }
+        
+        # Inizializza la prima run per ogni flow
+        for flow in self.flow_runs:
+            self.flow_runs[flow].append([])
 
         # Update tracking
         self.updates_available = False
@@ -70,10 +75,21 @@ class StateManager:
         self.loop_stats['status'] = 'stopped'
         self.logger.info("Loop mode fermato")
 
+    def start_new_run(self, flow_type: str):
+        """
+        Inizia una nuova run per un flow specifico (ruota i log)
+        
+        Args:
+            flow_type: Tipo flow ('api', 'web', 'realtime', 'gme')
+        """
+        if flow_type in self.flow_runs and flow_type != 'sistema':
+            # Aggiunge nuova lista vuota, la deque gestisce automaticamente l'eviction della più vecchia
+            self.flow_runs[flow_type].append([])
+
     def add_log_entry(self, level: str, message: str, flow_type: str = 'general', timestamp: Optional[datetime] = None):
         """
-        Aggiunge entry al buffer log
-
+        Aggiunge entry al buffer log con retention policy (24h)
+        
         Args:
             level: Livello log (info, error, warning, success)
             message: Messaggio log
@@ -85,54 +101,75 @@ class StateManager:
 
         log_entry = {
             "timestamp": timestamp.strftime('%H:%M:%S'),
+            "timestamp_obj": timestamp,  # Per check retention
             "level": level,
             "message": message,
             "flow_type": flow_type
         }
 
         self.log_buffer.append(log_entry)
+        
+        # Retention policy 24h per log_buffer (pulizia lazy)
+        # Controlla solo il primo elemento (il più vecchio)
+        if self.log_buffer:
+            oldest = self.log_buffer[0]
+            if oldest.get('timestamp_obj'):
+                age = (timestamp - oldest['timestamp_obj']).total_seconds()
+                if age > 86400:  # 24 ore
+                    self.log_buffer.popleft()
+
         self._add_log_to_flow_runs(log_entry)
 
         # Aggiorna timestamp ultimo update
         self.loop_stats['last_update'] = timestamp
 
     def _add_log_to_flow_runs(self, log_entry: dict):
-        """Aggiunge log alla struttura per flow type"""
+        """Aggiunge log alla run corrente del flow"""
         flow_type = log_entry.get('flow_type', 'general')
 
         # Solo i flow specifici vengono tracciati
         if flow_type in self.flow_runs:
-            self.flow_runs[flow_type].append(log_entry)
+            # Aggiunge alla run corrente (l'ultima della deque)
+            self.flow_runs[flow_type][-1].append(log_entry)
 
     def get_filtered_logs(self, flow_filter: str = 'all', limit: int = 2000) -> List[dict]:
         """
         Ottiene log filtrati per flow type
-
+        
         Args:
             flow_filter: Filtro flow ('all', 'api', 'web', 'realtime', 'gme', 'sistema')
             limit: Numero massimo log da restituire (usato solo per 'all')
-
+            
         Returns:
             Lista di log entries
-
-        Note:
-            - Tab "Tutti" (all): Mostra tutto il log buffer completo (ultimi N)
-            - Tab API, Web, Realtime, GME: Mostrano tutti i log di quel flow
-            - Tab Sistema: Mostra log di inizializzazione sistema e errori critici
         """
         if flow_filter == 'all':
             # Tab "Tutti": mostra tutto il log buffer (ultimi N)
-            all_logs = list(self.log_buffer)
-            if len(all_logs) > limit:
-                return all_logs[-limit:]
-            return all_logs
+            # Rimuovi timestamp_obj prima di inviare al frontend
+            result = []
+            for log in list(self.log_buffer)[-limit:]:
+                log_copy = log.copy()
+                if 'timestamp_obj' in log_copy:
+                    del log_copy['timestamp_obj']
+                result.append(log_copy)
+            return result
+            
         elif flow_filter == 'general':
             # Backward compatibility: redirect to sistema
             flow_filter = 'sistema'
 
-        # Tab specifici (api, web, realtime, gme, sistema): tutti i log di quel flow
+        # Tab specifici: appiattisci le run correnti
         if flow_filter in self.flow_runs:
-            return self.flow_runs[flow_filter]
+            result = []
+            # Itera su tutte le run salvate (max 3)
+            for run in self.flow_runs[flow_filter]:
+                for log in run:
+                    log_copy = log.copy()
+                    if 'timestamp_obj' in log_copy:
+                        del log_copy['timestamp_obj']
+                    result.append(log_copy)
+            return result
+            
         return []
 
     def clear_logs(self):
@@ -140,6 +177,7 @@ class StateManager:
         self.log_buffer.clear()
         for flow_type in self.flow_runs:
             self.flow_runs[flow_type].clear()
+            self.flow_runs[flow_type].append([])  # Ripristina run corrente vuota
         self.logger.info("Log puliti")
 
     def update_stats(self, flow_type: str, success: bool):

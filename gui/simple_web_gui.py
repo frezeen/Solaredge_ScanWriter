@@ -1257,6 +1257,7 @@ time /t >> {log_file}
 
                     # Esegui Web flow solo se abilitato (in thread separato per non bloccare GUI)
                     if web_enabled:
+                        self.state_manager.start_new_run('web')  # Ruota log
                         self.state_manager.loop_stats['web_stats']['executed'] += 1
                         try:
                             await asyncio.get_event_loop().run_in_executor(
@@ -1270,6 +1271,7 @@ time /t >> {log_file}
 
                     # Esegui API flow solo se abilitato (in thread separato per non bloccare GUI)
                     if api_enabled:
+                        self.state_manager.start_new_run('api')  # Ruota log
                         self.state_manager.loop_stats['api_stats']['executed'] += 1
                         try:
                             await asyncio.get_event_loop().run_in_executor(
@@ -1298,6 +1300,7 @@ time /t >> {log_file}
 
                 # Esegui Realtime solo se Modbus è abilitato
                 if modbus_enabled and time_until_realtime <= 0:
+                    self.state_manager.start_new_run('realtime')  # Ruota log
                     self.state_manager.loop_stats['realtime_stats']['executed'] += 1
                     try:
                         # Esegui in thread separato per evitare blocco su timeout Modbus
@@ -1328,6 +1331,7 @@ time /t >> {log_file}
                 if gme_enabled and time_until_gme <= 0:
                     from main import run_gme_flow
                     self.logger.info(f"[GUI] 🔋 Esecuzione raccolta GME... (last_run: {last_gme_run}, interval: {gme_interval}, time_until: {time_until_gme:.1f}s)")
+                    self.state_manager.start_new_run('gme')  # Ruota log
                     self.state_manager.loop_stats['gme_stats']['executed'] += 1
                     try:
                         await asyncio.get_event_loop().run_in_executor(
