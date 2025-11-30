@@ -109,13 +109,13 @@ class StateManager:
 
         self.log_buffer.append(log_entry)
         
-        # Retention policy 24h per log_buffer (pulizia lazy)
+        # Retention policy 12h per log_buffer (pulizia lazy)
         # Controlla solo il primo elemento (il più vecchio)
         if self.log_buffer:
             oldest = self.log_buffer[0]
             if oldest.get('timestamp_obj'):
                 age = (timestamp - oldest['timestamp_obj']).total_seconds()
-                if age > 86400:  # 24 ore
+                if age > 43200:  # 12 ore
                     self.log_buffer.popleft()
 
         self._add_log_to_flow_runs(log_entry)
