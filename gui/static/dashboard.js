@@ -13,7 +13,7 @@ class SolarDashboard {
         };
         this._optimizersCache = null; // Cache for optimizers list (array)
         this._optimizersSet = null; // Cache for optimizers set (O(1) lookups)
-        
+
         // API response cache with TTL
         this._apiCache = new Map();
         this._cacheTTL = {
@@ -23,12 +23,12 @@ class SolarDashboard {
             'modbus': 30000,           // 30 seconds for modbus list
             'config': 60000            // 60 seconds for config
         };
-        
+
         // Cleanup tracking per memory leak prevention
         this.intervals = [];
         this.eventListeners = [];
         this.abortController = new AbortController();
-        
+
         this.init();
     }
 
@@ -39,25 +39,25 @@ class SolarDashboard {
         this.updateConnectionStatus();
         this.startLoopMonitoring();
     }
-    
+
     // Cleanup method per prevenire memory leak
     destroy() {
         // Clear all intervals
         this.intervals.forEach(id => clearInterval(id));
         this.intervals = [];
-        
+
         // Abort all pending fetches
         this.abortController.abort();
-        
+
         // Remove event listeners
         this.eventListeners.forEach(({ element, event, handler }) => {
             element.removeEventListener(event, handler);
         });
         this.eventListeners = [];
-        
+
         // Clear API cache
         this.clearCache();
-        
+
         console.log('Dashboard destroyed, resources cleaned up');
     }
 
@@ -70,11 +70,11 @@ class SolarDashboard {
     async handleError(error, context, userMessage = null) {
         // Log the error
         await this.log('error', `Error ${context}`, error);
-        
+
         // Show user notification
         const message = userMessage || `Errore ${context}`;
         this.notify(message, 'error');
-        
+
         // Return false to indicate failure
         return false;
     }
@@ -87,12 +87,12 @@ class SolarDashboard {
                 signal: this.abortController.signal,
                 ...options
             });
-            
+
             if (!response.ok) {
                 const data = await response.json().catch(() => ({ error: 'Unknown error' }));
                 throw new Error(data.error || `HTTP ${response.status}`);
             }
-            
+
             return await response.json();
         } catch (error) {
             if (error.name === 'AbortError') {
@@ -106,21 +106,21 @@ class SolarDashboard {
     async getCached(cacheKey, fetchFn, ttl = null) {
         const cached = this._apiCache.get(cacheKey);
         const now = Date.now();
-        
+
         // Return cached data if fresh
         if (cached && (now - cached.timestamp) < (ttl || this._cacheTTL[cacheKey] || 30000)) {
             return cached.data;
         }
-        
+
         // Fetch fresh data
         const data = await fetchFn();
-        
+
         // Store in cache with timestamp
         this._apiCache.set(cacheKey, {
             data,
             timestamp: now
         });
-        
+
         return data;
     }
 
@@ -137,14 +137,14 @@ class SolarDashboard {
     // Memoize a pure function (cache computed values)
     memoize(fn, keyFn = (...args) => JSON.stringify(args)) {
         const cache = new Map();
-        
+
         return function(...args) {
             const key = keyFn(...args);
-            
+
             if (cache.has(key)) {
                 return cache.get(key);
             }
-            
+
             const result = fn.apply(this, args);
             cache.set(key, result);
             return result;
@@ -160,7 +160,7 @@ class SolarDashboard {
             if (btn.dataset.section) this.switchView('section', btn.dataset.section);
             if (btn.dataset.category) this.switchView('category', btn.dataset.category);
         };
-        
+
         document.addEventListener('click', clickHandler, { signal: this.abortController.signal });
         this.eventListeners.push({ element: document, event: 'click', handler: clickHandler });
 
@@ -242,7 +242,7 @@ class SolarDashboard {
             ]);
 
             Object.assign(this.state, { devices, endpoints, modbus, config });
-            
+
             // Load GME toggle state
             this.loadGMEState();
             this._invalidateOptimizerCache();
@@ -390,7 +390,7 @@ class SolarDashboard {
 
     createToggle(checked, toggleType, dataAttrs = {}, extraClass = '', ariaLabel = 'Toggle') {
         const dataAttrStr = this.generateDataAttrs(dataAttrs);
-        
+
         return `
             <label class="toggle-switch ${extraClass}" role="switch" aria-checked="${checked}" aria-label="${ariaLabel}" data-toggle-type="${toggleType}" ${dataAttrStr}>
                 <input type="checkbox" ${checked ? 'checked' : ''} aria-hidden="true">
@@ -410,7 +410,7 @@ class SolarDashboard {
 
         // Use DocumentFragment for batch DOM insertions (optimized)
         const fragment = document.createDocumentFragment();
-        
+
         filtered.forEach(([id, data], i) => {
             const card = this.createEndpointCard(id, data);
             animateElement(card, 'slide-in', i * 80);
@@ -459,7 +459,7 @@ class SolarDashboard {
 
         // Use DocumentFragment for batch DOM insertions (optimized)
         const fragment = document.createDocumentFragment();
-        
+
         filtered.forEach(([id, data], i) => {
             const card = this.createModbusCard(id, data);
             animateElement(card, 'slide-in', i * 80);
@@ -572,7 +572,7 @@ class SolarDashboard {
                 const data = await this.apiCall('POST', `/api/devices/toggle?id=${id}`);
                 Object.assign(this.state.devices[id], data);
                 this.updateDeviceUI(id, data);
-            } catch (e) { 
+            } catch (e) {
                 if (e.name !== 'AbortError') {
                     console.warn(`Failed to toggle optimizer ${id}:`, e);
                 }
@@ -741,7 +741,7 @@ class SolarDashboard {
             'site': 'SITE',
             'weather': 'WEATHER'
         };
-        
+
         // Find first matching pattern
         const matchedType = Object.entries(typePatterns).find(([pattern]) => id.includes(pattern));
         return matchedType ? matchedType[1] : 'DEVICE';
@@ -816,7 +816,7 @@ class SolarDashboard {
         const fail = stat.failed || 0;
         return this.createStatHTML('▶️', exec, '✅', succ, '❌', fail);
     }, (stat) => JSON.stringify(stat));
-    
+
     createStatHTML(icon1, val1, icon2, val2, icon3, val3) {
         return `<span style="display:flex;justify-content:space-between;width:100%"><span>${icon1}</span><span>${val1}</span></span>` +
                `<span style="display:flex;justify-content:space-between;width:100%"><span>${icon2}</span><span>${val2}</span></span>` +
@@ -838,7 +838,7 @@ class SolarDashboard {
                 if (metricToggle) metricToggle.checked = metricData.enabled;
             });
         }
-        
+
         // Invalidate cache if this is an optimizer
         if (this.isOptimizer(id)) {
             this._invalidateOptimizerCache();
@@ -980,14 +980,14 @@ class SolarDashboard {
 
         if (loop_mode && stats) {
             // Calcola totale runs
-            const totalRuns = (stats.api_stats?.executed || 0) + 
-                            (stats.web_stats?.executed || 0) + 
-                            (stats.realtime_stats?.executed || 0) + 
+            const totalRuns = (stats.api_stats?.executed || 0) +
+                            (stats.web_stats?.executed || 0) +
+                            (stats.realtime_stats?.executed || 0) +
                             (stats.gme_stats?.executed || 0);
-            
+
             // Scheduling info (intervalli configurati su righe separate)
             const scheduling = 'API/Web: 15m\nRealtime: 5s\nGME: 24h';
-            
+
             const elements = {
                 'loopUptime': stats.uptime_formatted || '--',
                 'apiRuns': this.formatStats(stats.api_stats),
@@ -1025,7 +1025,7 @@ class SolarDashboard {
                 const el = document.getElementById('gmeTiming');
                 if (el) el.textContent = `next: ${stats.gme_next_run}`;
             }
-            
+
             // Realtime next (calcola prossima esecuzione basata su 5s, con "next:")
             const realtimeTimingEl = document.getElementById('realtimeTiming');
             if (realtimeTimingEl) {
@@ -1053,17 +1053,17 @@ class SolarDashboard {
 
         try {
             const response = await this.apiCall('POST', '/api/gme/toggle');
-            
+
             if (response.status === 'success') {
                 gmeToggle.checked = response.enabled;
                 this.notify(`GME ${response.enabled ? 'abilitato' : 'disabilitato'}`, 'success');
-                
+
                 // Update config state
                 if (!this.state.config.gme) {
                     this.state.config.gme = {};
                 }
                 this.state.config.gme.enabled = response.enabled;
-                
+
                 // Invalidate config cache
                 this.invalidateCache('config');
             } else {
@@ -1137,7 +1137,7 @@ const YAMLConfig = {
     async loadFile(fileType) {
         try {
             const result = await apiGet(`/api/config/yaml?file=${fileType}`);
-            
+
             const editor = document.getElementById('yamlEditor');
             editor.value = result.content;
             this.currentFile = fileType;
@@ -1236,7 +1236,7 @@ function switchLogTab(flow) {
         const filteredLogs = getFilteredLogsFromCache(flow);
         renderFilteredLogs(filteredLogs, filteredLogs.length, null);
     }
-    
+
     // Then fetch fresh data from server (will update the display when ready)
     loadFilteredLogs();
 
@@ -1251,12 +1251,12 @@ function switchLogTab(flow) {
 // Build index for logs by flow type (O(n) build, O(1) lookups)
 function indexLogs(logs) {
     const byFlow = new Map();
-    
+
     // Initialize all flow types
     Object.keys(FILTER_NAMES).forEach(flow => {
         if (flow !== 'all') byFlow.set(flow, []);
     });
-    
+
     // Index logs by flow type
     logs.forEach(log => {
         const flowType = log.flow_type || 'general';
@@ -1265,7 +1265,7 @@ function indexLogs(logs) {
         }
         byFlow.get(flowType).push(log);
     });
-    
+
     return byFlow;
 }
 
@@ -1285,12 +1285,12 @@ function isCacheFresh() {
 async function loadFilteredLogs() {
     try {
         const data = await apiGet(`/api/loop/logs?flow=${currentLogFlow}&limit=500`);
-        
+
         // Update cache with indexed logs for faster future filtering
         logCache.logs = data.logs;
         logCache.byFlow = indexLogs(data.logs);
         logCache.lastUpdate = Date.now();
-        
+
         renderFilteredLogs(data.logs, data.total, data.run_counts);
     } catch (error) {
         console.error('Error loading filtered logs:', error);
@@ -1322,30 +1322,30 @@ function createLogEntry(log) {
     const flowType = log.flow_type || 'general';
     const entry = document.createElement('div');
     entry.className = `log-entry ${log.level.toLowerCase()}`;
-    
+
     const timestamp = document.createElement('span');
     timestamp.className = 'log-timestamp';
     timestamp.appendChild(document.createTextNode(log.timestamp));
-    
+
     const level = document.createElement('span');
     level.className = `log-level ${log.level.toLowerCase()}`;
     level.appendChild(document.createTextNode(log.level));
-    
+
     const flow = document.createElement('span');
     flow.className = 'log-flow';
     flow.dataset.flow = flowType;
     const flowIcon = dashboard ? dashboard.getFlowIcon(flowType) : (FLOW_ICONS[flowType] || 'ℹ️');
     flow.appendChild(document.createTextNode(`${flowIcon} ${flowType.toUpperCase()}`));
-    
+
     const message = document.createElement('span');
     message.className = 'log-message';
     message.appendChild(document.createTextNode(log.message));
-    
+
     entry.appendChild(timestamp);
     entry.appendChild(level);
     entry.appendChild(flow);
     entry.appendChild(message);
-    
+
     return entry;
 }
 
@@ -1370,13 +1370,13 @@ function renderFilteredLogs(logs, total, runCounts) {
 
     // Use DocumentFragment for batch rendering (optimized)
     const fragment = document.createDocumentFragment();
-    
+
     if (logs.length === 0) {
         fragment.appendChild(createEmptyLogEntry());
     } else {
         logs.forEach(log => fragment.appendChild(createLogEntry(log)));
     }
-    
+
     // Replace all children at once with the fragment
     container.replaceChildren(fragment);
     updateLogCount(total, runCounts);
@@ -1391,7 +1391,7 @@ async function clearLogs() {
 
     try {
         await apiPost('/api/loop/logs/clear');
-        
+
         const container = $('#logsContent');
         if (container) {
             setInnerHTML(container, '<div class="log-entry info"><span class="log-message">Log puliti - in attesa di nuovi log...</span></div>');

@@ -20,7 +20,7 @@ class YawlManager:
     def _get_category_for_device(self, device_type: str) -> str:
         """Determina la categoria appropriata basata sul device type"""
         device_type_upper = device_type.upper()
-        
+
         # Mapping diretto device type -> categoria
         if device_type_upper == 'INVERTER':
             return 'Inverter'
@@ -41,17 +41,17 @@ class YawlManager:
     def _create_device_endpoint(self, item, item_id, device_type, device_id, device_name):
         """Helper: crea configurazione endpoint per un dispositivo"""
         endpoint_key = f"{device_type.lower()}_{device_id}"
-        
+
         # Determina la categoria basata sul device type
         device_category = self._get_category_for_device(device_type)
-        
+
         # Converti device_id in stringa se necessario (per compatibilità YAML)
         device_id_str = str(device_id)
-        
+
         # Determina se il device deve essere abilitato di default
         # OPTIMIZER, WEATHER e SITE sono abilitati, tutto il resto disabled
         default_enabled = device_type in ['OPTIMIZER', 'WEATHER', 'SITE']
-        
+
         # Struttura endpoint con ordine preciso dei campi come nel file attuale
         endpoint = {}
         endpoint['device_id'] = device_id_str
@@ -59,14 +59,14 @@ class YawlManager:
         endpoint['device_type'] = device_type
         endpoint['enabled'] = default_enabled  # Solo OPTIMIZER e WEATHER abilitati di default
         endpoint['category'] = device_category  # Aggiungi categoria al device
-        
+
         # Aggiungi date_range basato sul device type
         # OPTIMIZER e WEATHER supportano max 7 giorni, altri dispositivi supportano range mensili
         if device_type in ['OPTIMIZER', 'WEATHER']:
             endpoint['date_range'] = '7days'
         else:
             endpoint['date_range'] = 'monthly'
-        
+
         # Gestione connessioni per OPTIMIZER e STRING (prima dei measurements)
         if device_type in ['OPTIMIZER', 'STRING']:
             connected_to = item_id.get('connectedToInverter', '')
@@ -93,7 +93,7 @@ class YawlManager:
                 else:
                     # Altri device: measurements abilitati solo se il device è abilitato
                     measurement_enabled = default_enabled
-                
+
                 endpoint['measurements'][param] = {'enabled': measurement_enabled}
 
         return endpoint_key, endpoint
@@ -187,21 +187,21 @@ class YawlManager:
     def _load_existing_config(self):
         """Carica configurazione esistente per preservare impostazioni enabled"""
         web_endpoints_path = self.root_dir / "config" / "sources" / "web_endpoints.yaml"
-        
+
         if not web_endpoints_path.exists():
             return {}
-            
+
         try:
             with open(web_endpoints_path, 'r', encoding='utf-8') as f:
                 existing_config = yaml.safe_load(f)
-                
+
             if isinstance(existing_config, dict) and 'web_scraping' in existing_config:
                 endpoints = existing_config['web_scraping'].get('endpoints', {})
                 self.logger.info(f"Caricata configurazione esistente con {len(endpoints)} endpoints")
                 return endpoints
             else:
                 return {}
-                
+
         except Exception as e:
             self.logger.warning(f"Errore caricamento configurazione esistente: {e}")
             return {}
@@ -209,19 +209,19 @@ class YawlManager:
     def _merge_with_existing_config(self, new_endpoints, existing_endpoints):
         """Merge nuovi endpoints con configurazione esistente preservando enabled states"""
         merged_endpoints = {}
-        
+
         for endpoint_key, new_endpoint in new_endpoints.items():
             if endpoint_key in existing_endpoints:
                 # Preserva impostazioni enabled esistenti
                 existing_endpoint = existing_endpoints[endpoint_key]
-                
+
                 # Copia la struttura nuova
                 merged_endpoint = new_endpoint.copy()
-                
+
                 # Preserva enabled del device se esiste
                 if 'enabled' in existing_endpoint:
                     merged_endpoint['enabled'] = existing_endpoint['enabled']
-                
+
                 # Preserva enabled dei measurements se esistono
                 if 'measurements' in existing_endpoint and 'measurements' in merged_endpoint:
                     for measurement_name, new_measurement in merged_endpoint['measurements'].items():
@@ -229,29 +229,29 @@ class YawlManager:
                             existing_measurement = existing_endpoint['measurements'][measurement_name]
                             if 'enabled' in existing_measurement:
                                 new_measurement['enabled'] = existing_measurement['enabled']
-                
+
                 merged_endpoints[endpoint_key] = merged_endpoint
                 self.logger.debug(f"Merged endpoint {endpoint_key} con configurazione esistente")
             else:
                 # Nuovo endpoint, usa configurazione di default
                 merged_endpoints[endpoint_key] = new_endpoint
                 self.logger.debug(f"Nuovo endpoint {endpoint_key}")
-        
+
         return merged_endpoints
 
     def save_web_endpoints_file(self, web_endpoints):
         """Salva solo il file web_endpoints.yaml preservando configurazioni esistenti"""
         try:
             web_endpoints_path = self.root_dir / "config" / "sources" / "web_endpoints.yaml"
-            
+
             # Carica configurazione esistente
             existing_endpoints = self._load_existing_config()
-            
+
             # Merge con configurazione esistente
             if existing_endpoints:
                 web_endpoints = self._merge_with_existing_config(web_endpoints, existing_endpoints)
                 self.logger.info("Configurazioni enabled preservate dalla versione esistente")
-            
+
             # Crea la struttura per web_endpoints.yaml
             web_config = {
                 'web_scraping': {
@@ -259,13 +259,13 @@ class YawlManager:
                     'endpoints': web_endpoints
                 }
             }
-            
+
             # Assicurati che la directory esista
             web_endpoints_path.parent.mkdir(parents=True, exist_ok=True)
-            
+
             with open(web_endpoints_path, 'w', encoding='utf-8') as f:
                 yaml.dump(web_config, f, default_flow_style=False, allow_unicode=True, indent=2)
-            
+
             self.logger.info(f"✅ File web_endpoints.yaml salvato: {web_endpoints_path}")
             return True
         except Exception as e:

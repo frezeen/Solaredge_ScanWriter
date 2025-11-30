@@ -16,20 +16,20 @@ def run_gui_mode(log: Logger, cache: CacheManager, config: Optional[Dict[str, An
     """Avvia GUI con loop automatico"""
     log.info("🌐 Avvio GUI Dashboard con loop automatico")
     from gui.simple_web_gui import SimpleWebGUI
-    
+
     gui = SimpleWebGUI(cache=cache, auto_start_loop=True)
-    
+
     async def run_gui():
         port = int(os.getenv('GUI_PORT', '8092'))
         runner = None
-        
+
         # Prova ad avviare sulla porta 8092 (usa default host='127.0.0.1')
         try:
             runner, _ = await gui.start(port=port)
             # Log rimosso (già loggato da SimpleWebGUI)
         except OSError as e:
             error_msg = str(e).lower()
-            
+
             # Porta occupata - prova a killare
             if "address already in use" in error_msg:
                 log.warning(f"⚠️ Porta {port} occupata, tento di liberarla...")
@@ -53,7 +53,7 @@ def run_gui_mode(log: Logger, cache: CacheManager, config: Optional[Dict[str, An
             else:
                 log.error(f"❌ Errore di rete durante avvio GUI su porta {port}: {e}")
                 raise
-        
+
         # Apri browser SUBITO dopo che il server è avviato
         url = f"http://127.0.0.1:{port}"
         # Log rimossi (già loggati da SimpleWebGUI)
@@ -61,15 +61,15 @@ def run_gui_mode(log: Logger, cache: CacheManager, config: Optional[Dict[str, An
         # log.info(f"📡 Accesso rete locale: http://{gui.real_ip}:{port} (se firewall permette)")
         # log.info("Loop avviato automaticamente - usa la GUI per controllarlo")
         # log.info("Premi Ctrl+C per fermare la GUI")
-        
+
         # Aspetta che il server sia pronto (usa delay configurabile)
         await asyncio.sleep(float(os.getenv('SCHEDULER_API_DELAY_SECONDS', '1')))
-        
+
         try:
             webbrowser.open(url)
         except Exception:
             pass
-        
+
         try:
             # Loop infinito con gestione interruzioni
             # Usa un intervallo configurabile per bilanciare CPU e responsività
@@ -87,7 +87,7 @@ def run_gui_mode(log: Logger, cache: CacheManager, config: Optional[Dict[str, An
                 log.info("✅ GUI chiusa correttamente")
             except Exception as e:
                 log.error(f"Errore durante chiusura GUI: {e}")
-    
+
     try:
         # Usa ProactorEventLoop su Windows, o uvloop se disponibile
         # Questo riduce il busy-wait di epoll
@@ -98,7 +98,7 @@ def run_gui_mode(log: Logger, cache: CacheManager, config: Optional[Dict[str, An
         except ImportError:
             # uvloop non disponibile, usa default
             pass
-        
+
         asyncio.run(run_gui())
     except KeyboardInterrupt:
         # Questo è normale quando si preme Ctrl+C
@@ -113,5 +113,5 @@ def run_gui_mode(log: Logger, cache: CacheManager, config: Optional[Dict[str, An
     except Exception as e:
         log.error(f"❌ Errore imprevisto nella GUI: {e}")
         return 1
-    
+
     return 0

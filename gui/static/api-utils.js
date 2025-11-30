@@ -15,12 +15,12 @@ async function apiCall(method, url, options = {}) {
             method,
             ...options
         });
-        
+
         if (!response.ok) {
             const data = await response.json().catch(() => ({ error: 'Unknown error' }));
             throw new Error(data.error || `HTTP ${response.status}`);
         }
-        
+
         return await response.json();
     } catch (error) {
         // Re-throw to let caller handle
@@ -50,11 +50,11 @@ async function apiPost(url, body = null, options = {}) {
         headers: { 'Content-Type': 'application/json' },
         ...options
     };
-    
+
     if (body !== null) {
         postOptions.body = JSON.stringify(body);
     }
-    
+
     return apiCall('POST', url, postOptions);
 }
 

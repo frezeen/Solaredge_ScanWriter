@@ -49,7 +49,7 @@ function getNotificationContainer() {
 function notify(message, type = 'info') {
     const container = getNotificationContainer();
     const el = document.createElement('div');
-    
+
     // Apply styles
     Object.assign(el.style, {
         background: NOTIFICATION_COLORS[type] || NOTIFICATION_COLORS.info,
@@ -73,7 +73,7 @@ function notify(message, type = 'info') {
         el.style.transform = 'translateX(0)';
         el.style.opacity = '1';
     }, 100);
-    
+
     // Animate out and remove
     const duration = NOTIFICATION_DURATIONS[type] || NOTIFICATION_DURATIONS.info;
     setTimeout(() => {
