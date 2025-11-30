@@ -119,6 +119,26 @@ def main() -> int:
     setup_logging(active_mode, config)
     log = get_logger("main")
     
+    # Log configurazione sistema (una volta all'avvio)
+    scheduler_config = config_manager.get_scheduler_config()
+    log.info(
+        f"⏱️  Scheduler configurato - "
+        f"API: {scheduler_config.api_delay_seconds}s, "
+        f"Web: {scheduler_config.web_delay_seconds}s, "
+        f"Realtime: {scheduler_config.realtime_delay_seconds}s, "
+        f"GME: {scheduler_config.gme_delay_seconds}s"
+    )
+    
+    influx_config = config_manager.get_influxdb_config()
+    log.info(
+        f"✅ InfluxDB configurato - "
+        f"URL: {influx_config.url}, "
+        f"Org: {influx_config.org}, "
+        f"Bucket: {influx_config.bucket}, "
+        f"Gzip: {influx_config.enable_gzip}, "
+        f"Precision: {influx_config.write_precision}"
+    )
+    
     # Inizializzazione Cache
     cache = CacheManager()
     log.info(color.success("✅ Cache centralizzata inizializzata"))
