@@ -5,7 +5,7 @@ SCOPO: Parser completo per dati web. Parse + Filter + Convert to InfluxDB Points
 from __future__ import annotations
 
 from typing import Any, Dict, List, Union
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 import json
 
 from app_logging import get_logger
@@ -189,14 +189,17 @@ def parse_web(measurements_raw: Dict[str, Any], config: Dict[str, Any] = None) -
                 continue
                 
             # FIX DUPLICAZIONE DATI GIORNALIERI
-            # Se il range è 'monthly' (dati giornalieri), forziamo il timestamp a Mezzanotte UTC.
+            # Se il range è 'monthly' (dati giornalieri), forziamo il timestamp a 23:59:59 UTC del giorno stesso.
+            # Questo evita problemi di boundary con aggregateWindow(every: 1mo) che spesso esclude la mezzanotte esatta.
             if date_range == 'monthly' and isinstance(time_raw, str):
                 try:
                     # Estrae solo la data YYYY-MM-DD
                     date_part = time_raw[:10]
                     # Crea datetime a mezzanotte UTC
                     dt_utc = datetime.strptime(date_part, "%Y-%m-%d").replace(tzinfo=timezone.utc)
-                    ts_ms = int(dt_utc.timestamp() * 1000)
+                    # Aggiunge 23 ore, 59 minuti e 59 secondi per portarlo a fine giornata
+                    dt_end_of_day = dt_utc + timedelta(hours=23, minutes=59, seconds=59)
+                    ts_ms = int(dt_end_of_day.timestamp() * 1000)
                 except Exception:
                     pass
 
