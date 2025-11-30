@@ -52,8 +52,6 @@ class SchedulerLoop:
         self._config = config
         self._log = logging.getLogger(__name__)
         self._last_call_time: Dict[SourceType, float] = {}
-        
-
     
     def execute_with_timing(self, 
                            source_type: SourceType, 
