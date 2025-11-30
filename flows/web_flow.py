@@ -34,7 +34,9 @@ def run_web_flow(
     scheduler_config = SchedulerConfig.from_config(config)
     scheduler = SchedulerLoop(scheduler_config)
     
-    scheduler.set_log(log) # Assicura che lo scheduler usi il logger corretto
+    
+    # scheduler.set_log(log) # RIMOSSO: Metodo non esistente
+    
     
     collector = CollectorWeb(scheduler=scheduler)
     collector.set_cache(cache)
