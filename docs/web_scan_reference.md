@@ -232,14 +232,13 @@ if date_range == 'monthly' and isinstance(time_raw, str):
 
 **Important**: Due to how Flux's `aggregateWindow(every: 1mo)` handles month boundaries, the recommended approach for monthly aggregations is to use manual grouping by year-month string extraction.
 
-#### Recommended Query (All 12 Months, with Empty Months)
+#### Recommended Query (Robust TimeShift Strategy)
 
-This query shows all 12 months of the year, filling missing months with zeros:
+This query uses a `timeShift(12h)` strategy to safely handle monthly aggregations. By shifting timestamps to noon before aggregation, we avoid boundary issues where midnight data might fall into the previous month.
 
 ```flux
 import "timezone"
 import "date"
-import "strings"
 
 option location = timezone.location(name: "Europe/Rome")
 
@@ -255,27 +254,20 @@ from(bucket: "Solaredge")
       r["endpoint"] == "EXPORT_ENERGY"
   )
   
-  // Deduplication: take last value per day (protection against old duplicates)
-  |> aggregateWindow(every: 1d, fn: last, createEmpty: true)
+  // CRITICAL: Shift time forward by 12 hours (to noon) before aggregation.
+  // This ensures that data at 00:00:00 lands safely in the correct month,
+  // avoiding boundary issues with timezone shifts.
+  // Note: We apply this directly to the raw data without prior daily aggregation
+  // because the parser already ensures one point per day at midnight UTC.
+  |> timeShift(duration: 12h)
+  
+  // Standard monthly aggregation
+  |> aggregateWindow(every: 1mo, fn: sum, createEmpty: true)
+  
+  // Shift time back (optional, for correct visual timestamp)
+  |> timeShift(duration: -12h)
+  
   |> fill(value: 0.0)
-  
-  // Extract year-month string for manual grouping
-  |> map(fn: (r) => ({
-      r with
-      year_month: strings.substring(v: string(v: r._time), start: 0, end: 7)
-  }))
-  
-  // Group by month and sum
-  |> group(columns: ["year_month", "endpoint"])
-  |> sum()
-  |> group()
-  
-  // Reconstruct timestamp to first day of month
-  |> map(fn: (r) => ({
-      r with
-      _time: time(v: r.year_month + "-01T00:00:00Z")
-  }))
-  
   |> pivot(rowKey: ["_time"], columnKey: ["endpoint"], valueColumn: "_value")
   
   |> map(fn: (r) => ({ r with 
@@ -286,9 +278,8 @@ from(bucket: "Solaredge")
       Autoconsumo: r.PRODUCTION_ENERGY - r.EXPORT_ENERGY
   }))
   
-  |> drop(columns: ["PRODUCTION_ENERGY", "IMPORT_ENERGY", "EXPORT_ENERGY", "year_month"])
+  |> drop(columns: ["PRODUCTION_ENERGY", "IMPORT_ENERGY", "EXPORT_ENERGY", "_start", "_stop", "_measurement", "device_id", "unit", "_field"])
   |> filter(fn: (r) => r._time < endOfYear)
-  |> sort(columns: ["_time"])
 ```
 
 #### Query for Previous Year
@@ -301,48 +292,7 @@ endOfLastYear = date.truncate(t: now(), unit: 1y)
 
 #### Query for Only Months with Data
 
-If you want to see only months that have actual data (no empty months), use `createEmpty: false`:
-
-```flux
-from(bucket: "Solaredge")
-  |> range(start: startOfYear, stop: endOfYear)
-  |> filter(fn: (r) => r["_measurement"] == "web" and r["_field"] == "Site")
-  |> filter(fn: (r) => 
-      r["endpoint"] == "PRODUCTION_ENERGY" or 
-      r["endpoint"] == "IMPORT_ENERGY" or 
-      r["endpoint"] == "EXPORT_ENERGY"
-  )
-  
-  |> aggregateWindow(every: 1d, fn: last, createEmpty: false)
-  
-  |> map(fn: (r) => ({
-      r with
-      year_month: strings.substring(v: string(v: r._time), start: 0, end: 7)
-  }))
-  
-  |> group(columns: ["year_month", "endpoint"])
-  |> sum()
-  |> group()
-  
-  |> map(fn: (r) => ({
-      r with
-      _time: time(v: r.year_month + "-01T00:00:00Z")
-  }))
-  
-  |> pivot(rowKey: ["_time"], columnKey: ["endpoint"], valueColumn: "_value")
-  
-  |> map(fn: (r) => ({ r with 
-      Produzione: r.PRODUCTION_ENERGY,
-      Prelievo: r.IMPORT_ENERGY,
-      Immissione: r.EXPORT_ENERGY,
-      Consumo: r.PRODUCTION_ENERGY + r.IMPORT_ENERGY - r.EXPORT_ENERGY,
-      Autoconsumo: r.PRODUCTION_ENERGY - r.EXPORT_ENERGY
-  }))
-  
-  |> drop(columns: ["PRODUCTION_ENERGY", "IMPORT_ENERGY", "EXPORT_ENERGY", "year_month"])
-  |> filter(fn: (r) => r._time < endOfYear)
-  |> sort(columns: ["_time"])
-```
+To hide empty future months, simply change `createEmpty: true` to `createEmpty: false` in the `aggregateWindow` function.
 
 ### Common Issues and Solutions
 
