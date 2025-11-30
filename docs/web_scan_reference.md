@@ -206,29 +206,78 @@ The web‑scraping flow writes points to the **main InfluxDB bucket** (configure
 }
 ```
 
-### Querying the data
-To retrieve monthly totals for the site, filter by `_field == "Site"` and pivot on the `endpoint` tag. Note that you may need to calculate Consumption and SelfConsumption if they are not provided directly.
+### Timestamp Normalization
 
-**Example Query (Production Only):**
-```flux
-from(bucket: "Solaredge")
-  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)
-  |> filter(fn: (r) => r["_measurement"] == "web")
-  |> filter(fn: (r) => r["_field"] == "Site")
-  |> filter(fn: (r) => r["endpoint"] == "PRODUCTION_ENERGY")
-  |> aggregateWindow(every: 1mo, fn: sum, createEmpty: true)
-  |> fill(value: 0.0)
-  |> yield(name: "Produzione")
+**Critical Implementation Detail**: The parser (`parser/web_parser.py`) normalizes all daily data timestamps to **midnight UTC** to prevent data duplication.
+
+When `date_range: 'monthly'` is configured for a device (e.g., SITE), the web API returns daily data points for the entire month. The parser extracts only the date portion (YYYY-MM-DD) and creates a timestamp at `00:00:00 UTC` for each day.
+
+**Why this matters:**
+- Without normalization, timestamps could vary slightly between runs (e.g., `2025-11-30 00:00:00+01:00` vs `2025-11-30 01:00:00+01:00` due to DST changes)
+- InfluxDB only overwrites points if **both timestamp AND all tags are identical**
+- Normalized timestamps ensure consistent overwriting instead of accumulating duplicates
+
+**Implementation** (from `parser/web_parser.py`):
+```python
+if date_range == 'monthly' and isinstance(time_raw, str):
+    try:
+        date_part = time_raw[:10]  # Extract YYYY-MM-DD
+        dt_utc = datetime.strptime(date_part, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+        ts_ms = int(dt_utc.timestamp() * 1000)
+    except Exception:
+        pass  # Fallback to original timestamp
 ```
 
-**Example Query (All Metrics + Calculations):**
+### Querying Monthly Aggregations
+
+**Important**: Due to how Flux's `aggregateWindow(every: 1mo)` handles month boundaries, the recommended approach for monthly aggregations is to use manual grouping by year-month string extraction.
+
+#### Recommended Query (All 12 Months, with Empty Months)
+
+This query shows all 12 months of the year, filling missing months with zeros:
+
 ```flux
+import "timezone"
+import "date"
+import "strings"
+
+option location = timezone.location(name: "Europe/Rome")
+
+startOfYear = date.truncate(t: now(), unit: 1y)
+endOfYear = date.add(d: 1y, to: startOfYear)
+
 from(bucket: "Solaredge")
-  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)
+  |> range(start: startOfYear, stop: endOfYear)
   |> filter(fn: (r) => r["_measurement"] == "web" and r["_field"] == "Site")
-  |> filter(fn: (r) => r["endpoint"] == "PRODUCTION_ENERGY" or r["endpoint"] == "IMPORT_ENERGY" or r["endpoint"] == "EXPORT_ENERGY")
-  |> aggregateWindow(every: 1mo, fn: sum, createEmpty: true)
+  |> filter(fn: (r) => 
+      r["endpoint"] == "PRODUCTION_ENERGY" or 
+      r["endpoint"] == "IMPORT_ENERGY" or 
+      r["endpoint"] == "EXPORT_ENERGY"
+  )
+  
+  // Deduplication: take last value per day (protection against old duplicates)
+  |> aggregateWindow(every: 1d, fn: last, createEmpty: true)
+  |> fill(value: 0.0)
+  
+  // Extract year-month string for manual grouping
+  |> map(fn: (r) => ({
+      r with
+      year_month: strings.substring(v: string(v: r._time), start: 0, end: 7)
+  }))
+  
+  // Group by month and sum
+  |> group(columns: ["year_month", "endpoint"])
+  |> sum()
+  |> group()
+  
+  // Reconstruct timestamp to first day of month
+  |> map(fn: (r) => ({
+      r with
+      _time: time(v: r.year_month + "-01T00:00:00Z")
+  }))
+  
   |> pivot(rowKey: ["_time"], columnKey: ["endpoint"], valueColumn: "_value")
+  
   |> map(fn: (r) => ({ r with 
       Produzione: r.PRODUCTION_ENERGY,
       Prelievo: r.IMPORT_ENERGY,
@@ -236,7 +285,84 @@ from(bucket: "Solaredge")
       Consumo: r.PRODUCTION_ENERGY + r.IMPORT_ENERGY - r.EXPORT_ENERGY,
       Autoconsumo: r.PRODUCTION_ENERGY - r.EXPORT_ENERGY
   }))
+  
+  |> drop(columns: ["PRODUCTION_ENERGY", "IMPORT_ENERGY", "EXPORT_ENERGY", "year_month"])
+  |> filter(fn: (r) => r._time < endOfYear)
+  |> sort(columns: ["_time"])
 ```
+
+#### Query for Previous Year
+
+Replace the first two lines with:
+```flux
+startOfLastYear = date.add(d: -1y, to: date.truncate(t: now(), unit: 1y))
+endOfLastYear = date.truncate(t: now(), unit: 1y)
+```
+
+#### Query for Only Months with Data
+
+If you want to see only months that have actual data (no empty months), use `createEmpty: false`:
+
+```flux
+from(bucket: "Solaredge")
+  |> range(start: startOfYear, stop: endOfYear)
+  |> filter(fn: (r) => r["_measurement"] == "web" and r["_field"] == "Site")
+  |> filter(fn: (r) => 
+      r["endpoint"] == "PRODUCTION_ENERGY" or 
+      r["endpoint"] == "IMPORT_ENERGY" or 
+      r["endpoint"] == "EXPORT_ENERGY"
+  )
+  
+  |> aggregateWindow(every: 1d, fn: last, createEmpty: false)
+  
+  |> map(fn: (r) => ({
+      r with
+      year_month: strings.substring(v: string(v: r._time), start: 0, end: 7)
+  }))
+  
+  |> group(columns: ["year_month", "endpoint"])
+  |> sum()
+  |> group()
+  
+  |> map(fn: (r) => ({
+      r with
+      _time: time(v: r.year_month + "-01T00:00:00Z")
+  }))
+  
+  |> pivot(rowKey: ["_time"], columnKey: ["endpoint"], valueColumn: "_value")
+  
+  |> map(fn: (r) => ({ r with 
+      Produzione: r.PRODUCTION_ENERGY,
+      Prelievo: r.IMPORT_ENERGY,
+      Immissione: r.EXPORT_ENERGY,
+      Consumo: r.PRODUCTION_ENERGY + r.IMPORT_ENERGY - r.EXPORT_ENERGY,
+      Autoconsumo: r.PRODUCTION_ENERGY - r.EXPORT_ENERGY
+  }))
+  
+  |> drop(columns: ["PRODUCTION_ENERGY", "IMPORT_ENERGY", "EXPORT_ENERGY", "year_month"])
+  |> filter(fn: (r) => r._time < endOfYear)
+  |> sort(columns: ["_time"])
+```
+
+### Common Issues and Solutions
+
+#### Issue: Data appears in wrong month
+**Cause**: `aggregateWindow(every: 1mo)` uses month boundaries that may not align with your expectations, especially around DST changes.
+
+**Solution**: Use the manual year-month extraction approach shown above instead of relying on `aggregateWindow(every: 1mo)` for monthly grouping.
+
+#### Issue: Duplicate data points
+**Cause**: Old data written before the timestamp normalization fix.
+
+**Solution**: 
+1. The parser now prevents future duplicates by normalizing timestamps
+2. For existing duplicates, the query includes `aggregateWindow(every: 1d, fn: last)` which takes only the most recent value per day
+3. Alternatively, drop and re-download the affected data
+
+#### Issue: Missing first day of month
+**Cause**: Timezone conversion issues where midnight on the 1st of the month gets shifted to the previous month.
+
+**Solution**: The timestamp normalization to UTC midnight prevents this issue. All data points are stored at `00:00:00 UTC` regardless of local timezone.
 
 ## API Endpoint Details
 
