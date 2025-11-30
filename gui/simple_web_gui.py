@@ -597,12 +597,22 @@ class SimpleWebGUI:
 
                 # Scheduler
                 try:
+                    import os
                     sched = cm.get_scheduler_config()
+                    
+                    # Get loop intervals from environment
+                    api_interval = int(os.getenv('LOOP_API_INTERVAL_MINUTES', '15'))
+                    web_interval = int(os.getenv('LOOP_WEB_INTERVAL_MINUTES', '15'))
+                    realtime_interval = int(os.getenv('LOOP_REALTIME_INTERVAL_SECONDS', '5'))
+                    gme_interval = int(os.getenv('LOOP_GME_INTERVAL_MINUTES', '1440'))
+                    
                     self.logger.info(
-                        f"[SYSTEM] ⏱️  Scheduler configurato (API: {sched.api_delay_seconds}s, "
-                        f"Web: {sched.web_delay_seconds}s, "
-                        f"Realtime: {sched.realtime_delay_seconds}s, "
-                        f"GME: {sched.gme_delay_seconds}s)"
+                        f"[SYSTEM] ⏱️  Rate limiters configurati (API: {sched.api_delay_seconds}s, "
+                        f"Web: {sched.web_delay_seconds}s, Realtime: {sched.realtime_delay_seconds}s, GME: {sched.gme_delay_seconds}s)"
+                    )
+                    self.logger.info(
+                        f"[SYSTEM] 🔄 Loop intervals configurati (API: {api_interval}min, Web: {web_interval}min, "
+                        f"Realtime: {realtime_interval}s, GME: {gme_interval}min)"
                     )
                 except Exception as e:
                     self.logger.warning(f"[SYSTEM] ⚠️ Errore log Scheduler: {e}")
