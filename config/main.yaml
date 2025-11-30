@@ -22,6 +22,8 @@ influxdb:
   jitter_interval_ms: ${INFLUX_JITTER_INTERVAL_MS}
   retry_interval_ms: ${INFLUX_RETRY_INTERVAL_MS}
   max_retries: ${INFLUX_MAX_RETRIES}
+  enable_gzip: ${INFLUX_ENABLE_GZIP}
+  write_precision: ${INFLUX_WRITE_PRECISION}
 logging:
   file_logging: ${LOG_FILE_LOGGING}
   level: ${LOG_LEVEL}

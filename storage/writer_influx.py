@@ -20,9 +20,22 @@ except ImportError:
 
 
 class InfluxWriter:
-    """Writer InfluxDB pulito - solo scrittura, nessuna elaborazione"""
+    """Writer InfluxDB pulito - solo scrittura, nessuna elaborazione.
+    
+    Implementa pattern Singleton per riutilizzare connessione tra chiamate.
+    Usa async writing, gzip compression e write precision configurabile.
+    """
     
     _initialized_once = False  # Flag di classe per log inizializzazione
+    _instance = None  # Singleton instance
+    _client = None  # Shared client
+    _write_api = None  # Shared write API
+
+    def __new__(cls):
+        """Singleton pattern per riutilizzare connessione."""
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+        return cls._instance
 
     def __init__(self):
         """Inizializza InfluxWriter con bucket unificato."""
@@ -48,7 +61,8 @@ class InfluxWriter:
             self._client = InfluxDBClient(
                 url=self._influx_config.url, 
                 token=self._influx_config.token, 
-                org=self._influx_config.org
+                org=self._influx_config.org,
+                enable_gzip=self._influx_config.enable_gzip  # Compressione Gzip
             )
             
             # Test connessione
@@ -59,7 +73,7 @@ class InfluxWriter:
             # Assicura esistenza bucket
             self._ensure_bucket_exists()
             
-            # Write API con configurazione ottimizzata
+            # Write API con configurazione ottimizzata (ASYNC per performance)
             write_options = WriteOptions(
                 batch_size=self._influx_config.batch_size,
                 flush_interval=self._influx_config.flush_interval_ms,
@@ -67,17 +81,21 @@ class InfluxWriter:
                 retry_interval=self._influx_config.retry_interval_ms,
                 max_retries=self._influx_config.max_retries
             )
+            # Usa write_api (batching sincrono ma ottimizzato)
+            # Note: write_api gestisce internamente batching e retry
             self._write_api = self._client.write_api(write_options=write_options)
             
             # Log inizializzazione solo la prima volta (evita spam nei flow)
             if not InfluxWriter._initialized_once:
                 self._log.info(
-                    f"✅ InfluxWriter inizializzato - "
+                    f"✅ InfluxWriter inizializzato (Singleton) - "
                     f"URL: {self._influx_config.url}, "
                     f"Org: {self._influx_config.org}, "
                     f"Bucket principale: {self._influx_config.bucket}, "
                     f"Bucket realtime: {self._influx_config.bucket_realtime}, "
-                    f"Bucket GME: {self._influx_config.bucket_gme}"
+                    f"Bucket GME: {self._influx_config.bucket_gme}, "
+                    f"Gzip: {self._influx_config.enable_gzip}, "
+                    f"Precision: {self._influx_config.write_precision}"
                 )
                 InfluxWriter._initialized_once = True
             
@@ -216,9 +234,14 @@ class InfluxWriter:
             self._log.debug(f"  • {bucket}: {len(bucket_points)} punti")
         
         try:
-            # Scrivi su ogni bucket
+            # Scrivi su ogni bucket con write precision configurabile
             for bucket, bucket_points in points_by_bucket.items():
-                self._write_api.write(bucket=bucket, org=self._influx_config.org, record=bucket_points)
+                self._write_api.write(
+                    bucket=bucket, 
+                    org=self._influx_config.org, 
+                    record=bucket_points,
+                    write_precision=self._influx_config.write_precision  # Precision configurabile
+                )
                 
                 # Extract measurement type for detailed logging
                 meas_type = "unknown"
