@@ -600,8 +600,12 @@ class SimpleWebGUI:
                 # InfluxDB
                 influx = cm.get_influxdb_config()
                 self.logger.info(
-                    f"[SYSTEM] ✅ InfluxDB: {influx.url} (Bucket: {influx.bucket})"
+                    f"[SYSTEM] ✅ InfluxDB: {influx.url} (Buckets: {influx.bucket}, {influx.bucket_gme}, {influx.bucket_weather})"
                 )
+
+                # Web Server & GUI
+                self.logger.info(f"[SYSTEM] ✅ Web Server: http://{self.real_ip}:{bind_port}")
+                self.logger.info(f"[SYSTEM] ✅ GUI Dashboard: Inizializzata")
 
                 # Cache
                 self.logger.info("[SYSTEM] ✅ Cache centralizzata inizializzata")
