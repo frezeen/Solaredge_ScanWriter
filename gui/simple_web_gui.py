@@ -593,10 +593,10 @@ class SimpleWebGUI:
                 try:
                     sched = cm.get_scheduler_config()
                     self.logger.info(
-                        f"[SYSTEM] ⏱️  Scheduler: API={sched.api_delay_seconds}s, "
-                        f"Web={sched.web_delay_seconds}s, "
-                        f"RT={sched.realtime_delay_seconds}s, "
-                        f"GME={sched.gme_delay_seconds}s"
+                        f"[SYSTEM] ⏱️  Scheduler configurato (API: {sched.api_delay_seconds}s, "
+                        f"Web: {sched.web_delay_seconds}s, "
+                        f"Realtime: {sched.realtime_delay_seconds}s, "
+                        f"GME: {sched.gme_delay_seconds}s)"
                     )
                 except Exception as e:
                     self.logger.warning(f"[SYSTEM] ⚠️ Errore log Scheduler: {e}")
@@ -604,25 +604,24 @@ class SimpleWebGUI:
                 # InfluxDB
                 try:
                     influx = cm.get_influxdb_config()
-                    # Gestione sicura attributi opzionali
-                    bucket_gme = getattr(influx, 'bucket_gme', 'N/A')
-                    bucket_weather = getattr(influx, 'bucket_weather', 'N/A')
-                    
                     self.logger.info(
-                        f"[SYSTEM] ✅ InfluxDB: {influx.url} (Buckets: {influx.bucket}, {bucket_gme}, {bucket_weather})"
+                        f"[SYSTEM] 💾 InfluxDB connesso a {influx.url} (Buckets: {influx.bucket}, {influx.bucket_realtime}, {influx.bucket_gme})"
                     )
                 except Exception as e:
                     self.logger.warning(f"[SYSTEM] ⚠️ Errore log InfluxDB: {e}")
 
                 # Web Server & GUI
                 try:
-                    self.logger.info(f"[SYSTEM] ✅ Web Server: http://{self.real_ip}:{bind_port}")
-                    self.logger.info(f"[SYSTEM] ✅ GUI Dashboard: Inizializzata")
+                    self.logger.info(f"[SYSTEM] 🌐 Web Server in ascolto su http://{self.real_ip}:{bind_port}")
+                    self.logger.info(f"[SYSTEM] 📊 GUI Dashboard inizializzata e pronta")
                 except Exception as e:
                     self.logger.warning(f"[SYSTEM] ⚠️ Errore log Web/GUI: {e}")
 
                 # Cache
-                self.logger.info("[SYSTEM] ✅ Cache centralizzata inizializzata")
+                self.logger.info("[SYSTEM] 🗄️  Cache centralizzata inizializzata e operativa")
+                
+                # Log settings info
+                self.logger.info("[SYSTEM] 📝 Log inizializzati (TUTTI: reset 24h, Flow: ultime 3 run, SISTEMA: mai resettati)")
 
             except Exception as e:
                 self.logger.warning(f"Impossibile inizializzare config manager per log: {e}")
