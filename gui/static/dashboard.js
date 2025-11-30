@@ -1230,6 +1230,18 @@ function switchLogTab(flow) {
     const filterName = dashboard ? dashboard.getFilterName(flow) : (FILTER_NAMES[flow] || flow);
     setTextContent($('#logsFilter'), `Filtro: ${filterName}`);
 
+    // Update log info message based on flow type
+    const logsInfoEl = $('#logsInfo');
+    if (logsInfoEl) {
+        if (flow === 'all') {
+            setTextContent(logsInfoEl, '📅 Log ultimi 24h');
+        } else if (flow === 'general') {
+            setTextContent(logsInfoEl, '♾️ Log mai resettati');
+        } else {
+            setTextContent(logsInfoEl, '📊 Mostrando ultime 3 run per flow');
+        }
+    }
+
     // Always show cached data immediately if available (even if not fresh)
     // This prevents the "Nessun log disponibile" flash when switching tabs
     if (logCache.logs.length > 0) {

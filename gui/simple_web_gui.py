@@ -579,8 +579,6 @@ class SimpleWebGUI:
 
             self.logger.info("="*50)
             self.logger.info("🚀 SOLAREDGE SCANWRITER")
-            self.logger.info(f"   URL: http://{self.real_ip}:{bind_port}")
-            self.logger.info(f"   Config: {self.config_file}")
             self.logger.info("="*50)
 
             # Log configurazione sistema per GUI (General tab)
@@ -592,8 +590,6 @@ class SimpleWebGUI:
                 # Startup banner
                 self.logger.info("[SYSTEM] " + "="*50)
                 self.logger.info("[SYSTEM] 🚀 SOLAREDGE SCANWRITER")
-                self.logger.info(f"[SYSTEM]    URL: http://{self.real_ip}:{bind_port}")
-                self.logger.info(f"[SYSTEM]    Config: {self.config_file}")
                 self.logger.info("[SYSTEM] " + "="*50)
                 
                 # Configuration
