@@ -1230,15 +1230,16 @@ function switchLogTab(flow) {
     const filterName = dashboard ? dashboard.getFilterName(flow) : (FILTER_NAMES[flow] || flow);
     setTextContent($('#logsFilter'), `Filtro: ${filterName}`);
 
-    // Update log info message based on flow type
+    // Update log info message based on flow type (dynamic from retention_config)
     const logsInfoEl = $('#logsInfo');
     if (logsInfoEl) {
+        const retentionConfig = dashboard?.state?.loopStatus?.retention_config || { all_hours: 12, flow_runs: 3 };
         if (flow === 'all') {
-            setTextContent(logsInfoEl, '📅 Log ultimi 24h');
+            setTextContent(logsInfoEl, `📅 Log ultimi ${retentionConfig.all_hours}h`);
         } else if (flow === 'general') {
             setTextContent(logsInfoEl, '♾️ Log mai resettati');
         } else {
-            setTextContent(logsInfoEl, '📊 Mostrando ultime 3 run per flow');
+            setTextContent(logsInfoEl, `📊 Mostrando ultime ${retentionConfig.flow_runs} run per flow`);
         }
     }
 
@@ -1361,13 +1362,16 @@ function createLogEntry(log) {
     return entry;
 }
 
-// Helper: Update log count display
+// Helper: Update log count display (dynamic from retention_config)
 function updateLogCount(total, runCounts) {
     let countText = `${total} log visualizzati`;
 
+    // Get retention config from dashboard state
+    const retentionConfig = dashboard?.state?.loopStatus?.retention_config || { all_hours: 12, flow_runs: 3 };
+
     // Add context-specific suffix based on current filter
     if (currentLogFlow === 'all') {
-        countText += ' (Ultimi 24h)';
+        countText += ` (Ultimi ${retentionConfig.all_hours}h)`;
     } else if (currentLogFlow === 'general') {
         countText += ' (Mai resettati)';
     } else {
