@@ -61,8 +61,8 @@ class YawlManager:
         endpoint['category'] = device_category  # Aggiungi categoria al device
         
         # Aggiungi date_range basato sul device type
-        # OPTIMIZER supporta max 7 giorni, altri dispositivi supportano range mensili
-        if device_type == 'OPTIMIZER':
+        # OPTIMIZER e WEATHER supportano max 7 giorni, altri dispositivi supportano range mensili
+        if device_type in ['OPTIMIZER', 'WEATHER']:
             endpoint['date_range'] = '7days'
         else:
             endpoint['date_range'] = 'monthly'
