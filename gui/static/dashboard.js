@@ -1387,7 +1387,7 @@ function renderFilteredLogs(logs, total, runCounts) {
     const container = $('#logsContent');
     if (!container || !logs) return;
 
-    const shouldScroll = autoScrollEnabled ||
+    const shouldScroll = autoScrollEnabled &&
         (container.scrollTop + container.clientHeight >= container.scrollHeight - 10);
 
     // Use DocumentFragment for batch rendering (optimized)
