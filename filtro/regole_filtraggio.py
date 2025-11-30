@@ -23,50 +23,50 @@ DEBUG_MODE = getattr(_global_config, 'filter_debug', False)
 ALLOWED_FIELDS = {
     # Fields API/Web esistenti
     'value', 'energy', 'power', 'consumption', 'production', 'power_flow', 'raw_json', '_field', 'Meter', 'Inverter',
-    
+
     # Fields realtime - Device types (maiuscole per coerenza con API/Web)
     'Inverter', 'Meter', 'Battery',
-    
+
     # Fields realtime - Potenza
     'ac_power', 'dc_power', 'power_ac_scale', 'power_dc_scale',
     'ac_va', 'power_apparent_scale', 'ac_var', 'power_reactive_scale',
-    
+
     # Fields realtime - Tensioni AC
     'ac_voltage_an', 'ac_voltage_bn', 'ac_voltage_cn',
     'ac_voltage_ab', 'ac_voltage_bc', 'ac_voltage_ca', 'voltage_scale',
-    
+
     # Fields realtime - Correnti AC
     'ac_current', 'ac_current_a', 'ac_current_b', 'ac_current_c', 'current_scale',
-    
+
     # Fields realtime - Tensioni/Correnti DC
     'dc_voltage', 'dc_current', 'voltage_dc_scale', 'current_dc_scale',
-    
+
     # Fields realtime - Frequenza
     'ac_frequency', 'frequency_scale',
-    
+
     # Fields realtime - Temperature
     'temperature', 'temperature_scale', 'c_heatsink_temperature',
     'c_transformer_temperature', 'c_other_temperature',
-    
+
     # Fields realtime - Fattore di potenza
     'ac_pf', 'power_factor_scale',
-    
+
     # Fields realtime - Energia
     'ac_energy_wh', 'energy_total_scale',
-    
+
     # Fields realtime - Controlli e efficienza
     'efficiency', 'rrcr_state', 'active_power_limit', 'cosphi',
     'commit_power_control_settings', 'restore_power_control_default_settings',
     'reactive_power_config', 'reactive_power_response_time',
     'advanced_power_control_enable', 'export_control_mode',
     'export_control_limit_mode', 'export_control_site_limit',
-    
+
     # Fields realtime - Identificatori SunSpec
     'c_sunspec_did', 'c_sunspec_length', 'c_length', 'c_did', 'device_address',
-    
+
     # Fields realtime - Stringhe
     'status', 'status_vendor', 'manufacturer', 'model', 'version', 'serial', 'c_id',
-    
+
     # Fields realtime - Meter specifici
     'ac_power_a', 'ac_power_b', 'ac_power_c', 'ac_voltage_ln', 'ac_voltage_ll',
     'ac_current_total', 'ac_frequency_meter', 'ac_real_power', 'ac_apparent_power',
@@ -85,7 +85,7 @@ def is_valid_numeric_value(value: Any) -> bool:
     """Valida valore numerico (> 0, o qualsiasi in debug mode)"""
     if isinstance(value, bool):
         return False
-    
+
     try:
         num = float(value)
         return True if DEBUG_MODE else num > 0
@@ -107,16 +107,16 @@ def _validate_raw_point(raw_point: Dict[str, Any]) -> bool:
     """Valida punto raw"""
     if not isinstance(raw_point, dict):
         return False
-    
+
     # Campi base richiesti
     if not raw_point.get("source") or not raw_point.get("timestamp"):
         return False
-    
+
     # Punti metadata/detailed: accetta qualsiasi json_data non nullo
     data_type = raw_point.get("data_type")
     if data_type in ["metadata", "detailed"]:
         return "json_data" in raw_point
-    
+
     # Altri punti: verifica valore
     if "json_data" in raw_point:
         return has_valid_values_in_json(raw_point["json_data"])
@@ -131,27 +131,27 @@ def filter_raw_points(raw_points: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
 
 def filter_structured_points(structured_points: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """Filtra punti strutturati secondo regole d'oro.
-    
+
     Supporta sia dict che Point objects nativi InfluxDB.
     """
     result = []
-    
+
     for point in structured_points:
         # Se è un Point object InfluxDB, passa direttamente (già validato)
         if hasattr(point, 'to_line_protocol'):
             result.append(point)
             continue
-        
+
         # Altrimenti valida come dict
         if not isinstance(point, dict) or not point.get('fields'):
             continue
-        
+
         # Filtra fields
         valid_fields = {}
         for field, value in point.get('fields', {}).items():
             if field not in ALLOWED_FIELDS:
                 continue
-            
+
             # raw_json: accetta stringhe non vuote
             if field == 'raw_json':
                 if isinstance(value, str) and value.strip():
@@ -170,11 +170,11 @@ def filter_structured_points(structured_points: List[Dict[str, Any]]) -> List[Di
             # Altri campi: valida numerici
             elif is_valid_numeric_value(value):
                 valid_fields[field] = value
-        
+
         # Mantieni punto solo se ha fields validi
         if valid_fields:
             filtered_point = point.copy()
             filtered_point['fields'] = valid_fields
             result.append(filtered_point)
-    
+
     return result

@@ -7,10 +7,10 @@ def run_scan_flow(log: Logger, cache: Any, config: Dict[str, Any]) -> int:
     log.info("🔍 Modalità scan: scansione web tree")
     from tools.web_tree_scanner import WebTreeScanner
     from tools.yawl_manager import YawlManager
-    
+
     scanner = WebTreeScanner()
     scanner.scan()
-    
+
     # Aggiorna solo il file web_endpoints.yaml
     log.info("Aggiornando file web_endpoints.yaml...")
     ym = YawlManager()

@@ -5,10 +5,10 @@ class UpdateChecker {
         this.intervalId = null;
         this.isChecking = false;
         this.updatesBanner = null;
-        
+
         this.init();
     }
-    
+
     init() {
         this.createUpdatesBanner();
         this.startAutoCheck();
@@ -16,7 +16,7 @@ class UpdateChecker {
         // Controlla subito al caricamento
         this.checkForUpdates();
     }
-    
+
     createUpdatesBanner() {
         // Crea il banner degli aggiornamenti
         const banner = document.createElement('div');
@@ -30,33 +30,33 @@ class UpdateChecker {
                 </div>
             </div>
         `;
-        
+
         // Inserisci il banner all'inizio del body
         document.body.insertBefore(banner, document.body.firstChild);
         this.updatesBanner = banner;
     }
-    
+
     startAutoCheck() {
         // Controlla ogni ora
         this.intervalId = setInterval(() => {
             this.checkForUpdates();
         }, this.checkInterval);
-        
+
         console.log('✅ Auto-check aggiornamenti avviato (ogni ora)');
     }
-    
+
     async checkForUpdates() {
         if (this.isChecking) {
             console.log('⏳ Controllo aggiornamenti già in corso...');
             return;
         }
-        
+
         this.isChecking = true;
-        
+
         try {
             const response = await fetch('/api/updates/check');
             const data = await response.json();
-            
+
             if (data.status === 'success') {
                 this.handleCheckResult(data);
             } else {
@@ -70,10 +70,10 @@ class UpdateChecker {
             this.isChecking = false;
         }
     }
-    
+
     handleCheckResult(data) {
         const { updates_available, remote_commits, message, restart_required } = data;
-        
+
         if (restart_required) {
             // Riavvia automaticamente se necessario
             this.restartService();
@@ -87,7 +87,7 @@ class UpdateChecker {
             this.notify('✅ Sei già aggiornato', 'success');
         }
     }
-    
+
     showUpdatesBanner(commits = 0) {
         if (this.updatesBanner) {
             // Aggiorna il testo con il numero di commit
@@ -99,53 +99,53 @@ class UpdateChecker {
             this.updatesBanner.classList.remove('hidden');
         }
     }
-    
+
     hideUpdatesBanner() {
         if (this.updatesBanner) {
             this.updatesBanner.classList.add('hidden');
         }
     }
-    
+
     async runUpdate() {
         try {
             // Prima controlla se ci sono aggiornamenti
             this.notify('🔍 Controllo aggiornamenti...', 'info');
-            
+
             const checkResponse = await fetch('/api/updates/check');
             const checkData = await checkResponse.json();
-            
+
             if (checkData.status === 'success' && !checkData.updates_available) {
                 console.log('✅ Nessun aggiornamento disponibile');
                 this.notify('✅ Sei già aggiornato, nessun aggiornamento da applicare', 'success');
                 this.hideUpdatesBanner();
                 return;
             }
-            
+
             // Conferma dall'utente
             if (!confirm('Sei sicuro di voler eseguire l\'aggiornamento?\n\nIl servizio si riavvierà automaticamente e la GUI si riconnetterà tra circa 30 secondi.')) {
                 return;
             }
-            
+
             // Avvia aggiornamento
             this.notify('🚀 Avvio aggiornamento...', 'info');
-            
+
             const response = await fetch('/api/updates/run', {
                 method: 'POST'
             });
-            
+
             const data = await response.json();
-            
+
             if (data.status === 'success') {
                 console.log('✅ Update avviato');
                 this.hideUpdatesBanner();
                 this.notify('✅ Aggiornamento avviato! Attendi la riconnessione...', 'success');
-                
+
                 // Salva flag per mostrare messaggio dopo riconnessione
                 localStorage.setItem('updateInProgress', 'true');
-                
+
                 // Inizia subito a provare la riconnessione
                 this.waitForReconnection();
-                
+
             } else {
                 console.error('❌ Errore:', data.message);
                 this.notify(`Errore: ${data.message}`, 'error');
@@ -155,26 +155,26 @@ class UpdateChecker {
             this.notify('Errore durante la richiesta', 'error');
         }
     }
-    
+
     async waitForReconnection() {
         console.log('🔄 Attesa 5 secondi prima di tentare la riconnessione...');
         this.notify('🔄 Riconnessione in corso (attesa 5 sec)...', 'info');
-        
+
         // Attendi 5 secondi prima di iniziare i tentativi
         await new Promise(resolve => setTimeout(resolve, 5000));
-        
+
         let attempts = 0;
         const maxAttempts = 120; // 120 tentativi = 2 minuti
-        
+
         const tryReconnect = async () => {
             attempts++;
-            
+
             try {
                 const response = await fetch('/api/ping', {
                     method: 'GET',
                     cache: 'no-cache'
                 });
-                
+
                 if (response.ok) {
                     console.log('✅ Riconnesso!');
                     // Salva flag per mostrare messaggio dopo reload
@@ -186,7 +186,7 @@ class UpdateChecker {
             } catch (error) {
                 // Server non ancora disponibile
             }
-            
+
             if (attempts < maxAttempts) {
                 if (attempts % 10 === 0) {
                     console.log(`Tentativo ${attempts}/${maxAttempts}...`);
@@ -197,10 +197,10 @@ class UpdateChecker {
                 this.notify('⚠️ Timeout riconnessione. Ricarica manualmente la pagina.', 'warning');
             }
         };
-        
+
         tryReconnect();
     }
-    
+
     checkUpdateCompleted() {
         // Controlla se l'update è stato completato (dopo reload)
         if (sessionStorage.getItem('updateCompleted') === 'true') {
@@ -209,7 +209,7 @@ class UpdateChecker {
             console.log('✅ Aggiornamento completato con successo!');
         }
     }
-    
+
     notify(message, type = 'info') {
         // Usa il sistema di notifiche globale
         if (typeof notify === 'function') {
@@ -218,7 +218,7 @@ class UpdateChecker {
             console.log(`[${type.toUpperCase()}] ${message}`);
         }
     }
-    
+
     destroy() {
         if (this.intervalId) {
             clearInterval(this.intervalId);

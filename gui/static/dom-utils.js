@@ -33,7 +33,7 @@ function replaceChildren(container, elements) {
  */
 function createElement(tag, attributes = {}, children = []) {
     const element = document.createElement(tag);
-    
+
     // Set attributes
     Object.entries(attributes).forEach(([key, value]) => {
         if (key === 'className') {
@@ -50,7 +50,7 @@ function createElement(tag, attributes = {}, children = []) {
             element.setAttribute(key, value);
         }
     });
-    
+
     // Add children
     children.forEach(child => {
         if (typeof child === 'string') {
@@ -59,7 +59,7 @@ function createElement(tag, attributes = {}, children = []) {
             element.appendChild(child);
         }
     });
-    
+
     return element;
 }
 

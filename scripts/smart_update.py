@@ -37,7 +37,7 @@ class UpdateConfig:
     preserve_files: Tuple[str, ...] = (
         ".env",
         "config/sources/api_endpoints.yaml",
-        "config/sources/web_endpoints.yaml", 
+        "config/sources/web_endpoints.yaml",
         "config/sources/modbus_endpoints.yaml",
         "cookies/web_cookies.json",
         "install_report.md",
@@ -48,30 +48,30 @@ class UpdateConfig:
         "check-logrotate.sh",
         "manage-journal.sh",
     )
-    
+
     preserve_dirs: Tuple[str, ...] = (
         "logs",
-        "cache", 
+        "cache",
         "cookies",
         "scripts",
         "config"
     )
-    
+
     executable_files: Tuple[str, ...] = (
         "update.sh",
-        "install.sh", 
+        "install.sh",
         "setup-permissions.sh",
         "scripts/smart_update.py",
         "scripts/cleanup_logs.sh"
     )
-    
+
     possible_services: Tuple[str, ...] = (
-        "solaredge-scanwriter", 
-        "solaredge-collector", 
-        "solaredge", 
+        "solaredge-scanwriter",
+        "solaredge-collector",
+        "solaredge",
         "collector"
     )
-    
+
     # Timeout configurations
     service_start_timeout: int = 3
     command_timeout: int = 300  # 5 minutes default for commands
@@ -82,10 +82,10 @@ class UpdateConfig:
 
 class SmartUpdater:
     """Sistema di aggiornamento intelligente per SolarEdge Data Collector"""
-    
+
     def __init__(self, project_root: str = ".", config_manager=None):
         self.project_root = Path(project_root).resolve()
-        
+
         # Setup logging - use project logger if available, fallback to basic
         if USE_PROJECT_MODULES:
             self.logger = get_logger(__name__)
@@ -98,7 +98,7 @@ class SmartUpdater:
             logging.basicConfig(level=logging.ERROR)  # Only show errors
             self.logger = logging.getLogger(__name__)
             self.config_manager = None
-        
+
         self.config = UpdateConfig()
         self.update_metrics = {
             'start_time': None,
@@ -106,31 +106,31 @@ class SmartUpdater:
             'steps_completed': [],
             'errors_encountered': []
         }
-        
+
     def _log_with_color(self, message: str, level: str = "INFO") -> None:
         """Log con colori per output console (mantiene compatibilità con output esistente)"""
         colors = {
             "INFO": "\033[0;34m",    # Blue
-            "SUCCESS": "\033[0;32m", # Green  
+            "SUCCESS": "\033[0;32m", # Green
             "WARNING": "\033[1;33m", # Yellow
             "ERROR": "\033[0;31m",   # Red
             "RESET": "\033[0m"       # Reset
         }
-        
+
         timestamp = datetime.now().strftime("%H:%M:%S")
         color = colors.get(level, colors["INFO"])
         reset = colors["RESET"]
-        
+
         icons = {
             "INFO": "ℹ️",
-            "SUCCESS": "✅", 
+            "SUCCESS": "✅",
             "WARNING": "⚠️",
             "ERROR": "❌"
         }
-        
+
         icon = icons.get(level, "•")
         print(f"{color}[{timestamp}] {icon} {message}{reset}")
-        
+
         # Log anche nel sistema di logging del progetto
         if level == "ERROR":
             self.logger.error(message)
@@ -140,12 +140,12 @@ class SmartUpdater:
             self.logger.info(f"SUCCESS: {message}")
         else:
             self.logger.info(message)
-    
+
     def log(self, message: str, level: str = "INFO") -> None:
         """Wrapper per compatibilità con codice esistente"""
         self._log_with_color(message, level)
-        
-    async def run_command_async(self, cmd: List[str], capture_output: bool = True, 
+
+    async def run_command_async(self, cmd: List[str], capture_output: bool = True,
                                check: bool = True, timeout: Optional[int] = 300) -> subprocess.CompletedProcess:
         """Esegue comando asincrono con logging e timeout"""
         try:
@@ -160,10 +160,10 @@ class SmartUpdater:
                 stdout, stderr = await asyncio.wait_for(
                     process.communicate(), timeout=timeout
                 )
-                
+
                 # Crea oggetto compatibile con subprocess.CompletedProcess
                 result = subprocess.CompletedProcess(
-                    cmd, process.returncode, 
+                    cmd, process.returncode,
                     stdout.decode() if stdout else None,
                     stderr.decode() if stderr else None
                 )
@@ -171,12 +171,12 @@ class SmartUpdater:
                 process = await asyncio.create_subprocess_exec(*cmd, cwd=self.project_root)
                 await asyncio.wait_for(process.wait(), timeout=timeout)
                 result = subprocess.CompletedProcess(cmd, process.returncode)
-            
+
             if check and result.returncode != 0:
                 raise subprocess.CalledProcessError(result.returncode, cmd, result.stdout, result.stderr)
-                
+
             return result
-            
+
         except asyncio.TimeoutError:
             self.log(f"Command timed out after {timeout}s", "ERROR")
             raise
@@ -187,13 +187,13 @@ class SmartUpdater:
             if e.stderr:
                 self.log(f"Stderr: {e.stderr}", "ERROR")
             raise
-    
-    def run_command(self, cmd: List[str], capture_output: bool = True, 
+
+    def run_command(self, cmd: List[str], capture_output: bool = True,
                    check: bool = True) -> subprocess.CompletedProcess:
         """Wrapper sincrono per compatibilità"""
         try:
             result = subprocess.run(
-                cmd, 
+                cmd,
                 capture_output=capture_output,
                 text=True,
                 check=check,
@@ -207,9 +207,9 @@ class SmartUpdater:
             if e.stderr:
                 self.log(f"Stderr: {e.stderr}", "ERROR")
             raise
-            
 
-            
+
+
     def find_active_service(self) -> Optional[str]:
         """Trova il servizio systemd attivo"""
         for service in self.config.possible_services:
@@ -224,10 +224,10 @@ class SmartUpdater:
             except (subprocess.CalledProcessError, FileNotFoundError) as e:
                 self.logger.debug(f"Service {service} not found or not enabled: {e}")
                 continue
-        
+
         self.log("No active systemd service found", "WARNING")
         return None
-        
+
     def stop_service(self, service_name: str) -> bool:
         """Ferma il servizio systemd"""
         try:
@@ -236,12 +236,12 @@ class SmartUpdater:
         except (subprocess.CalledProcessError, FileNotFoundError) as e:
             self.log(f"Failed to stop service {service_name}: {e}", "WARNING")
             return False
-            
+
     def start_service(self, service_name: str) -> bool:
         """Avvia il servizio systemd"""
         try:
             self.run_command(["systemctl", "start", service_name])
-            
+
             # Verifica che sia attivo con timeout configurabile
             time.sleep(self.config.service_start_timeout)
             result = self.run_command(
@@ -249,7 +249,7 @@ class SmartUpdater:
                 capture_output=True,
                 check=False
             )
-            
+
             if result.returncode == 0:
                 return True
             else:
@@ -258,7 +258,7 @@ class SmartUpdater:
         except (subprocess.CalledProcessError, FileNotFoundError) as e:
             self.log(f"Failed to start service {service_name}: {e}", "ERROR")
             return False
-            
+
     def backup_configs(self) -> bool:
         """Backup temporaneo delle configurazioni durante l'aggiornamento"""
         try:
@@ -267,7 +267,7 @@ class SmartUpdater:
             if temp_backup.exists():
                 shutil.rmtree(temp_backup)
             temp_backup.mkdir()
-            
+
             backed_up_count = 0
             # Backup solo file di configurazione essenziali
             for file_path in self.config.preserve_files:
@@ -279,14 +279,14 @@ class SmartUpdater:
                     backed_up_count += 1
                 else:
                     self.logger.debug(f"Configuration file not found: {file_path}")
-            
+
             self.log(f"Backed up {backed_up_count} configuration files", "SUCCESS")
             return True
-            
+
         except (OSError, PermissionError) as e:
             self.log(f"Failed to backup configurations: {e}", "ERROR")
             return False
-        
+
     def get_current_commit(self) -> str:
         """Ottiene l'hash del commit corrente"""
         try:
@@ -294,7 +294,7 @@ class SmartUpdater:
             return result.stdout.strip()
         except:
             return "unknown"
-            
+
     def check_for_updates(self) -> Tuple[bool, int]:
         """Controlla se ci sono aggiornamenti disponibili"""
         try:
@@ -302,7 +302,7 @@ class SmartUpdater:
             git_dir = self.project_root / ".git"
             if not git_dir.exists():
                 self.log("Not a git repository - attempting to initialize...", "WARNING")
-                
+
                 # Prova a inizializzare il repository
                 if self._initialize_git_repository():
                     self.log("Git repository initialized successfully", "SUCCESS")
@@ -310,70 +310,70 @@ class SmartUpdater:
                     self.log("Could not initialize git repository", "ERROR")
                     self.log("Manual installation detected - updates disabled", "INFO")
                     return False, 0
-            
+
             self.run_command(["git", "fetch", "origin"])
-            
+
             result = self.run_command([
                 "git", "rev-list", "HEAD...origin/main", "--count"
             ])
-            
+
             commits_behind = int(result.stdout.strip())
             has_updates = commits_behind > 0
-            
+
             if has_updates:
                 pass  # Found updates - will be handled by caller
             else:
                 self.log("Repository is up to date", "SUCCESS")
-                
+
             return has_updates, commits_behind
-            
+
         except Exception as e:
             self.log(f"Failed to check for updates: {e}", "ERROR")
             return False, 0
-    
+
     def _initialize_git_repository(self) -> bool:
         """Inizializza repository git se mancante (per installazioni manuali)"""
         try:
             self.log("Initializing git repository...", "INFO")
-            
+
             # 1. Init repository
             self.run_command(["git", "init", "-b", "main"])
-            
+
             # 2. Add remote
             self.run_command([
                 "git", "remote", "add", "origin",
                 "https://github.com/frezeen/Solaredge_ScanWriter.git"
             ])
-            
+
             # 3. Fetch remote
             self.run_command(["git", "fetch", "origin"])
-            
+
             # 4. Reset to remote main (questo crea il branch locale)
             self.run_command(["git", "reset", "--hard", "origin/main"])
-            
+
             # 5. Set tracking branch
             self.run_command(["git", "branch", "--set-upstream-to=origin/main", "main"])
-            
+
             self.log("Git repository initialized and synced with remote", "SUCCESS")
             return True
-            
+
         except Exception as e:
             self.log(f"Failed to initialize git repository: {e}", "ERROR")
             return False
-            
+
     def apply_git_update(self) -> bool:
         """Applica aggiornamento Git in modo sicuro con timeout configurabile"""
         try:
             # Stash modifiche locali
             self.run_command(["git", "stash", "push", "-m", f"Auto-stash before update {datetime.now()}"])
-            
+
             # Configura strategia di merge se necessario
             try:
                 self.run_command(["git", "config", "pull.rebase", "false"])
             except subprocess.CalledProcessError:
                 # Non critico se fallisce
                 pass
-                
+
             # Prova pull normale con timeout esteso per operazioni Git
             try:
                 result = subprocess.run(
@@ -388,29 +388,29 @@ class SmartUpdater:
                     return True
                 else:
                     raise subprocess.CalledProcessError(result.returncode, result.args, result.stdout, result.stderr)
-                
+
             except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
                 self.log("Git pull failed, trying reset strategy...", "WARNING")
-                
+
                 # Backup aggiuntivo delle modifiche locali
                 try:
                     self.run_command([
-                        "git", "stash", "push", "-m", 
+                        "git", "stash", "push", "-m",
                         f"Additional changes before reset {datetime.now()}"
                     ])
                 except subprocess.CalledProcessError:
                     # Non critico se fallisce
                     pass
-                    
+
                 # Reset hard
                 self.run_command(["git", "reset", "--hard", "origin/main"])
                 self.log("Git reset successful", "SUCCESS")
                 return True
-                
+
         except Exception as e:
             self.log(f"Git update failed: {e}", "ERROR")
             return False
-            
+
     def restore_configs(self) -> bool:
         """Ripristina configurazioni dal backup temporaneo"""
         try:
@@ -418,37 +418,37 @@ class SmartUpdater:
             if not temp_backup.exists():
                 self.log("No temporary backup found", "WARNING")
                 return True
-                
+
             restored_count = 0
             for file_path in self.config.preserve_files:
                 src = temp_backup / file_path
                 dst = self.project_root / file_path
-                
+
                 if src.exists():
                     dst.parent.mkdir(parents=True, exist_ok=True)
                     shutil.copy2(src, dst)
                     restored_count += 1
                 else:
                     self.logger.debug(f"Backup file not found: {file_path}")
-            
+
             self.log(f"Restored {restored_count} configuration files", "SUCCESS")
-            
+
             # Salva backup permanente dell'ultimo update riuscito (sovrascrive il precedente)
             last_backup = self.project_root / self.config.last_backup_dir_name
             if last_backup.exists():
                 shutil.rmtree(last_backup)
             shutil.copytree(temp_backup, last_backup)
             self.log("Saved permanent backup of last successful update", "SUCCESS")
-            
+
             # Rimuovi backup temporaneo
             shutil.rmtree(temp_backup)
-            
+
             return True
-            
+
         except (OSError, PermissionError) as e:
             self.log(f"Failed to restore configurations: {e}", "ERROR")
             return False
-            
+
     def fix_permissions(self) -> bool:
         """Ripristina tutti i permessi necessari"""
         try:
@@ -459,7 +459,7 @@ class SmartUpdater:
                 if full_path.exists():
                     os.chmod(full_path, 0o755)
                     executable_count += 1
-                    
+
             # Determina utente e gruppo per configurazioni
             if os.getuid() == 0:  # Running as root
                 config_user = "solaredge" if self._user_exists("solaredge") else "root"
@@ -467,7 +467,7 @@ class SmartUpdater:
             else:
                 config_user = os.getenv("USER", "root")
                 config_group = config_user
-                
+
             # Ripristina permessi directory (crea se non esistono)
             dir_count = 0
             for dir_path in self.config.preserve_dirs:
@@ -475,7 +475,7 @@ class SmartUpdater:
                 try:
                     # Crea directory se non esiste
                     full_path.mkdir(parents=True, exist_ok=True)
-                    
+
                     # Sistema permessi
                     if config_user != "root":
                         shutil.chown(full_path, config_user, config_group)
@@ -483,7 +483,7 @@ class SmartUpdater:
                     dir_count += 1
                 except PermissionError as e:
                     self.log(f"Cannot change ownership of {dir_path}: {e}", "WARNING")
-                        
+
             # Ripristina permessi file di configurazione
             file_count = 0
             for file_path in self.config.preserve_files:
@@ -496,7 +496,7 @@ class SmartUpdater:
                         file_count += 1
                     except PermissionError as e:
                         self.log(f"Cannot change ownership of {file_path}: {e}", "WARNING")
-            
+
             # Sistema permessi per tutti i file nella directory cookies
             cookies_dir = self.project_root / "cookies"
             if cookies_dir.exists():
@@ -508,14 +508,14 @@ class SmartUpdater:
                         file_count += 1
                     except PermissionError as e:
                         self.log(f"Cannot change ownership of {cookie_file.name}: {e}", "WARNING")
-                        
+
             self.log(f"Permissions fixed: {executable_count} executables, {dir_count} directories, {file_count} files", "SUCCESS")
             return True
-            
+
         except (OSError, ValueError) as e:
             self.log(f"Failed to fix permissions: {e}", "ERROR")
             return False
-            
+
     def _user_exists(self, username: str) -> bool:
         """Verifica se un utente esiste nel sistema"""
         try:
@@ -523,15 +523,15 @@ class SmartUpdater:
             return True
         except KeyError:
             return False
-            
+
     def update_system_packages(self) -> bool:
         """Aggiorna pacchetti di sistema Debian/Ubuntu in modo sicuro"""
         try:
             self.log("Updating system packages...", "INFO")
-            
+
             # 1. Update package list
             self.run_command(["apt-get", "update", "-qq"], check=False)
-            
+
             # 2. Upgrade packages in modo sicuro (non rimuove pacchetti)
             # Usa --with-new-pkgs per installare nuove dipendenze se necessario
             # ma senza rimuovere pacchetti esistenti
@@ -557,30 +557,30 @@ class SmartUpdater:
                     self.log("System packages dist-upgraded", "SUCCESS")
                 except Exception as dist_error:
                     self.log(f"Dist-upgrade warning: {dist_error}", "WARNING")
-            
+
             # 3. Cleanup
             try:
                 self.run_command(["apt-get", "autoremove", "-y", "-qq"], check=False)
                 self.run_command(["apt-get", "autoclean", "-y", "-qq"], check=False)
             except Exception:
                 pass  # Non critico
-            
+
             return True
         except Exception as e:
             self.log(f"System package update warning: {e}", "WARNING")
             return True  # Non bloccare l'update del progetto
-    
+
     def update_dependencies(self) -> bool:
         """Aggiorna dipendenze Python (system-wide, no venv)"""
         requirements_file = self.project_root / "requirements.txt"
         if not requirements_file.exists():
             self.log("requirements.txt not found, skipping dependency update")
             return True
-            
+
         try:
             # Use system python - upgrade only if needed (changed in requirements.txt)
             self.run_command([
-                sys.executable, "-m", "pip", "install", 
+                sys.executable, "-m", "pip", "install",
                 "-r", "requirements.txt",
                 "--upgrade-strategy", "only-if-needed",
                 "--break-system-packages"
@@ -590,7 +590,7 @@ class SmartUpdater:
         except Exception as e:
             self.log(f"Dependency update warning: {e}", "WARNING")
             return True  # Non bloccare l'update
-            
+
     def validate_configuration(self) -> bool:
         """Valida la configurazione dopo l'aggiornamento seguendo le linee guida del progetto"""
         try:
@@ -600,7 +600,7 @@ import sys
 try:
     from config.config_manager import get_config_manager
     config_manager = get_config_manager()
-    
+
     # Test basic configuration access
     api_config = config_manager.get_solaredge_api_config()
     print("Configuration validation: SUCCESS")
@@ -612,29 +612,29 @@ except Exception as e:
     print(f"Configuration error: {e}")
     sys.exit(2)
 """
-            
+
             # Use system python (no venv)
             result = self.run_command([
                 sys.executable, "-c", validation_script
             ])
-            
+
             # 2. Verifica file di configurazione essenziali
             missing_files = []
             for config_file in self.config.preserve_files:
                 if not (self.project_root / config_file).exists():
                     missing_files.append(config_file)
-            
+
             if missing_files:
                 self.log(f"Missing configuration files: {missing_files}", "WARNING")
                 # Non è critico se alcuni file mancano
-            
+
             self.log("Configuration validation successful", "SUCCESS")
             return True
-            
+
         except Exception as e:
             self.log(f"Configuration validation failed: {e}", "ERROR")
             return False
-            
+
     def _prepare_update(self, force: bool) -> Tuple[bool, Optional[str], bool]:
         """Prepara l'aggiornamento: verifica updates e ferma servizi"""
         # 1. Verifica aggiornamenti disponibili
@@ -642,64 +642,64 @@ except Exception as e:
         if not has_updates and not force:
             self.log("No updates available", "SUCCESS")
             return False, None, False
-            
+
         # 2. Trova e ferma servizio
         service_name = self.find_active_service()
         service_was_running = False
         if service_name:
             service_was_running = self.stop_service(service_name)
-            
+
         return True, service_name, service_was_running
-    
+
     def _execute_update_steps(self) -> bool:
         """Esegue i passi principali dell'aggiornamento"""
         # 3. Backup temporaneo configurazioni
         if not self.backup_configs():
             self.log("Configuration backup failed, aborting", "ERROR")
             return False
-        
+
         # 4. Applica aggiornamento Git
         if not self.apply_git_update():
             self.log("Git update failed, aborting", "ERROR")
             return False
-            
+
         # 5. Ripristina configurazioni
         if not self.restore_configs():
             self.log("Configuration restore failed", "ERROR")
             return False
-            
+
         # 6. Ripristina permessi
         if not self.fix_permissions():
             self.log("Permission fix failed", "ERROR")
             return False
-            
+
         return True
-    
+
     def _finalize_update(self, service_name: Optional[str], service_was_running: bool) -> bool:
         """Finalizza l'aggiornamento: dipendenze, validazione e riavvio servizi"""
         # 7. Aggiorna pacchetti di sistema
         self.update_system_packages()
-        
+
         # 8. Aggiorna dipendenze Python
         if not self.update_dependencies():
             self.log("Dependency update failed", "WARNING")
             # Non è critico, continua
-            
+
         # 9. Valida configurazione
         if not self.validate_configuration():
             self.log("Configuration validation failed", "ERROR")
             self.log("Consider running rollback", "WARNING")
             return False
-        
+
         # 10. Importa dashboard Grafana (sempre)
         self.import_grafana_dashboard()
-            
+
         # 11. Riavvia servizio
         if service_was_running and service_name:
             self.start_service(service_name)
-            
+
         return True
-    
+
     def import_grafana_dashboard(self) -> bool:
         """Importa dashboard Grafana con UIDs corretti (come install.sh)"""
         try:
@@ -707,20 +707,20 @@ except Exception as e:
             import os
             from pathlib import Path
             import requests
-            
+
             dashboard_file = self.project_root / "grafana" / "dashboard-solaredge.json"
-            
+
             if not dashboard_file.exists():
                 self.log("Dashboard file not found, skipping", "WARNING")
                 return True
-            
+
             self.log("📊 Importing Grafana dashboard with correct UIDs...", "INFO")
-            
+
             # Leggi credenziali da environment
             grafana_url = os.getenv('GRAFANA_URL', 'http://localhost:3000')
             grafana_user = os.getenv('GRAFANA_USER', 'admin')
             grafana_pass = os.getenv('GRAFANA_PASSWORD', 'admin')
-            
+
             # 1. Ottieni UIDs dei data sources da Grafana
             try:
                 ds_response = requests.get(
@@ -728,14 +728,14 @@ except Exception as e:
                     auth=(grafana_user, grafana_pass),
                     timeout=10
                 )
-                
+
                 if ds_response.status_code == 200:
                     datasources = ds_response.json()
-                    
+
                     # Trova UIDs
                     influx_uid = None
                     sunmoon_uid = None
-                    
+
                     for ds in datasources:
                         if ds.get('name') == 'Solaredge':
                             influx_uid = ds.get('uid')
@@ -743,11 +743,11 @@ except Exception as e:
                         elif ds.get('name') == 'Sun and Moon':
                             sunmoon_uid = ds.get('uid')
                             self.log(f"Found Sun and Moon data source UID: {sunmoon_uid}", "INFO")
-                    
+
                     # 2. Carica e modifica dashboard JSON con UIDs corretti
                     with open(dashboard_file, 'r') as f:
                         dashboard_json = json.load(f)
-                    
+
                     # 3. Aggiorna UIDs nel dashboard (walk through nested structure)
                     def update_datasource_uids(obj, influx_uid, sunmoon_uid):
                         """Recursively update data source UIDs in dashboard JSON"""
@@ -765,13 +765,13 @@ except Exception as e:
                             # Recurse into list items
                             for item in obj:
                                 update_datasource_uids(item, influx_uid, sunmoon_uid)
-                    
+
                     if influx_uid or sunmoon_uid:
                         update_datasource_uids(dashboard_json, influx_uid, sunmoon_uid)
                         self.log("✅ Dashboard UIDs updated", "SUCCESS")
                     else:
                         self.log("⚠️ No data source UIDs found, importing dashboard as-is", "WARNING")
-                    
+
                     # 4. Importa dashboard con UIDs corretti
                     # Rimuovi id e uid dalla dashboard per permettere l'import
                     if 'id' in dashboard_json:
@@ -780,14 +780,14 @@ except Exception as e:
                         dashboard_uid = dashboard_json['uid']
                     else:
                         dashboard_uid = None
-                    
+
                     payload = {
                         "dashboard": dashboard_json,
                         "overwrite": True,
                         "message": "Updated by smart_update.py with correct UIDs",
                         "folderId": 0
                     }
-                    
+
                     # Usa l'endpoint corretto per Grafana 9+
                     response = requests.post(
                         f"{grafana_url}/api/dashboards/import",
@@ -795,7 +795,7 @@ except Exception as e:
                         json=payload,
                         timeout=10
                     )
-                    
+
                     # Se fallisce con import, prova con db (per retrocompatibilità)
                     if response.status_code == 404:
                         payload_db = {
@@ -809,7 +809,7 @@ except Exception as e:
                             json=payload_db,
                             timeout=10
                         )
-                    
+
                     if response.status_code == 200:
                         result = response.json()
                         self.log("✅ Dashboard imported successfully with correct UIDs", "SUCCESS")
@@ -823,27 +823,27 @@ except Exception as e:
                 else:
                     self.log(f"Failed to get data sources: HTTP {ds_response.status_code}", "WARNING")
                     return True  # Non bloccare l'update
-                    
+
             except requests.exceptions.RequestException as e:
                 self.log(f"Grafana connection error: {e}", "WARNING")
                 return True  # Non bloccare l'update
-                
+
         except Exception as e:
             self.log(f"Error importing dashboard: {e}", "WARNING")
             return True  # Non bloccare l'update
-    
+
     def _log_update_completion(self, service_name: Optional[str]) -> None:
         """Log finale dell'aggiornamento completato"""
         self.log("🎉 Smart update completed successfully!", "SUCCESS")
-    
+
     def _log_update_metrics(self) -> None:
         """Log delle metriche dell'aggiornamento per monitoraggio"""
         # Metrics logging removed for cleaner output
         pass
-            
+
         if self.update_metrics['errors_encountered']:
             self.log(f"Errors encountered: {len(self.update_metrics['errors_encountered'])}", "WARNING")
-    
+
     def run_update(self, force: bool = False) -> bool:
         """Esegue l'aggiornamento completo con metriche"""
         self.update_metrics['start_time'] = datetime.now()
@@ -852,21 +852,21 @@ except Exception as e:
             should_update, service_name, service_was_running = self._prepare_update(force)
             if not should_update:
                 return True
-                
+
             # Esecuzione passi principali
             if not self._execute_update_steps():
                 return False
-                
+
             # Finalizzazione
             if not self._finalize_update(service_name, service_was_running):
                 return False
-                
+
             # Log completamento
             self.update_metrics['end_time'] = datetime.now()
             self._log_update_completion(service_name)
             self._log_update_metrics()
             return True
-            
+
         except Exception as e:
             self.update_metrics['end_time'] = datetime.now()
             self.update_metrics['errors_encountered'].append(str(e))
@@ -879,13 +879,13 @@ except Exception as e:
 async def main_async() -> int:
     """Entry point asincrono per lo script"""
     import argparse
-    
+
     parser = argparse.ArgumentParser(description="Smart Update System for SolarEdge Data Collector")
     parser.add_argument("--force", action="store_true", help="Force update even if no changes detected")
     parser.add_argument("--check-only", action="store_true", help="Only check for updates, don't apply")
-    
+
     args = parser.parse_args()
-    
+
     try:
         # Create updater with ConfigManager if available
         config_manager = None
@@ -894,9 +894,9 @@ async def main_async() -> int:
                 config_manager = ConfigManager()
             except Exception:
                 pass  # Silent fallback
-        
+
         updater = SmartUpdater(config_manager=config_manager)
-        
+
         if args.check_only:
             has_updates, count = updater.check_for_updates()
             if has_updates:
@@ -908,7 +908,7 @@ async def main_async() -> int:
         else:
             success = updater.run_update(force=args.force)
             return 0 if success else 1
-            
+
     except KeyboardInterrupt:
         print("\nUpdate interrupted by user")
         return 130
@@ -926,15 +926,15 @@ def main() -> None:
     except Exception:
         # Fallback alla versione sincrona
         import argparse
-        
+
         parser = argparse.ArgumentParser(description="Smart Update System for SolarEdge Data Collector")
         parser.add_argument("--force", action="store_true", help="Force update even if no changes detected")
         parser.add_argument("--check-only", action="store_true", help="Only check for updates, don't apply")
-        
+
         args = parser.parse_args()
-        
+
         updater = SmartUpdater()
-        
+
         if args.check_only:
             has_updates, count = updater.check_for_updates()
             if has_updates:

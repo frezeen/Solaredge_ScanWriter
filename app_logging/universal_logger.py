@@ -38,23 +38,23 @@ def _get_logging_config():
 
 def configure_logging(level: str | None = None, log_file: str | None = None, script_name: str | None = None) -> None:
     global _configured
-    
+
     # Evita riconfigurazioni multiple
     if _configured and level is None and log_file is None:
         return
-    
+
     # Carica configurazione lazy
     _get_logging_config()
-    
+
     root_logger = _logging.getLogger()
     # Rimuovi tutti gli handler esistenti per evitare duplicazioni
     for handler in root_logger.handlers[:]:
         root_logger.removeHandler(handler)
-    
+
     lvl = (level or _DEFAULT_LEVEL).upper()
     _DEFAULT_DIR.mkdir(parents=True, exist_ok=True)
     fmt = "%(asctime)s | %(levelname)s | %(name)s | %(message)s"
-    
+
     # Configura il logger di base (console)
     _logging.basicConfig(level=lvl, format=fmt)
 
@@ -75,7 +75,7 @@ def configure_logging(level: str | None = None, log_file: str | None = None, scr
         fh.setLevel(lvl)
         fh.setFormatter(_logging.Formatter(fmt))
         root_logger.addHandler(fh)
-    
+
     _configured = True
 
 def get_logger(name: str):

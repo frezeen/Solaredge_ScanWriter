@@ -96,59 +96,59 @@ class InfluxDBConfig:
 
 class ConfigManager:
     """Manager centralizzato per configurazione da YAML."""
-    
+
     def __init__(self, config_path: str = "config/main.yaml"):
         # Carica variabili d'ambiente dal file .env
         load_dotenv()
-        
+
         self.config_path = Path(config_path)
         self._config_data: Dict[str, Any] = {}
         self._yaml_loader = get_yaml_loader()
         self._load_config()
-    
+
     def _load_config(self) -> None:
         """Carica configurazione YAML con sostituzione variabili d'ambiente usando unified loader."""
         try:
             if not self.config_path.exists():
                 raise FileNotFoundError(f"File configurazione non trovato: {self.config_path}")
-            
+
             # Use unified YAML loader with caching and env substitution
             self._config_data = self._yaml_loader.load_yaml(
-                self.config_path, 
-                substitute_env=True, 
+                self.config_path,
+                substitute_env=True,
                 use_cache=True
             )
-            
+
             # Carica sources da file separati
             self._load_sources()
-            
+
         except Exception as e:
             raise RuntimeError(f"Errore caricamento configurazione {self.config_path}: {e}") from e
-    
+
     def _load_sources(self) -> None:
         """Carica configurazioni sources da file separati usando unified loader."""
         sources_dir = self.config_path.parent / 'sources'
-        
+
         if not sources_dir.exists():
             # Se la cartella sources non esiste, usa sources dal main.yaml
             return
-        
+
         sources = {}
-        
+
         # Carica API endpoints
         api_file = sources_dir / 'api_endpoints.yaml'
         if api_file.exists():
             api_data = self._yaml_loader.load_yaml(api_file, substitute_env=True, use_cache=True)
             if 'api_ufficiali' in api_data:
                 sources['api_ufficiali'] = api_data['api_ufficiali']
-        
+
         # Carica Modbus endpoints
         modbus_file = sources_dir / 'modbus_endpoints.yaml'
         if modbus_file.exists():
             modbus_data = self._yaml_loader.load_yaml(modbus_file, substitute_env=True, use_cache=True)
             if 'modbus' in modbus_data:
                 sources['modbus'] = modbus_data['modbus']
-        
+
         # Carica Web endpoints
         web_file = sources_dir / 'web_endpoints.yaml'
         if web_file.exists():
@@ -159,15 +159,15 @@ class ConfigManager:
             # File web_endpoints.yaml mancante - usa configurazione vuota
             # L'utente deve eseguire 'python main.py --scan' per generarlo
             pass
-        
+
         # Merge sources nel config principale
         if sources:
             self._config_data['sources'] = sources
-    
+
     def reload(self) -> None:
         """Ricarica configurazione da file."""
         self._load_config()
-    
+
     def get_global_config(self) -> GlobalConfig:
         """Ottieni configurazione globale."""
         global_data = self._config_data.get('global', {})
@@ -180,7 +180,7 @@ class ConfigManager:
             batch_request_timeout=int(global_data.get('batch_request_timeout', 60)),
             filter_debug=str(global_data.get('filter_debug', 'false')).lower() == 'true'
         )
-    
+
     def get_logging_config(self) -> LoggingConfig:
         """Ottieni configurazione logging."""
         logging_data = self._config_data.get('logging', {})
@@ -189,7 +189,7 @@ class ConfigManager:
             level=logging_data.get('level', 'INFO'),
             log_directory=logging_data.get('log_directory', 'logs')
         )
-    
+
     def get_scheduler_config(self) -> SchedulerConfig:
         """Ottieni configurazione scheduler."""
         scheduler_data = self._config_data.get('scheduler', {})
@@ -200,7 +200,7 @@ class ConfigManager:
             gme_delay_seconds=float(scheduler_data.get('gme_delay_seconds', 6.0)),
             skip_delay_on_cache_hit=bool(scheduler_data.get('skip_delay_on_cache_hit', True))
         )
-    
+
     def get_solaredge_api_config(self) -> SolarEdgeAPIConfig:
         """Ottieni configurazione API SolarEdge."""
         api_data = self._config_data.get('solaredge', {}).get('api', {})
@@ -213,7 +213,7 @@ class ConfigManager:
             site_id=api_data.get('site_id', ''),
             timeout_seconds=int(api_data.get('timeout_seconds', 30))
         )
-    
+
     def get_solaredge_web_config(self) -> SolarEdgeWebConfig:
         """Ottieni configurazione Web SolarEdge."""
         web_data = self._config_data.get('solaredge', {}).get('web', {})
@@ -225,10 +225,10 @@ class ConfigManager:
             session_timeout_seconds=int(web_data.get('session_timeout_seconds', 3600)),
             username=web_data.get('username', '')
         )
-    
+
     def get_influxdb_config(self) -> InfluxDBConfig:
         """Ottieni configurazione InfluxDB dalle variabili d'ambiente.
-        
+
         Supporta bucket separati per dati API/Web, Realtime e GME con retention diverse.
         """
         return InfluxDBConfig(
@@ -248,7 +248,7 @@ class ConfigManager:
             enable_gzip=os.environ.get('INFLUX_ENABLE_GZIP', 'true').lower() == 'true',
             write_precision=os.environ.get('INFLUX_WRITE_PRECISION', 's')
         )
-    
+
     def get_realtime_config(self) -> RealtimeConfig:
         """Ottieni configurazione Realtime dalle variabili d'ambiente."""
         return RealtimeConfig(
@@ -257,38 +257,38 @@ class ConfigManager:
             timeout=int(os.environ.get('REALTIME_MODBUS_TIMEOUT', '1')),
             unit=int(os.environ.get('REALTIME_MODBUS_UNIT', '1'))
         )
-    
+
     def get_modbus_endpoints(self) -> Dict[str, Any]:
         """Ottieni configurazione endpoints Modbus da file YAML usando unified loader.
-        
+
         Returns:
             Dizionario con configurazione modbus endpoints
-            
+
         Raises:
             FileNotFoundError: Se file modbus_endpoints.yaml non trovato
             ValueError: Se configurazione modbus non valida
         """
         modbus_config_path = Path("config/sources/modbus_endpoints.yaml")
-        
+
         if not modbus_config_path.exists():
             raise FileNotFoundError(f"File configurazione modbus non trovato: {modbus_config_path}")
-        
+
         try:
             # Use unified YAML loader with caching and env substitution
             modbus_config = self._yaml_loader.load_yaml(
-                modbus_config_path, 
-                substitute_env=True, 
+                modbus_config_path,
+                substitute_env=True,
                 use_cache=True
             )
-            
+
             if not modbus_config or 'modbus' not in modbus_config:
                 raise ValueError("Configurazione modbus non valida: sezione 'modbus' mancante")
-            
+
             return modbus_config['modbus']
-            
+
         except Exception as e:
             raise ValueError(f"Errore parsing YAML modbus_endpoints.yaml: {e}") from e
-    
+
     def get_raw_config(self) -> Dict[str, Any]:
         """Ottieni configurazione raw per compatibilità."""
         return self._config_data.copy()
