@@ -138,7 +138,7 @@ class SolarDashboard {
     memoize(fn, keyFn = (...args) => JSON.stringify(args)) {
         const cache = new Map();
 
-        return function(...args) {
+        return function (...args) {
             const key = keyFn(...args);
 
             if (cache.has(key)) {
@@ -819,8 +819,8 @@ class SolarDashboard {
 
     createStatHTML(icon1, val1, icon2, val2, icon3, val3) {
         return `<span style="display:flex;justify-content:space-between;width:100%"><span>${icon1}</span><span>${val1}</span></span>` +
-               `<span style="display:flex;justify-content:space-between;width:100%"><span>${icon2}</span><span>${val2}</span></span>` +
-               `<span style="display:flex;justify-content:space-between;width:100%"><span>${icon3}</span><span>${val3}</span></span>`;
+            `<span style="display:flex;justify-content:space-between;width:100%"><span>${icon2}</span><span>${val2}</span></span>` +
+            `<span style="display:flex;justify-content:space-between;width:100%"><span>${icon3}</span><span>${val3}</span></span>`;
     }
 
     updateDeviceUI(id, data) {
@@ -981,9 +981,9 @@ class SolarDashboard {
         if (loop_mode && stats) {
             // Calcola totale runs
             const totalRuns = (stats.api_stats?.executed || 0) +
-                            (stats.web_stats?.executed || 0) +
-                            (stats.realtime_stats?.executed || 0) +
-                            (stats.gme_stats?.executed || 0);
+                (stats.web_stats?.executed || 0) +
+                (stats.realtime_stats?.executed || 0) +
+                (stats.gme_stats?.executed || 0);
 
             // Scheduling info (intervalli configurati su righe separate)
             const scheduling = 'API/Web: 15m\nRealtime: 5s\nGME: 24h';
@@ -1031,7 +1031,7 @@ class SolarDashboard {
             if (realtimeTimingEl) {
                 const now = new Date();
                 const nextRealtime = new Date(now.getTime() + 5000);
-                const nextStr = nextRealtime.toLocaleTimeString('it-IT', {hour: '2-digit', minute: '2-digit', second: '2-digit'});
+                const nextStr = nextRealtime.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
                 realtimeTimingEl.textContent = `next: ${nextStr}`;
             }
         }
@@ -1352,12 +1352,22 @@ function createLogEntry(log) {
 // Helper: Update log count display
 function updateLogCount(total, runCounts) {
     let countText = `${total} log visualizzati`;
-    if (runCounts) {
-        const totalRuns = Object.values(runCounts).reduce((sum, count) => sum + count, 0);
-        if (totalRuns > 0) {
-            countText += ` (ultime ${totalRuns} run)`;
+
+    // Add context-specific suffix based on current filter
+    if (currentLogFlow === 'all') {
+        countText += ' (Ultimi 24h)';
+    } else if (currentLogFlow === 'general') {
+        countText += ' (Mai resettati)';
+    } else {
+        // For flow-specific tabs (api, web, realtime, gme)
+        if (runCounts) {
+            const totalRuns = Object.values(runCounts).reduce((sum, count) => sum + count, 0);
+            if (totalRuns > 0) {
+                countText += ` (Ultime ${totalRuns} run)`;
+            }
         }
     }
+
     setTextContent($('#logsCount'), countText);
 }
 
