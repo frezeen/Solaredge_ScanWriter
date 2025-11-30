@@ -587,6 +587,33 @@ class SimpleWebGUI:
             self.logger.info(f"   Config: {self.config_file}")
             self.logger.info("="*50)
             
+            # Log configurazione sistema per GUI (General tab)
+            try:
+                from config.config_manager import get_config_manager
+                cm = get_config_manager()
+                
+                # Scheduler
+                sched = cm.get_scheduler_config()
+                self.logger.info(
+                    f"⏱️  Scheduler: API={sched.api_delay_seconds}s, "
+                    f"Web={sched.web_delay_seconds}s, "
+                    f"RT={sched.realtime_delay_seconds}s, "
+                    f"GME={sched.gme_delay_seconds}s"
+                )
+                
+                # InfluxDB
+                influx = cm.get_influxdb_config()
+                self.logger.info(
+                    f"✅ InfluxDB: {influx.url} (Bucket: {influx.bucket})"
+                )
+                
+                # Cache
+                self.logger.info("✅ Cache centralizzata inizializzata")
+                
+            except Exception as e:
+                self.logger.warning(f"Impossibile loggare config sistema: {e}")
+
+            
             # Avvia automaticamente il loop se richiesto
             if self.auto_start_loop:
                 self.logger.info("[GUI] 🚀 Avvio automatico del loop...")

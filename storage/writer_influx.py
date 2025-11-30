@@ -85,8 +85,6 @@ class InfluxWriter:
             # Note: write_api gestisce internamente batching e retry
             self._write_api = self._client.write_api(write_options=write_options)
             
-
-            
         except Exception as e:
             raise RuntimeError(f"InfluxWriter: errore inizializzazione - {e}")
 

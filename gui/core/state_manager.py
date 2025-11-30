@@ -118,9 +118,14 @@ class StateManager:
         flow_type = log_entry.get('flow_type', 'general')
         
         # General: accumula tutti i messaggi senza concetto di run
-        if flow_type == 'general':
+        # Inoltre, accumula SEMPRE errori e warning da qualsiasi flow
+        is_error_or_warning = log_entry.get('level', '').upper() in ['ERROR', 'WARNING']
+        
+        if flow_type == 'general' or is_error_or_warning:
             self.general_logs.append(log_entry)
-            return
+            
+            if flow_type == 'general':
+                return
         
         # Altri flow: gestione run
         if flow_type not in self.flow_runs:
