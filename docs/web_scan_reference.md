@@ -143,8 +143,8 @@ All measurements inherit the device's enabled state by default.
 The system uses a "Smart Range" mode to optimize API requests:
 
 *   **History Mode** (explicit dates):
-    *   **Daily/7days Devices**: Iterates day-by-day to ensure maximum precision and avoid overlaps.
-    *   **Monthly Devices** (e.g. Site): Iterates month-by-month to optimize requests and ensure cache consistency with Loop Mode.
+    *   **Daily/7days Devices** (e.g. Optimizers, Weather): Iterates day-by-day. **Note**: The `HistoryManager` tool limits this to the last 7 days by default to avoid excessive API load.
+    *   **Monthly Devices** (e.g. Site): Iterates month-by-month. `HistoryManager` fetches the FULL history for these devices based on their `date_range` configuration.
 *   **Loop Mode** (no dates): Uses the `date_range` field defined in `web_endpoints.yaml`:
     *   `7days`: Requests last 7 days (e.g., for Optimizers).
     *   `monthly`: Requests from 1st of current month to today (e.g., for Site).
