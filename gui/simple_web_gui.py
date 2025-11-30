@@ -359,7 +359,10 @@ class SimpleWebGUI:
         """Restituisce lo stato del loop mode - REFACTORED"""
         try:
             # Delega a StateManager (gestisce serializzazione datetime)
-            return web.json_response(self.state_manager.get_loop_status())
+            status = self.state_manager.get_loop_status()
+            # Add retention config for dynamic UI
+            status['retention_config'] = self.state_manager.retention_config
+            return web.json_response(status)
 
         except Exception as e:
             return self.error_handler.handle_api_error(e, "getting loop status", "Error retrieving loop status")
@@ -636,8 +639,10 @@ class SimpleWebGUI:
                 # Cache
                 self.logger.info("[SYSTEM] 🗄️  Cache centralizzata inizializzata e operativa")
                 
-                # Log settings info
-                self.logger.info("[SYSTEM] 📝 Log inizializzati (TUTTI: reset 24h, Flow: ultime 3 run, SISTEMA: mai resettati)")
+                # Log settings info (dynamic from retention_config)
+                all_hours = self.state_manager.retention_config['all_hours']
+                flow_runs = self.state_manager.retention_config['flow_runs']
+                self.logger.info(f"[SYSTEM] 📝 Log inizializzati (TUTTI: reset {all_hours}h, Flow: ultime {flow_runs} run, SISTEMA: mai resettati)")
 
             except Exception as e:
                 self.logger.warning(f"Impossibile inizializzare config manager per log: {e}")

@@ -24,13 +24,20 @@ class StateManager:
         # Log tracking con deque per auto-eviction
         self.log_buffer = deque(maxlen=max_log_buffer)
 
+        # Retention configuration (exposed to UI)
+        self.retention_config = {
+            'all_hours': 12,        # Hours for "Tutti" tab
+            'flow_runs': 3,         # Number of runs for flow tabs
+            'sistema_reset': False  # Sistema never resets
+        }
+
         # Flow runs tracking - logs raggruppati per flow type
         # Ogni flow ha una deque di liste (runs), max 3 run
         self.flow_runs: Dict[str, deque] = {
-            'api': deque(maxlen=3),
-            'web': deque(maxlen=3),
-            'realtime': deque(maxlen=3),
-            'gme': deque(maxlen=3),
+            'api': deque(maxlen=self.retention_config['flow_runs']),
+            'web': deque(maxlen=self.retention_config['flow_runs']),
+            'realtime': deque(maxlen=self.retention_config['flow_runs']),
+            'gme': deque(maxlen=self.retention_config['flow_runs']),
             'sistema': deque(maxlen=1)  # Sistema ha solo una "run" continua
         }
         
@@ -109,13 +116,14 @@ class StateManager:
 
         self.log_buffer.append(log_entry)
         
-        # Retention policy 12h per log_buffer (pulizia lazy)
+        # Retention policy per log_buffer (pulizia lazy)
         # Controlla solo il primo elemento (il più vecchio)
+        retention_seconds = self.retention_config['all_hours'] * 3600
         if self.log_buffer:
             oldest = self.log_buffer[0]
             if oldest.get('timestamp_obj'):
                 age = (timestamp - oldest['timestamp_obj']).total_seconds()
-                if age > 43200:  # 12 ore
+                if age > retention_seconds:
                     self.log_buffer.popleft()
 
         self._add_log_to_flow_runs(log_entry)
