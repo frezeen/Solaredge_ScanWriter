@@ -408,14 +408,9 @@ class CollectorWeb(CollectorWebInterface):
         for device_type, reqs in grouped.items():
             date_range = reqs[0].get('date_range', 'daily')
             
-            # Genera chiave cache per questo tipo di device
-            if date_range == 'monthly':
-                # Cache mensile: usa anno-mese
-                year_month = target_date[:7]
-                cache_key = f"{device_type}_{year_month}"
-            else:
-                # Cache giornaliera: usa data completa
-                cache_key = f"{device_type}_{target_date}"
+            # Usa solo device_type come endpoint (cartella)
+            # La data va nel filename gestito dal cache manager
+            cache_endpoint = device_type
             
             def _fetch_group():
                 self.ensure_session()
@@ -426,14 +421,19 @@ class CollectorWeb(CollectorWebInterface):
                     # Leggi cache esistente per merge
                     existing_cache = None
                     if self.cache:
-                        existing_cache = self.cache.get_cached_data("web", cache_key, target_date)
+                        # Per monthly usa anno-mese come data
+                        cache_date = target_date[:7]  # "2025-12"
+                        existing_cache = self.cache.get_cached_data("web", cache_endpoint, cache_date)
                     
                     raw_data = self._aggregate_site_to_daily(raw_data, existing_cache)
                 
                 return raw_data
             
+            # Determina data per cache (mensile o giornaliera)
+            cache_date = target_date[:7] if date_range == 'monthly' else target_date
+            
             if self.cache:
-                group_data = self.cache.get_or_fetch("web", cache_key, target_date, _fetch_group)
+                group_data = self.cache.get_or_fetch("web", cache_endpoint, cache_date, _fetch_group)
                 all_results.extend(group_data.get('list', []))
             else:
                 group_data = _fetch_group()

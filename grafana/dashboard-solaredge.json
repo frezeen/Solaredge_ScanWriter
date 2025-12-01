@@ -3460,86 +3460,6 @@
     },
     {
       "datasource": {
-        "type": "influxdb",
-        "uid": "ff27vpmruzxtsc"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "displayName": "Produzione",
-          "mappings": [],
-          "noValue": "Produzione 0kWh",
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "yellow",
-                "value": 0
-              }
-            ]
-          },
-          "unit": "watth"
-        },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": ""
-            },
-            "properties": []
-          }
-        ]
-      },
-      "gridPos": {
-        "h": 2,
-        "w": 1,
-        "x": 23,
-        "y": 40
-      },
-      "hideTimeOverride": true,
-      "id": 173,
-      "options": {
-        "colorMode": "background",
-        "graphMode": "none",
-        "justifyMode": "center",
-        "orientation": "auto",
-        "percentChangeColorMode": "standard",
-        "reduceOptions": {
-          "calcs": [
-            "sum"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "showPercentChange": false,
-        "text": {},
-        "textMode": "auto",
-        "wideLayout": true
-      },
-      "pluginVersion": "12.3.0",
-      "targets": [
-        {
-          "alias": "Produzione",
-          "datasource": {
-            "type": "influxdb",
-            "uid": "ff27vpmruzxtsc"
-          },
-          "query": "import \"timezone\"\r\nimport \"date\"\r\noption location = timezone.location(name: \"Europe/Rome\")\r\nstartOfYear = date.truncate(t: now(), unit: 1y)\r\nendOfYear = date.add(d: 1y, to: startOfYear)\r\n\r\nfrom(bucket: \"Solaredge\")\r\n  |> range(start: startOfYear, stop: endOfYear)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"web\" and r[\"_field\"] == \"Site\")\r\n  |> filter(fn: (r) => r[\"endpoint\"] == \"PRODUCTION_ENERGY\")\r\n  |> aggregateWindow(every: 1d, fn: last, createEmpty: false)\r\n  |> sum()\r\n  |> yield(name: \"Produzione_Anno_Corrente\")",
-          "rawQuery": true,
-          "refId": "Produzione",
-          "resultFormat": "time_series"
-        }
-      ],
-      "timeFrom": "0d/d",
-      "timeShift": "0y/y",
-      "title": "",
-      "transparent": true,
-      "type": "stat"
-    },
-    {
-      "datasource": {
         "type": "datasource",
         "uid": "-- Mixed --"
       },
@@ -3572,7 +3492,7 @@
         "h": 2,
         "w": 1,
         "x": 23,
-        "y": 42
+        "y": 40
       },
       "id": 144,
       "options": {
@@ -3603,6 +3523,77 @@
           "hide": false,
           "query": "import \"timezone\"\r\noption location = timezone.location(name: \"Europe/Rome\")\r\n\r\nselfconsumption = from(bucket: \"Solaredge\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"api\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"Meter\")\r\n  |> filter(fn: (r) => r[\"endpoint\"] == \"site_energy_details\")\r\n  |> filter(fn: (r) => r[\"metric\"] == \"SelfConsumption\")\r\n  |> filter(fn: (r) => exists r._value)\r\n  |> sum()\r\n  |> map(fn: (r) => ({ _time: now(), _value: r._value, _field: \"selfconsumption\" }))\r\n\r\npurchased = from(bucket: \"Solaredge\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"api\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"Meter\")\r\n  |> filter(fn: (r) => r[\"endpoint\"] == \"site_energy_details\")\r\n  |> filter(fn: (r) => r[\"metric\"] == \"Purchased\")\r\n  |> filter(fn: (r) => exists r._value)\r\n  |> sum()\r\n  |> map(fn: (r) => ({ _time: now(), _value: r._value, _field: \"purchased\" }))\r\n\r\nunion(tables: [selfconsumption, purchased])\r\n  |> pivot(rowKey: [\"_time\"], columnKey: [\"_field\"], valueColumn: \"_value\")\r\n  |> map(fn: (r) => ({\r\n      _time: r._time,\r\n      _value: if (r.selfconsumption + r.purchased) > 0.0 \r\n              then (r.selfconsumption / (r.selfconsumption + r.purchased)) * 100.0 \r\n              else 0.0\r\n  }))\r\n",
           "refId": "% Autoconsumo"
+        }
+      ],
+      "title": "",
+      "transparent": true,
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "datasource",
+        "uid": "-- Mixed --"
+      },
+      "description": "",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "fixedColor": "light-yellow",
+            "mode": "thresholds"
+          },
+          "displayName": "% Prelievo",
+          "mappings": [],
+          "max": 100,
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "dark-red",
+                "value": 0
+              }
+            ]
+          },
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 2,
+        "w": 1,
+        "x": 23,
+        "y": 42
+      },
+      "id": 172,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "sum"
+          ],
+          "fields": "",
+          "limit": 1,
+          "values": false
+        },
+        "showPercentChange": false,
+        "text": {},
+        "textMode": "auto",
+        "wideLayout": false
+      },
+      "pluginVersion": "12.3.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "ff27vpmruzxtsc"
+          },
+          "hide": false,
+          "query": "import \"timezone\"\r\noption location = timezone.location(name: \"Europe/Rome\")\r\n\r\npurchased = from(bucket: \"Solaredge\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"api\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"Meter\")\r\n  |> filter(fn: (r) => r[\"endpoint\"] == \"site_energy_details\")\r\n  |> filter(fn: (r) => r[\"metric\"] == \"Purchased\")\r\n  |> filter(fn: (r) => exists r._value)\r\n  |> sum()\r\n  |> map(fn: (r) => ({ _time: now(), _value: r._value, _field: \"purchased\" }))\r\n\r\nconsumption = from(bucket: \"Solaredge\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"api\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"Meter\")\r\n  |> filter(fn: (r) => r[\"endpoint\"] == \"site_energy_details\")\r\n  |> filter(fn: (r) => r[\"metric\"] == \"Consumption\")\r\n  |> filter(fn: (r) => exists r._value)\r\n  |> sum()\r\n  |> map(fn: (r) => ({ _time: now(), _value: r._value, _field: \"consumption\" }))\r\n\r\nunion(tables: [purchased, consumption])\r\n  |> pivot(rowKey: [\"_time\"], columnKey: [\"_field\"], valueColumn: \"_value\")\r\n  |> map(fn: (r) => ({\r\n      _time: r._time,\r\n      _value: if r.consumption > 0.0 \r\n              then (r.purchased / r.consumption) * 100.0 \r\n              else 100.0\r\n  }))\r\n",
+          "refId": "A"
         }
       ],
       "title": "",
@@ -3810,32 +3801,37 @@
     },
     {
       "datasource": {
-        "type": "datasource",
-        "uid": "-- Mixed --"
+        "type": "influxdb",
+        "uid": "ff27vpmruzxtsc"
       },
-      "description": "",
       "fieldConfig": {
         "defaults": {
           "color": {
-            "fixedColor": "light-yellow",
             "mode": "thresholds"
           },
-          "displayName": "% Prelievo",
+          "displayName": "Produzione",
           "mappings": [],
-          "max": 100,
-          "min": 0,
+          "noValue": "Produzione 0kWh",
           "thresholds": {
             "mode": "absolute",
             "steps": [
               {
-                "color": "dark-red",
+                "color": "yellow",
                 "value": 0
               }
             ]
           },
-          "unit": "percent"
+          "unit": "watth"
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": ""
+            },
+            "properties": []
+          }
+        ]
       },
       "gridPos": {
         "h": 2,
@@ -3843,7 +3839,8 @@
         "x": 23,
         "y": 44
       },
-      "id": 172,
+      "hideTimeOverride": true,
+      "id": 173,
       "options": {
         "colorMode": "background",
         "graphMode": "none",
@@ -3855,26 +3852,29 @@
             "sum"
           ],
           "fields": "",
-          "limit": 1,
           "values": false
         },
         "showPercentChange": false,
         "text": {},
         "textMode": "auto",
-        "wideLayout": false
+        "wideLayout": true
       },
       "pluginVersion": "12.3.0",
       "targets": [
         {
+          "alias": "Produzione",
           "datasource": {
             "type": "influxdb",
             "uid": "ff27vpmruzxtsc"
           },
-          "hide": false,
-          "query": "import \"timezone\"\r\noption location = timezone.location(name: \"Europe/Rome\")\r\n\r\npurchased = from(bucket: \"Solaredge\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"api\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"Meter\")\r\n  |> filter(fn: (r) => r[\"endpoint\"] == \"site_energy_details\")\r\n  |> filter(fn: (r) => r[\"metric\"] == \"Purchased\")\r\n  |> filter(fn: (r) => exists r._value)\r\n  |> sum()\r\n  |> map(fn: (r) => ({ _time: now(), _value: r._value, _field: \"purchased\" }))\r\n\r\nconsumption = from(bucket: \"Solaredge\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"api\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"Meter\")\r\n  |> filter(fn: (r) => r[\"endpoint\"] == \"site_energy_details\")\r\n  |> filter(fn: (r) => r[\"metric\"] == \"Consumption\")\r\n  |> filter(fn: (r) => exists r._value)\r\n  |> sum()\r\n  |> map(fn: (r) => ({ _time: now(), _value: r._value, _field: \"consumption\" }))\r\n\r\nunion(tables: [purchased, consumption])\r\n  |> pivot(rowKey: [\"_time\"], columnKey: [\"_field\"], valueColumn: \"_value\")\r\n  |> map(fn: (r) => ({\r\n      _time: r._time,\r\n      _value: if r.consumption > 0.0 \r\n              then (r.purchased / r.consumption) * 100.0 \r\n              else 100.0\r\n  }))\r\n",
-          "refId": "A"
+          "query": "import \"timezone\"\r\nimport \"date\"\r\noption location = timezone.location(name: \"Europe/Rome\")\r\nstartOfYear = date.truncate(t: now(), unit: 1y)\r\nendOfYear = date.add(d: 1y, to: startOfYear)\r\n\r\nfrom(bucket: \"Solaredge\")\r\n  |> range(start: startOfYear, stop: endOfYear)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"web\" and r[\"_field\"] == \"Site\")\r\n  |> filter(fn: (r) => r[\"endpoint\"] == \"PRODUCTION_ENERGY\")\r\n  |> aggregateWindow(every: 1d, fn: last, createEmpty: false)\r\n  |> sum()\r\n  |> yield(name: \"Produzione_Anno_Corrente\")",
+          "rawQuery": true,
+          "refId": "Produzione",
+          "resultFormat": "time_series"
         }
       ],
+      "timeFrom": "0d/d",
+      "timeShift": "0y/y",
       "title": "",
       "transparent": true,
       "type": "stat"
@@ -5883,6 +5883,6 @@
   "timezone": "",
   "title": "Solaredge 3.0",
   "uid": "afb91a6f-d8f7-43ae-8a98-67eab1bb4baa",
-  "version": 572,
+  "version": 576,
   "weekStart": "monday"
 }
