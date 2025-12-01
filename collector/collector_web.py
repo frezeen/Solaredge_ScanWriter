@@ -421,16 +421,15 @@ class CollectorWeb(CollectorWebInterface):
                     # Leggi cache esistente per merge
                     existing_cache = None
                     if self.cache:
-                        # Per monthly usa anno-mese come data
-                        cache_date = target_date[:7]  # "2025-12"
-                        existing_cache = self.cache.get_cached_data("web", cache_endpoint, cache_date)
+                        # Per monthly usa la data completa (fine mese) per compatibilità con cache manager
+                        existing_cache = self.cache.get_cached_data("web", cache_endpoint, target_date)
                     
                     raw_data = self._aggregate_site_to_daily(raw_data, existing_cache)
                 
                 return raw_data
             
-            # Determina data per cache (mensile o giornaliera)
-            cache_date = target_date[:7] if date_range == 'monthly' else target_date
+            # Usa sempre target_date completo per cache (formato YYYY-MM-DD richiesto dal cache manager)
+            cache_date = target_date
             
             if self.cache:
                 group_data = self.cache.get_or_fetch("web", cache_endpoint, cache_date, _fetch_group)
