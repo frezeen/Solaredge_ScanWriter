@@ -70,7 +70,7 @@ api_ufficiali:
         frequenza, potenza attiva/reattiva, fattore di potenza, temperatura e modalit├á
         operative. Include anche versione software e tipo di inverter (monofase/trifase).
         Dati divisi per fase dove applicabile. Limitato a una settimana di dati.
-      enabled: true
+      enabled: false
       endpoint: /equipment/{siteId}/{serialNumber}/data
       extraction:
         values_path: data.telemetries
@@ -87,7 +87,7 @@ api_ufficiali:
         Lista degli inverter e SMI (Safety Monitoring Interface) installati.
         Fornisce nomi, modelli, produttori e numeri seriali di tutti i dispositivi
         di conversione energia del sito.
-      enabled: true
+      enabled: false
       endpoint: /equipment/{siteId}/list
       extraction:
         raw_json_field: raw_json
@@ -134,7 +134,7 @@ api_ufficiali:
         energetica aggregati per giorno, utili per analisi storiche e confronti con
         il pannello di controllo ufficiale. Limitato a un anno di dati quando si usa
         risoluzione giornaliera.
-      enabled: true
+      enabled: false
       endpoint: /site/{siteId}/energy
       extraction:
         time_field: date
@@ -222,7 +222,7 @@ api_ufficiali:
         Benefici ambientali derivanti dalla produzione energetica del sito.
         Include calcolo di emissioni CO2 evitate, alberi equivalenti piantati e impatto
         ambientale positivo. Metriche di sostenibilit├á e impatto ambientale.
-      enabled: true
+      enabled: false
       endpoint: /site/{siteId}/envBenefits
       extraction:
         raw_json_field: raw_json
@@ -271,7 +271,7 @@ api_ufficiali:
         Panoramica corrente del sito con metriche chiave. Include potenza
         istantanea, energia giornaliera/mensile/lifetime e dati di produzione aggregati.
         Overview completo delle prestazioni attuali.
-      enabled: true
+      enabled: false
       endpoint: /site/{siteId}/overview
       extraction:
         raw_json_field: raw_json
@@ -287,7 +287,7 @@ api_ufficiali:
         elevata. Monitora in tempo reale produzione, consumo, autoconsumo, immissione
         e acquisto di potenza. Critico per analisi di prestazioni in tempo reale e
         ottimizzazione sistema.
-      enabled: true
+      enabled: false
       endpoint: /site/{siteId}/powerDetails
       extraction:
         time_field: date
@@ -360,7 +360,7 @@ api_ufficiali:
         Fornisce un singolo valore aggregato di energia prodotta dal sistema fotovoltaico,
         utile per report annuali e confronti con il Site Dashboard. Corrisponde al
         valore mostrato come "energia prodotta totale" nell'app SolarEdge.
-      enabled: true
+      enabled: false
       endpoint: /site/{siteId}/timeFrameEnergy
       extraction:
         time_field: startLifetimeEnergy.date
