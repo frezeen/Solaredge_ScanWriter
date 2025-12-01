@@ -174,9 +174,11 @@ class CollectorAPI:
 
                     if self.cache:
                         today = datetime.now().strftime('%Y-%m-%d')
+                        is_metadata = endpoint_config.get('data_type') == 'metadata'
                         results[endpoint_name] = self.cache.get_or_fetch(
                             'api_ufficiali', endpoint_name, today,
-                            lambda: self._call_api(url, params)
+                            lambda: self._call_api(url, params),
+                            is_metadata=is_metadata
                         )
                     else:
                         results[endpoint_name] = self._call_api(url, params)
@@ -287,9 +289,11 @@ class CollectorAPI:
                                                              f"{start_date} 00:00:00",
                                                              f"{end_date} 23:59:59")
 
+                        is_metadata = endpoint_config.get('data_type') == 'metadata'
                         cached_data = self.cache.get_or_fetch(
                             'api_ufficiali', endpoint_name, month_key,
-                            lambda: self._call_api(url, params)
+                            lambda: self._call_api(url, params),
+                            is_metadata=is_metadata
                         )
                         use_cache = True
                         logger.info(f"✅ Cache diretta per {endpoint_name} (come API mode)")
@@ -344,8 +348,9 @@ class CollectorAPI:
 
                     # Salva ogni giorno in cache separatamente
                     if self.cache:
+                        is_metadata = endpoint_config.get('data_type') == 'metadata'
                         for day, day_data in daily_data.items():
-                            self.cache.save_to_cache('api_ufficiali', endpoint_name, day, day_data)
+                            self.cache.save_to_cache('api_ufficiali', endpoint_name, day, day_data, is_metadata=is_metadata)
                             logger.debug(f"💾 Cache salvata: {endpoint_name} - {day}")
 
                 # Aggiungi i dati al risultato finale (sia da cache che da API)
