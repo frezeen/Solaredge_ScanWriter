@@ -5,7 +5,6 @@ Struttura: cache/{source}/{endpoint}/{date}_{hash}.json.gz
 
 Caratteristiche:
 - Cache infinita per api_ufficiali e web
-- Cache 7 giorni per realtime
 - Solo file compressi .json.gz
 - Hash nei nomi file per evitare riscritture inutili
 - Logging universale tramite app_logging
@@ -33,14 +32,7 @@ class CacheManager:
     TTL_CONFIG = {
         'api_ufficiali': 15,    # API ufficiali: 15 minuti, poi hash check
         'web': 15,              # Web scraping: 15 minuti, poi hash check
-        'realtime': 5,          # Real-time: 5 minuti auto-refresh (no hash check)
         'gme': 1440             # GME: 24 ore (dati giornalieri)
-    }
-    
-    CACHE_MAPPINGS = {
-        'web_measurements': ('web', 'measurements'),
-        'api_measurements': ('api_ufficiali', 'site_overview'),
-        'api_data': ('api_ufficiali', 'site_overview')
     }
 
     def __init__(self, cache_dir: str = "cache"):
@@ -60,12 +52,19 @@ class CacheManager:
     def _extract_time_from_filename(self, file_path: Path) -> Optional[datetime]:
         """Estrae l'orario dal nome del file cache."""
         try:
-            # Formato: 2025-10-03_14-32.json.gz
+            # Formato: 2025-10-03_14-32.json.gz o 2025-11_14-32_a3f5b2c8.json.gz
             filename = file_path.stem.replace('.json', '')  # Rimuove .json da .json.gz
             if '_' not in filename:
                 return None
             
-            date_part, time_part = filename.split('_', 1)
+            parts = filename.split('_')
+            date_part = parts[0]
+            time_part = parts[1] if len(parts) > 1 else None
+            
+            if not time_part:
+                return None
+            
+            # Rimuovi hash se presente (es. 14-32 da 14-32 o da array con hash)
             time_str = time_part.replace('-', ':')  # 14-32 → 14:32
             
             # Combina data e ora
@@ -74,19 +73,23 @@ class CacheManager:
         except (ValueError, AttributeError):
             return None
 
-    def _build_cache_path(self, source: str, endpoint: str, date: str, time_str: str = None) -> Path:
-        """Costruisce path cache con orario nel nome."""
+    def _build_cache_path(self, source: str, endpoint: str, date: str, time_str: str = None, data_hash: str = None) -> Path:
+        """Costruisce path cache con orario e opzionalmente hash nel nome."""
         if time_str:
-            filename = f"{date}_{time_str}{FILE_EXTENSION}"
+            if data_hash:
+                filename = f"{date}_{time_str}_{data_hash}{FILE_EXTENSION}"
+            else:
+                filename = f"{date}_{time_str}{FILE_EXTENSION}"
         else:
             # Usa orario attuale se non specificato
             time_str = datetime.now().strftime('%H-%M')
-            filename = f"{date}_{time_str}{FILE_EXTENSION}"
+            if data_hash:
+                filename = f"{date}_{time_str}_{data_hash}{FILE_EXTENSION}"
+            else:
+                filename = f"{date}_{time_str}{FILE_EXTENSION}"
         return self.cache_dir / source / endpoint / filename
     
-    def get_cache_path(self, source: str, endpoint: str, date: str, time_str: str = None) -> Path:
-        """Restituisce path del file cache compresso con orario"""
-        return self._build_cache_path(source, endpoint, date, time_str)
+
 
     def _validate_cache_file(self, cache_path: Path) -> Optional[Dict[str, Any]]:
         """Valida esistenza e lettura file cache."""
@@ -133,17 +136,25 @@ class CacheManager:
         return self._validate_cache_age_from_filename(cache_path, source, target_date)
 
     def _find_latest_cache_file(self, source: str, endpoint: str, date: str) -> Optional[Path]:
-        """Trova il file cache per una data (dovrebbe essere unico)."""
+        """Trova il file cache per una data, prioritizzando file con hash (sigillo qualità)."""
         endpoint_dir = self.cache_dir / source / endpoint
         if not endpoint_dir.exists():
             return None
         
-        # COMPREHENSION per file matching (REGOLA #6)
-        pattern = f"{date}_*{FILE_EXTENSION}"
-        matching_files = list(endpoint_dir.glob(pattern))
+        # Prima cerca file CON hash (completi)
+        pattern_with_hash = f"{date}_*_*{FILE_EXTENSION}"
+        files_with_hash = list(endpoint_dir.glob(pattern_with_hash))
         
-        # Dovrebbe esserci solo 1 file per giorno, ma prendiamo il più recente per sicurezza
-        return max(matching_files, key=lambda p: p.name) if matching_files else None
+        if files_with_hash:
+            # Trovato file con sigillo qualità - priorità massima
+            return max(files_with_hash, key=lambda p: p.name)
+        
+        # Altrimenti cerca file SENZA hash (parziali)
+        pattern_without_hash = f"{date}_*{FILE_EXTENSION}"
+        files_without_hash = [f for f in endpoint_dir.glob(pattern_without_hash) 
+                              if len(f.stem.split('_')) == 2]  # Solo 2 parti: date_time
+        
+        return max(files_without_hash, key=lambda p: p.name) if files_without_hash else None
     
     def get_cached_data(self, source: str, endpoint: str, date: str, time_str: str = None) -> Optional[Dict[str, Any]]:
         """Recupera dati dalla cache se valida"""
@@ -174,20 +185,68 @@ class CacheManager:
             'data_hash': data_hash
         }
     
+    def _has_full_month_data(self, data: Dict[str, Any], month_key: str) -> bool:
+        """Verifica se i dati coprono tutti i giorni del mese."""
+        import calendar
+        try:
+            year, month = map(int, month_key.split('-'))
+            days_in_month = calendar.monthrange(year, month)[1]
+            
+            unique_days = set()
+            
+            # Parsing per energy/power details
+            for key in ['energyDetails', 'powerDetails']:
+                if key in data:
+                    meters = data[key].get('meters', [])
+                    for meter in meters:
+                        for value_entry in meter.get('values', []):
+                            date_str = value_entry.get('date', '')
+                            if date_str:
+                                day = date_str.split(' ')[0] if ' ' in date_str else date_str
+                                if day.startswith(month_key):
+                                    unique_days.add(day)
+            
+            # Parsing per equipment data
+            if 'data' in data and 'telemetries' in data['data']:
+                for telemetry in data['data']['telemetries']:
+                    date_str = telemetry.get('date', '')
+                    if date_str:
+                        day = date_str.split(' ')[0] if ' ' in date_str else date_str
+                        if day.startswith(month_key):
+                            unique_days.add(day)
+            
+            # Verifica se abbiamo tutti i giorni
+            has_all_days = len(unique_days) == days_in_month
+            if has_all_days:
+                self._log.debug(f"✅ Dati completi per {month_key}: {len(unique_days)}/{days_in_month} giorni")
+            else:
+                self._log.debug(f"⚠️ Dati parziali per {month_key}: {len(unique_days)}/{days_in_month} giorni")
+            
+            return has_all_days
+        except Exception as e:
+            self._log.warning(f"Errore validazione completezza dati: {e}")
+            return False
+
     def save_to_cache(self, source: str, endpoint: str, date: str, data: Dict[str, Any], data_hash: str = None) -> str:
-        """Salva dati in cache con orario nel nome del file."""
+        """Salva dati in cache con orario e hash (se completo) nel nome."""
         # WALRUS OPERATOR per hash generation (REGOLA #3)
         if not (data_hash := data_hash or self.get_data_hash(data)):
             raise ValueError("Impossibile generare hash dei dati")
         
-        # Rimuovi il vecchio file se esiste (per rinominare con nuovo orario)
+        # Verifica se i dati sono completi (solo per chiavi mensili YYYY-MM)
+        is_complete = False
+        if len(date) == 7 and '-' in date:  # Formato YYYY-MM
+            is_complete = self._has_full_month_data(data, date)
+        
+        # Rimuovi il vecchio file se esiste (per rinominare con nuovo orario/hash)
         old_file = self._find_latest_cache_file(source, endpoint, date)
         if old_file and old_file.exists():
             old_file.unlink()
         
-        # Crea nuovo file con orario attuale
+        # Crea nuovo file con orario attuale e hash se completo
         current_time = datetime.now().strftime('%H-%M')
-        cache_path = self._build_cache_path(source, endpoint, date, current_time)
+        quality_hash = data_hash if is_complete else None
+        cache_path = self._build_cache_path(source, endpoint, date, current_time, quality_hash)
         
         cache_path.parent.mkdir(parents=True, exist_ok=True)
         cache_entry = self._build_cache_entry(source, endpoint, date, data, data_hash)
@@ -196,7 +255,8 @@ class CacheManager:
             with gzip.open(cache_path, 'wt', encoding=ENCODING) as f:
                 json.dump(cache_entry, f, indent=2, ensure_ascii=False)
 
-            self._log.info(f"💾 CACHE SAVED [{source}]: {data_hash} ({date})")
+            seal_status = "🔒 SEALED" if is_complete else "📝 PARTIAL"
+            self._log.info(f"💾 CACHE SAVED [{source}] {seal_status}: {data_hash} ({date})")
             return data_hash
 
         except Exception as e:
@@ -253,14 +313,8 @@ class CacheManager:
                 # Controlla se la cache è ancora valida usando nome file + data target
                 if self._validate_cache_age_from_filename(cache_path, source, date):
                     # CACHE HIT DIRETTO - nessuna chiamata API
-                    if source == 'realtime':
-                        self._log.info(f"🔄 REALTIME REFRESH [{source}/{endpoint}]: {date}")
-                        fresh_data = fetch_func()
-                        self.save_to_cache(source, endpoint, date, fresh_data)
-                        return fresh_data
-                    else:
-                        self._log.info(f"✅ CACHE HIT [{source}/{endpoint}]: {date}")
-                        return cache_entry['data']
+                    self._log.info(f"✅ CACHE HIT [{source}/{endpoint}]: {date}")
+                    return cache_entry['data']
                 
                 # Cache scaduto (> 15 min): hash check per web/api (solo per dati di oggi)
                 elif source in ['web', 'api_ufficiali']:
@@ -361,20 +415,7 @@ class CacheManager:
 
         return stats
 
-    def has_valid_cache(self, cache_type: str) -> bool:
-        """Verifica se esiste cache valida per un tipo generico usando costanti di classe."""
-        # WALRUS OPERATOR per mapping check (REGOLA #3)
-        if not (mapping := self.CACHE_MAPPINGS.get(cache_type)):
-            return False
-        
-        source, endpoint = mapping
-        date = datetime.now().strftime(DATE_PATTERN)
-        
-        # WALRUS OPERATOR per file search (REGOLA #3)
-        if not (cache_path := self._find_latest_cache_file(source, endpoint, date)):
-            return False
-        
-        return self.is_cache_valid(cache_path, source)
+
     
     def cache_exists_for_date(self, source: str, endpoint: str, date: str, ignore_ttl: bool = False) -> bool:
         """Verifica se esiste cache per una data specifica.
@@ -397,7 +438,6 @@ class CacheManager:
         if ignore_ttl:
             return True
         
-        # Altrimenti verifica validità con TTL
         # Altrimenti verifica validità con TTL
         return self.is_cache_valid(cache_path, source)
 
@@ -424,7 +464,7 @@ class CacheManager:
         """Verifica se esistono dati nel database per una data specifica.
         
         Args:
-            source: Sorgente dati ('api_ufficiali', 'web', 'realtime')
+            source: Sorgente dati ('api_ufficiali', 'web', 'gme')
             date: Data in formato YYYY-MM-DD
             
         Returns:
@@ -448,10 +488,7 @@ class CacheManager:
                 return True  # Assume che i dati ci siano se non possiamo verificare
             
             # Determina bucket e measurement basato sulla sorgente
-            if source == 'realtime':
-                bucket = influx_config.bucket_realtime
-                measurement = 'realtime'
-            elif source == 'web':
+            if source == 'web':
                 bucket = influx_config.bucket
                 measurement = 'web'
             elif source == 'api_ufficiali':
@@ -490,78 +527,4 @@ class CacheManager:
             self._log.warning(f"Errore verifica database per {source} {date}: {e}")
             return True  # In caso di errore, assume che i dati ci siano per evitare loop infiniti
 
-    def get_or_fetch_with_db_check(self, source: str, endpoint: str, date: str, fetch_func: Callable, force_db_check: bool = False) -> Dict[str, Any]:
-        """Versione robusta di get_or_fetch che verifica anche il database.
-        
-        Args:
-            source: Sorgente dati
-            endpoint: Nome endpoint
-            date: Data in formato YYYY-MM-DD
-            fetch_func: Funzione per recuperare dati freschi
-            force_db_check: Se True, forza la verifica del database anche per cache hit
-            
-        Returns:
-            Dati dall'endpoint
-        """
-        cache_key = self.get_cache_key(source, endpoint, date)
-        
-        try:
-            # Prima controlla se esiste un file cache (valido o scaduto)
-            cache_path = self._find_latest_cache_file(source, endpoint, date)
-            if cache_path and (cache_entry := self._validate_cache_file(cache_path)):
-                
-                # Controlla se la cache è ancora valida usando nome file + data target
-                if self._validate_cache_age_from_filename(cache_path, source, date):
-                    
-                    # Per realtime, sempre refresh
-                    if source == 'realtime':
-                        self._log.info(f"🔄 REALTIME REFRESH [{source}/{endpoint}]: {date}")
-                        fresh_data = fetch_func()
-                        self.save_to_cache(source, endpoint, date, fresh_data)
-                        return fresh_data
-                    
-                    # Per dati storici o se force_db_check è True, verifica database
-                    target_dt = datetime.strptime(date, '%Y-%m-%d').date()
-                    today = datetime.now().date()
-                    
-                    if force_db_check or target_dt < today:
-                        # Verifica se i dati sono effettivamente nel database
-                        if not self._check_database_data_exists(source, date):
-                            self._log.warning(f"🔍 CACHE HIT ma DATABASE VUOTO: {cache_key} ({date}) - Rifetch necessario")
-                            fresh_data = fetch_func()
-                            self.save_to_cache(source, endpoint, date, fresh_data)
-                            return fresh_data
-                    
-                    # Cache hit normale
-                    self._log.info(f"✅ CACHE HIT [{source}/{endpoint}]: {date}")
-                    return cache_entry['data']
-                
-                # Cache scaduto (> 15 min): hash check per web/api (solo per dati di oggi)
-                elif source in ['web', 'api_ufficiali']:
-                    target_dt = datetime.strptime(date, '%Y-%m-%d').date()
-                    today = datetime.now().date()
-                    
-                    # Per dati storici, usa sempre la cache senza hash check (ma con db check se richiesto)
-                    if target_dt < today:
-                        if force_db_check and not self._check_database_data_exists(source, date):
-                            self._log.warning(f"📚 HISTORICAL CACHE ma DATABASE VUOTO: {cache_key} ({date}) - Rifetch necessario")
-                            fresh_data = fetch_func()
-                            self.save_to_cache(source, endpoint, date, fresh_data)
-                            return fresh_data
-                        
-                        self._log.info(f"📚 HISTORICAL CACHE HIT [{source}/{endpoint}]: {date}")
-                        return cache_entry['data']
-                    
-                    # Per dati di oggi, fai hash check
-                    self._log.info(f"⏰ CACHE EXPIRED (>15min) [{source}/{endpoint}]: {date}")
-                    return self._check_hash_and_refresh(source, endpoint, date, fetch_func, cache_entry['data'])
-            
-            # Cache miss completo - nessun file trovato
-            self._log.info(f"🌐 API CALL [{source}/{endpoint}]: {date}")
-            fresh_data = fetch_func()
-            self.save_to_cache(source, endpoint, date, fresh_data)
-            return fresh_data
-            
-        except Exception as e:
-            self._log.error(f"Cache operation failed {cache_key}: {e}")
-            raise RuntimeError(f"Cache operation failed for {cache_key}") from e
+
