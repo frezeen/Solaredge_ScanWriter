@@ -5,7 +5,7 @@ SCOPO: Parser completo per dati web. Parse + Filter + Convert to InfluxDB Points
 from __future__ import annotations
 
 from typing import Any, Dict, List, Union
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 import json
 
 from app_logging import get_logger
@@ -187,18 +187,6 @@ def parse_web(measurements_raw: Dict[str, Any], config: Dict[str, Any] = None) -
             
             if ts_ms is None or ts_ms <= 0:
                 continue
-                
-            # FIX DUPLICAZIONE DATI GIORNALIERI
-            # Se il range è 'monthly' (dati giornalieri), forziamo il timestamp a Mezzanotte UTC.
-            if date_range == 'monthly' and isinstance(time_raw, str):
-                try:
-                    # Estrae solo la data YYYY-MM-DD
-                    date_part = time_raw[:10]
-                    # Crea datetime a mezzanotte UTC
-                    dt_utc = datetime.strptime(date_part, "%Y-%m-%d").replace(tzinfo=timezone.utc)
-                    ts_ms = int(dt_utc.timestamp() * 1000)
-                except Exception:
-                    pass
 
             raw_point = _create_raw_point(
                 device_id,
@@ -213,6 +201,7 @@ def parse_web(measurements_raw: Dict[str, Any], config: Dict[str, Any] = None) -
     if not raw_points:
         _log.warning("parse_web nessun punto RAW generato")
         raise RuntimeError("parse_web: nessun punto RAW generato - stop")
+    
     raw_points.sort(key=lambda p: (p["device_id"], p["metric"], p["timestamp"]))
     filtered_points = filter_raw_points(raw_points)
     _log.info(f"Filtrati {len(filtered_points)}/{len(raw_points)} punti validi")

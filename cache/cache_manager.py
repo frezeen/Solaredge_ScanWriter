@@ -219,7 +219,7 @@ class CacheManager:
         cache_key = self.get_cache_key(source, endpoint, date)
         
         try:
-            self._log.info(f"🌐 API CALL (hash check) [{source}]: {cache_key} ({date})")
+            self._log.info(f"🌐 API CALL (hash check) [{source}/{endpoint}]: {date}")
             fresh_data = fetch_func()
             fresh_hash = self.get_data_hash(fresh_data)
             cached_hash = self.get_data_hash(cached_data)
@@ -254,12 +254,12 @@ class CacheManager:
                 if self._validate_cache_age_from_filename(cache_path, source, date):
                     # CACHE HIT DIRETTO - nessuna chiamata API
                     if source == 'realtime':
-                        self._log.info(f"🔄 REALTIME REFRESH [{source}]: {cache_key} ({date})")
+                        self._log.info(f"🔄 REALTIME REFRESH [{source}/{endpoint}]: {date}")
                         fresh_data = fetch_func()
                         self.save_to_cache(source, endpoint, date, fresh_data)
                         return fresh_data
                     else:
-                        self._log.info(f"✅ CACHE HIT [{source}]: {cache_key} ({date})")
+                        self._log.info(f"✅ CACHE HIT [{source}/{endpoint}]: {date}")
                         return cache_entry['data']
                 
                 # Cache scaduto (> 15 min): hash check per web/api (solo per dati di oggi)
@@ -269,15 +269,15 @@ class CacheManager:
                     
                     # Per dati storici, usa sempre la cache senza hash check
                     if target_dt < today:
-                        self._log.info(f"📚 HISTORICAL CACHE HIT [{source}]: {cache_key} ({date})")
+                        self._log.info(f"📚 HISTORICAL CACHE HIT [{source}/{endpoint}]: {date}")
                         return cache_entry['data']
                     
                     # Per dati di oggi, fai hash check
-                    self._log.info(f"⏰ CACHE EXPIRED (>15min) [{source}]: {cache_key} ({date})")
+                    self._log.info(f"⏰ CACHE EXPIRED (>15min) [{source}/{endpoint}]: {date}")
                     return self._check_hash_and_refresh(source, endpoint, date, fetch_func, cache_entry['data'])
             
             # Cache miss completo - nessun file trovato
-            self._log.info(f"🌐 API CALL [{source}]: {cache_key} ({date})")
+            self._log.info(f"🌐 API CALL [{source}/{endpoint}]: {date}")
             fresh_data = fetch_func()
             self.save_to_cache(source, endpoint, date, fresh_data)
             return fresh_data
@@ -515,7 +515,7 @@ class CacheManager:
                     
                     # Per realtime, sempre refresh
                     if source == 'realtime':
-                        self._log.info(f"🔄 REALTIME REFRESH [{source}]: {cache_key} ({date})")
+                        self._log.info(f"🔄 REALTIME REFRESH [{source}/{endpoint}]: {date}")
                         fresh_data = fetch_func()
                         self.save_to_cache(source, endpoint, date, fresh_data)
                         return fresh_data
@@ -533,7 +533,7 @@ class CacheManager:
                             return fresh_data
                     
                     # Cache hit normale
-                    self._log.info(f"✅ CACHE HIT [{source}]: {cache_key} ({date})")
+                    self._log.info(f"✅ CACHE HIT [{source}/{endpoint}]: {date}")
                     return cache_entry['data']
                 
                 # Cache scaduto (> 15 min): hash check per web/api (solo per dati di oggi)
@@ -549,15 +549,15 @@ class CacheManager:
                             self.save_to_cache(source, endpoint, date, fresh_data)
                             return fresh_data
                         
-                        self._log.info(f"📚 HISTORICAL CACHE HIT [{source}]: {cache_key} ({date})")
+                        self._log.info(f"📚 HISTORICAL CACHE HIT [{source}/{endpoint}]: {date}")
                         return cache_entry['data']
                     
                     # Per dati di oggi, fai hash check
-                    self._log.info(f"⏰ CACHE EXPIRED (>15min) [{source}]: {cache_key} ({date})")
+                    self._log.info(f"⏰ CACHE EXPIRED (>15min) [{source}/{endpoint}]: {date}")
                     return self._check_hash_and_refresh(source, endpoint, date, fetch_func, cache_entry['data'])
             
             # Cache miss completo - nessun file trovato
-            self._log.info(f"🌐 API CALL [{source}]: {cache_key} ({date})")
+            self._log.info(f"🌐 API CALL [{source}/{endpoint}]: {date}")
             fresh_data = fetch_func()
             self.save_to_cache(source, endpoint, date, fresh_data)
             return fresh_data
