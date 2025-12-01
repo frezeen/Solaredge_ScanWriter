@@ -185,44 +185,78 @@ class CacheManager:
             'data_hash': data_hash
         }
     
+    def _parse_date_value(self, value: Any) -> Optional[str]:
+        """Estrae una data YYYY-MM-DD da vari formati (stringa, timestamp)."""
+        try:
+            if isinstance(value, str):
+                # Gestione stringhe: "2024-06-01", "2024-06-01 12:00:00", ISO format
+                if len(value) >= 10 and value[4] == '-' and value[7] == '-':
+                    return value[:10]
+            elif isinstance(value, (int, float)):
+                # Gestione timestamp (secondi o millisecondi)
+                # Se > 3e10 (anno 2920), probabilmente sono millisecondi
+                ts = value / 1000 if value > 3e10 else value
+                # Filtro timestamp non validi (es. 0 o troppo piccoli)
+                if ts > 946684800:  # > 2000-01-01
+                    return datetime.fromtimestamp(ts).strftime('%Y-%m-%d')
+        except Exception:
+            pass
+        return None
+
+    def _extract_dates_recursively(self, data: Any, target_month: str, found_days: set) -> None:
+        """
+        Attraversa ricorsivamente il JSON cercando date che matchano il mese target.
+        Popola il set found_days in-place.
+        """
+        if isinstance(data, dict):
+            for key, value in data.items():
+                # Se la chiave suggerisce una data/tempo, prova a parsare il valore
+                if key in ('date', 'time', 'timeStamp', 'timestamp', 'lastUpdated', 'date_time'):
+                    if date_str := self._parse_date_value(value):
+                        if date_str.startswith(target_month):
+                            found_days.add(date_str)
+                
+                # Ricorsione su dizionari e liste
+                if isinstance(value, (dict, list)):
+                    self._extract_dates_recursively(value, target_month, found_days)
+                    
+        elif isinstance(data, list):
+            for item in data:
+                self._extract_dates_recursively(item, target_month, found_days)
+
     def _has_full_month_data(self, data: Dict[str, Any], month_key: str) -> bool:
-        """Verifica se i dati coprono tutti i giorni del mese."""
+        """
+        Verifica universale se i dati coprono tutti i giorni del mese.
+        Usa scansione ricorsiva per trovare date.
+        
+        Logica Time-Series:
+        - Se trova tutti i giorni del mese -> SEALED (True)
+        - Se NON trova date (0 giorni) -> PARTIAL (False) (Assume dati mancanti/errore)
+        - Se trova alcuni giorni ma non tutti -> PARTIAL (False)
+        """
         import calendar
         try:
             year, month = map(int, month_key.split('-'))
             days_in_month = calendar.monthrange(year, month)[1]
             
             unique_days = set()
+            self._extract_dates_recursively(data, month_key, unique_days)
             
-            # Parsing per energy/power details
-            for key in ['energyDetails', 'powerDetails']:
-                if key in data:
-                    meters = data[key].get('meters', [])
-                    for meter in meters:
-                        for value_entry in meter.get('values', []):
-                            date_str = value_entry.get('date', '')
-                            if date_str:
-                                day = date_str.split(' ')[0] if ' ' in date_str else date_str
-                                if day.startswith(month_key):
-                                    unique_days.add(day)
+            num_found = len(unique_days)
             
-            # Parsing per equipment data
-            if 'data' in data and 'telemetries' in data['data']:
-                for telemetry in data['data']['telemetries']:
-                    date_str = telemetry.get('date', '')
-                    if date_str:
-                        day = date_str.split(' ')[0] if ' ' in date_str else date_str
-                        if day.startswith(month_key):
-                            unique_days.add(day)
-            
-            # Verifica se abbiamo tutti i giorni
-            has_all_days = len(unique_days) == days_in_month
-            if has_all_days:
-                self._log.debug(f"✅ Dati completi per {month_key}: {len(unique_days)}/{days_in_month} giorni")
+            # Logica di decisione
+            if num_found == days_in_month:
+                self._log.debug(f"✅ Dati completi per {month_key}: {num_found}/{days_in_month} giorni")
+                return True
+            elif num_found == 0:
+                # Nessuna data trovata per time-series: probabilmente errore o dati mancanti
+                # NON sigilliamo, così riproverà
+                self._log.debug(f"⚠️ Nessuna data trovata per {month_key} (Time-Series) -> PARTIAL")
+                return False
             else:
-                self._log.debug(f"⚠️ Dati parziali per {month_key}: {len(unique_days)}/{days_in_month} giorni")
-            
-            return has_all_days
+                self._log.debug(f"⚠️ Dati parziali per {month_key}: {num_found}/{days_in_month} giorni")
+                return False
+                
         except Exception as e:
             self._log.warning(f"Errore validazione completezza dati: {e}")
             return False
