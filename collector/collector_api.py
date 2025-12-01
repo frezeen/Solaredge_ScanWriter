@@ -241,6 +241,10 @@ class CollectorAPI:
 
         logger.info(f"Raccolta dati per periodo: {start_date} → {end_date}")
 
+        # Estrai chiave mese per cache (YYYY-MM invece di YYYY-MM-DD)
+        month_key = start_date[:7]  # es. 2025-11-01 → 2025-11
+        logger.debug(f"Cache key per questo periodo: {month_key}")
+
         # Risultati aggregati per tutto il periodo
         aggregated_results = {}
 
@@ -262,7 +266,7 @@ class CollectorAPI:
                         # Endpoint equipment - usano logiche speciali ma con cache
                         if endpoint_name == 'equipment_data':
                             cached_data = self.cache.get_or_fetch(
-                                'api_ufficiali', endpoint_name, start_date,
+                                'api_ufficiali', endpoint_name, month_key,
                                 lambda: self._collect_equipment_endpoint_with_dates(
                                     endpoint_name, endpoint_config,
                                     f"{start_date} 00:00:00", f"{end_date} 23:59:59"
@@ -271,7 +275,7 @@ class CollectorAPI:
                         else:
                             # Altri endpoint equipment (change_log, storage_data)
                             cached_data = self.cache.get_or_fetch(
-                                'api_ufficiali', endpoint_name, start_date,
+                                'api_ufficiali', endpoint_name, month_key,
                                 lambda: self._collect_equipment_endpoint(endpoint_name, endpoint_config)
                             )
                         use_cache = True
@@ -284,7 +288,7 @@ class CollectorAPI:
                                                              f"{end_date} 23:59:59")
 
                         cached_data = self.cache.get_or_fetch(
-                            'api_ufficiali', endpoint_name, start_date,
+                            'api_ufficiali', endpoint_name, month_key,
                             lambda: self._call_api(url, params)
                         )
                         use_cache = True
