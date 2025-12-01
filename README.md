@@ -100,7 +100,7 @@ Gestione semplice tramite interfaccia web, nessuna configurazione manuale richie
 - 📝 **Editor Configurazione**: Syntax highlighting per modifiche YAML in tempo reale
 - 📊 **Statistiche Live**: Contatori richieste, errori, performance cache
 - 🔧 **Gestione Device**: Abilitazione/disabilitazione singoli endpoint e sensori
-- 🔄 **Sistema Update Integrato**: Controllo e applicazione aggiornamenti con un click
+- 🔄 **Sistema Update Ufficiale**: Controllo e applicazione aggiornamenti con un click (metodo raccomandato)
 
 **Automazione 24/7 Completa**
 
@@ -522,38 +522,50 @@ rm cookies/web_cookies.json
 
 ### Aggiornamenti
 
-**Metodo 1: GUI Web (Raccomandato)**
+> [!IMPORTANT]
+> Il **metodo ufficiale e supportato** per aggiornare SolarEdge ScanWriter è tramite **GUI Web**. Questo garantisce un processo sicuro, automatizzato e senza interruzioni del servizio.
 
-Accedi alla GUI (`http://localhost:8092` o IP della macchina):
-1. Clicca sull'icona 🔄 in alto a destra
-2. Controlla aggiornamenti disponibili
-3. Clicca "Aggiorna Ora" per applicare
-4. Il sistema si riavvierà automaticamente
+#### Sistema Update Ufficiale (GUI Web)
 
-**Metodo 2: Command Line**
+**Accesso**: `http://localhost:8092` o IP della macchina
+
+**Procedura**:
+
+1. **Verifica Aggiornamenti**: Clicca sull'icona 🔄 in alto a destra nella GUI
+2. **Controlla Versioni**: Visualizza versione corrente e versione disponibile
+3. **Avvia Update**: Clicca "Aggiorna Ora" per iniziare il processo
+4. **Monitoraggio**: Segui il progresso in tempo reale nella GUI
+5. **Completamento**: Il sistema si riavvierà automaticamente al termine
+
+**Vantaggi del metodo GUI**:
+
+- ✅ **Backup Automatico**: Salvataggio configurazioni prima dell'update
+- ✅ **Zero Downtime**: Aggiornamento senza interruzione raccolta dati
+- ✅ **Rollback Sicuro**: Ripristino automatico in caso di errori
+- ✅ **Validazione**: Controllo integrità e compatibilità pre-update
+- ✅ **Dashboard Grafana**: Importazione automatica dashboard aggiornata
+- ✅ **Preservazione Config**: Mantiene `.env` e `config/*.yaml` locali
+- ✅ **Gestione Permessi**: Correzione automatica permessi file
+
+#### Metodo Alternativo (Command Line - Solo per Conoscenza)
+
+> [!NOTE]
+> Questo metodo è fornito solo a scopo informativo per utenti avanzati. **Il metodo ufficiale e raccomandato è tramite GUI**.
 
 ```bash
 cd /opt/Solaredge_ScanWriter
 ./update.sh
 ```
 
-**Lo script `update.sh`**:
+Lo script `update.sh` esegue le stesse operazioni del sistema GUI (backup, pull da GitHub, aggiornamento dipendenze, restart servizio). Per un'esperienza ottimale e supportata, utilizza la GUI.
 
-- ✅ Controlla aggiornamenti disponibili
-- ✅ Backup automatico configurazione
-- ✅ Pull da GitHub e aggiornamento dipendenze
-- ✅ Preserva configurazioni locali (`.env`, `config/*.yaml`)
-- ✅ Corregge permessi automaticamente
-- ✅ Restart servizio
-- ✅ **Importa automaticamente dashboard Grafana aggiornata**
+#### ⚠️ Importante - Dashboard Personalizzate
 
-**⚠️ Importante - Dashboard Personalizzate**:
-Se hai creato dashboard personalizzate in Grafana, salvale con un **nome diverso** da "SolarEdge". Lo script 
-`update.sh` sovrascrive automaticamente la dashboard "SolarEdge" con la versione aggiornata dal repository.
+Se hai creato dashboard personalizzate in Grafana, salvale con un **nome diverso** da "SolarEdge". Il sistema di update (sia GUI che shell) sovrascrive automaticamente la dashboard "SolarEdge" con la versione aggiornata dal repository.
 
 **Esempio**:
 
-- Dashboard originale: "SolarEdge" → Verrà sovrascritta da update.sh
+- Dashboard originale: "SolarEdge" → Verrà sovrascritta dall'update
 - Dashboard personalizzata: "SolarEdge - Custom" → Sarà preservata
 
 ## 🤝 Contributi
