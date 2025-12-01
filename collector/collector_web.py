@@ -4,7 +4,7 @@ Mantiene tutte le funzionalità ma con codice più pulito e intelligente.
 """
 from __future__ import annotations
 from typing import Any, Dict, List, Protocol, runtime_checkable, Optional, Tuple
-import os, re, time, json, hashlib
+import os, re, time, json
 import urllib.request, urllib.error
 from pathlib import Path
 import requests
@@ -391,19 +391,55 @@ class CollectorWeb(CollectorWebInterface):
             raise
 
     def fetch_measurements(self, device_requests: List[Dict[str, Any]]) -> Dict[str, Any]:
-        """Recupera measurements."""
+        """Recupera measurements con cache per tipo di device."""
         if not device_requests:
             raise RuntimeError("device_requests vuoto")
 
-        def _fetch():
-            self.ensure_session()
-            return self._fetch_all_measurements(device_requests)
-
-        if self.cache:
-            date = getattr(self, '_target_date', None) or datetime.now().strftime("%Y-%m-%d")
-            key = self._generate_cache_key(device_requests, date)
-            return self.cache.get_or_fetch("web", key, date, _fetch)
-        return _fetch()
+        all_results = []
+        target_date = getattr(self, '_target_date', None) or datetime.now().strftime("%Y-%m-%d")
+        
+        # Raggruppa device per tipo per ottimizzare chiamate e cache
+        grouped = defaultdict(list)
+        for req in device_requests:
+            device_type = req.get('device', {}).get('itemType', 'GENERIC')
+            grouped[device_type].append(req)
+        
+        # Processa ogni tipo di device con cache dedicata
+        for device_type, reqs in grouped.items():
+            date_range = reqs[0].get('date_range', 'daily')
+            
+            # Genera chiave cache per questo tipo di device
+            if date_range == 'monthly':
+                # Cache mensile: usa anno-mese
+                year_month = target_date[:7]
+                cache_key = f"{device_type}_{year_month}"
+            else:
+                # Cache giornaliera: usa data completa
+                cache_key = f"{device_type}_{target_date}"
+            
+            def _fetch_group():
+                self.ensure_session()
+                raw_data = self._fetch_all_measurements(reqs)
+                
+                # Per SITE con monthly, aggrega i dati 15min in giornalieri PRIMA di salvare in cache
+                if device_type == 'SITE' and date_range == 'monthly':
+                    # Leggi cache esistente per merge
+                    existing_cache = None
+                    if self.cache:
+                        existing_cache = self.cache.get_cached_data("web", cache_key, target_date)
+                    
+                    raw_data = self._aggregate_site_to_daily(raw_data, existing_cache)
+                
+                return raw_data
+            
+            if self.cache:
+                group_data = self.cache.get_or_fetch("web", cache_key, target_date, _fetch_group)
+                all_results.extend(group_data.get('list', []))
+            else:
+                group_data = _fetch_group()
+                all_results.extend(group_data.get('list', []))
+        
+        return {"list": all_results}
 
     def fetch_measurements_for_date(self, device_requests: List[Dict[str, Any]], target_date: str) -> Dict[str, Any]:
         """Recupera measurements per una data specifica.
@@ -510,6 +546,78 @@ class CollectorWeb(CollectorWebInterface):
 
         return session
 
+    def _aggregate_site_to_daily(self, raw_data: Dict[str, Any], existing_cache: Dict[str, Any] = None) -> Dict[str, Any]:
+        """Aggrega dati SITE da 15min a giornalieri e merge con cache esistente.
+        
+        Args:
+            raw_data: Dati raw 15min dall'API
+            existing_cache: Cache esistente da mergare (opzionale)
+        
+        Returns:
+            Dati aggregati giornalieri con merge della cache esistente
+        """
+        from collections import defaultdict
+        
+        items = raw_data.get('list', [])
+        aggregated_items = []
+        
+        for item in items:
+            measurements = item.get('measurements', [])
+            measurement_type = item.get('measurementType')
+            
+            # Inizializza con dati dalla cache esistente se disponibile
+            daily_totals = defaultdict(float)
+            daily_timestamps = {}
+            
+            if existing_cache:
+                # Carica dati esistenti dalla cache per questo measurement_type
+                for cached_item in existing_cache.get('list', []):
+                    if cached_item.get('measurementType') == measurement_type:
+                        for cached_m in cached_item.get('measurements', []):
+                            time_str = cached_m.get('time', '')
+                            value = cached_m.get('measurement')
+                            if time_str and value is not None:
+                                date_part = time_str[:10]
+                                daily_totals[date_part] = value
+                                daily_timestamps[date_part] = time_str
+                        break
+            
+            # Aggrega nuovi dati per giorno (sovrascrive giorni esistenti nella cache)
+            new_daily_totals = defaultdict(float)
+            for m in measurements:
+                time_str = m.get('time', '')
+                value = m.get('measurement')
+                
+                if not time_str or value is None:
+                    continue
+                
+                # Estrai solo la data (YYYY-MM-DD)
+                date_part = time_str[:10]
+                
+                # Accumula solo valori > 0
+                if value > 0:
+                    new_daily_totals[date_part] += value
+            
+            # Sovrascrivi i giorni nuovi nella cache esistente
+            for date_part, total in new_daily_totals.items():
+                daily_totals[date_part] = total
+                daily_timestamps[date_part] = f"{date_part}T00:00:00+01:00"
+            
+            # Crea measurements aggregati (tutti i giorni: cache + nuovi)
+            aggregated_measurements = []
+            for date_part in sorted(daily_totals.keys()):
+                aggregated_measurements.append({
+                    'time': daily_timestamps[date_part],
+                    'measurement': daily_totals[date_part]
+                })
+            
+            # Crea nuovo item con measurements aggregati
+            aggregated_item = item.copy()
+            aggregated_item['measurements'] = aggregated_measurements
+            aggregated_items.append(aggregated_item)
+        
+        return {'list': aggregated_items}
+    
     def _get_date_params(self, target_date: str = None, date_range: str = 'daily') -> Dict[str, str]:
         """Parametri data per oggi o data specifica.
 
@@ -548,13 +656,6 @@ class CollectorWeb(CollectorWebInterface):
         else:
             # Default 'daily': solo il giorno target
             return {"start-date": end_str, "end-date": end_str}
-
-    def _generate_cache_key(self, requests: List[Dict[str, Any]], date: str) -> str:
-        """Genera chiave cache."""
-        hash_val = hashlib.md5(
-            json.dumps(requests, sort_keys=True).encode()
-        ).hexdigest()[:8]
-        return f"measurements_{hash_val}_{date}"
 
     # ========== Config-based Requests ==========
 
