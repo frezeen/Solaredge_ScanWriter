@@ -124,3 +124,6 @@ backups/*
 config_latest/
 *.backup
 .temp_config_backup/
+
+# Custom prompts
+python_refactor_prompt.md

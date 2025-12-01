@@ -40,10 +40,31 @@ class CacheManager:
         self.cache_dir.mkdir(exist_ok=True)
         self._log = get_logger("cache_manager")
         # Eliminata ridondanza: solo self._log (REGOLA #0)
+        
+        # Statistics counters
+        self.stats = {
+            'cache_hits': 0,
+            'cache_misses': 0,
+            'sealed_saves': 0,
+            'partial_saves': 0
+        }
 
     def get_cache_key(self, source: str, endpoint: str, date: str) -> str:
         """Genera chiave cache univoca."""
         return hashlib.md5(f"{source}_{endpoint}_{date}".encode()).hexdigest()[:CACHE_KEY_LENGTH]
+    
+    def get_statistics(self) -> Dict[str, int]:
+        """Restituisce statistiche sull'utilizzo della cache."""
+        return self.stats.copy()
+    
+    def reset_statistics(self) -> None:
+        """Resetta i contatori delle statistiche."""
+        self.stats = {
+            'cache_hits': 0,
+            'cache_misses': 0,
+            'sealed_saves': 0,
+            'partial_saves': 0
+        }
     
     def get_data_hash(self, data: Dict[str, Any]) -> str:
         """Genera hash dei dati per rilevare cambiamenti."""
@@ -111,7 +132,13 @@ class CacheManager:
             
             # Per dati storici (history mode), la cache è sempre valida
             if target_date:
-                target_dt = datetime.strptime(target_date, '%Y-%m-%d').date()
+                # Supporta sia YYYY-MM-DD che YYYY-MM
+                if len(target_date) == 7 and target_date.count('-') == 1:
+                    # Formato mensile: considera il primo giorno del mese
+                    target_dt = datetime.strptime(target_date + '-01', '%Y-%m-%d').date()
+                else:
+                    target_dt = datetime.strptime(target_date, '%Y-%m-%d').date()
+                    
                 today = datetime.now().date()
                 
                 # Se stiamo richiedendo dati del passato, la cache è sempre valida
@@ -156,8 +183,12 @@ class CacheManager:
         
         return max(files_without_hash, key=lambda p: p.name) if files_without_hash else None
     
-    def get_cached_data(self, source: str, endpoint: str, date: str, time_str: str = None) -> Optional[Dict[str, Any]]:
-        """Recupera dati dalla cache se valida"""
+    def get_cached_data(self, source: str, endpoint: str, date: str, time_str: str = None, ignore_ttl: bool = False) -> Optional[Dict[str, Any]]:
+        """Recupera dati dalla cache se valida
+        
+        Args:
+            ignore_ttl: Se True, ignora il TTL e restituisce cache anche se scaduta
+        """
         # WALRUS OPERATOR per determinazione path (REGOLA #3)
         if time_str:
             cache_path = self._build_cache_path(source, endpoint, date, time_str)
@@ -169,10 +200,12 @@ class CacheManager:
             return None
         
         # Usa validazione basata su nome file con supporto per dati storici
-        if not self._validate_cache_age_from_filename(cache_path, source, date):
+        # Se ignore_ttl=True, salta il check TTL (per merge operations)
+        if not ignore_ttl and not self._validate_cache_age_from_filename(cache_path, source, date):
             return None
         
         self._log.info(f"✅ CACHE HIT [{source}]: {self.get_cache_key(source, endpoint, date)} ({date})")
+        self.stats['cache_hits'] += 1
         return cache_data['data']
 
     def _build_cache_entry(self, source: str, endpoint: str, date: str, data: Dict[str, Any], data_hash: str) -> Dict[str, Any]:
@@ -261,16 +294,26 @@ class CacheManager:
             self._log.warning(f"Errore validazione completezza dati: {e}")
             return False
 
-    def save_to_cache(self, source: str, endpoint: str, date: str, data: Dict[str, Any], data_hash: str = None) -> str:
+    def save_to_cache(self, source: str, endpoint: str, date: str, data: Dict[str, Any], data_hash: str = None, is_metadata: bool = False) -> str:
         """Salva dati in cache con orario e hash (se completo) nel nome."""
         # WALRUS OPERATOR per hash generation (REGOLA #3)
         if not (data_hash := data_hash or self.get_data_hash(data)):
             raise ValueError("Impossibile generare hash dei dati")
         
-        # Verifica se i dati sono completi (solo per chiavi mensili YYYY-MM)
+        # Verifica se i dati sono completi
         is_complete = False
-        if len(date) == 7 and '-' in date:  # Formato YYYY-MM
-            is_complete = self._has_full_month_data(data, date)
+        
+        # Dati giornalieri (YYYY-MM-DD): sempre completi per definizione
+        if len(date) == 10 and date.count('-') == 2:
+            is_complete = True
+            self._log.debug(f"✅ Dati giornalieri validi per {date} -> SEALED")
+        # Dati mensili (YYYY-MM): verifica completezza
+        elif len(date) == 7 and '-' in date:
+            if is_metadata:
+                is_complete = True
+                self._log.debug(f"✅ Dati metadata validi per {date} -> SEALED")
+            else:
+                is_complete = self._has_full_month_data(data, date)
         
         # Rimuovi il vecchio file se esiste (per rinominare con nuovo orario/hash)
         old_file = self._find_latest_cache_file(source, endpoint, date)
@@ -291,6 +334,13 @@ class CacheManager:
 
             seal_status = "🔒 SEALED" if is_complete else "📝 PARTIAL"
             self._log.info(f"💾 CACHE SAVED [{source}] {seal_status}: {data_hash} ({date})")
+            
+            # Update statistics
+            if is_complete:
+                self.stats['sealed_saves'] += 1
+            else:
+                self.stats['partial_saves'] += 1
+                
             return data_hash
 
         except Exception as e:
@@ -335,7 +385,7 @@ class CacheManager:
             self.save_to_cache(source, endpoint, date, fresh_data)
             return fresh_data
     
-    def get_or_fetch(self, source: str, endpoint: str, date: str, fetch_func: Callable) -> Dict[str, Any]:
+    def get_or_fetch(self, source: str, endpoint: str, date: str, fetch_func: Callable, is_metadata: bool = False) -> Dict[str, Any]:
         """Ottieni da cache con logica intelligente per tipo sorgente (REGOLA #4)."""
         cache_key = self.get_cache_key(source, endpoint, date)
         
@@ -348,11 +398,18 @@ class CacheManager:
                 if self._validate_cache_age_from_filename(cache_path, source, date):
                     # CACHE HIT DIRETTO - nessuna chiamata API
                     self._log.info(f"✅ CACHE HIT [{source}/{endpoint}]: {date}")
+                    self.stats['cache_hits'] += 1
                     return cache_entry['data']
                 
                 # Cache scaduto (> 15 min): hash check per web/api (solo per dati di oggi)
                 elif source in ['web', 'api_ufficiali']:
-                    target_dt = datetime.strptime(date, '%Y-%m-%d').date()
+                    # Supporta sia YYYY-MM-DD che YYYY-MM
+                    if len(date) == 7 and date.count('-') == 1:
+                        # Formato mensile: considera il primo giorno del mese
+                        target_dt = datetime.strptime(date + '-01', '%Y-%m-%d').date()
+                    else:
+                        target_dt = datetime.strptime(date, '%Y-%m-%d').date()
+                        
                     today = datetime.now().date()
                     
                     # Per dati storici, usa sempre la cache senza hash check
@@ -366,8 +423,9 @@ class CacheManager:
             
             # Cache miss completo - nessun file trovato
             self._log.info(f"🌐 API CALL [{source}/{endpoint}]: {date}")
+            self.stats['cache_misses'] += 1
             fresh_data = fetch_func()
-            self.save_to_cache(source, endpoint, date, fresh_data)
+            self.save_to_cache(source, endpoint, date, fresh_data, is_metadata=is_metadata)
             return fresh_data
             
         except Exception as e:

@@ -272,6 +272,19 @@ class HistoryManager:
             elif web_failed:
                 self.log.info(color.error(f"❌ Web Recent (Optimizers): 0/7 giorni (fallito)"))
 
+        # Cache Statistics
+        if self.cache:
+            cache_stats = self.cache.get_statistics()
+            total_requests = cache_stats['cache_hits'] + cache_stats['cache_misses']
+            if total_requests > 0:
+                hit_rate = (cache_stats['cache_hits'] / total_requests) * 100
+                self.log.info(color.bold("─" * 60))
+                self.log.info(color.highlight("📊 Cache Statistics:"))
+                self.log.info(color.success(f"  ✅ Cache Hits: {cache_stats['cache_hits']}/{total_requests} ({hit_rate:.1f}%)"))
+                self.log.info(color.dim(f"  🌐 Cache Misses: {cache_stats['cache_misses']}/{total_requests}"))
+                self.log.info(color.success(f"  🔒 Sealed: {cache_stats['sealed_saves']}"))
+                self.log.info(color.dim(f"  📝 Partial: {cache_stats['partial_saves']}"))
+
         if interrupted:
             self.log.info(color.dim(f"⏸️ Rimanenti: {total_months - success_count - failed_count}/{total_months}"))
             self.log.info(color.highlight("💡 Riavvia con --history per continuare dal punto di interruzione"))

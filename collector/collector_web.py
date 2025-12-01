@@ -361,7 +361,7 @@ class CollectorWeb(CollectorWebInterface):
 
         if self.cache:
             date = datetime.now().strftime("%Y-%m-%d")
-            return self.cache.get_or_fetch("web", "tree", date, _fetch)
+            return self.cache.get_or_fetch("web", "tree", date, _fetch, is_metadata=True)
         return _fetch()
 
     def _make_tree_request(self) -> Dict[str, Any]:
@@ -418,18 +418,24 @@ class CollectorWeb(CollectorWebInterface):
                 
                 # Per SITE con monthly, aggrega i dati 15min in giornalieri PRIMA di salvare in cache
                 if device_type == 'SITE' and date_range == 'monthly':
-                    # Leggi cache esistente per merge
+                    # Leggi cache esistente per merge (ignora TTL per preservare dati accumulati)
                     existing_cache = None
                     if self.cache:
-                        # Per monthly usa la data completa (fine mese) per compatibilità con cache manager
-                        existing_cache = self.cache.get_cached_data("web", cache_endpoint, target_date)
+                        # Per monthly usa chiave mensile (YYYY-MM)
+                        month_key = target_date[:7]
+                        existing_cache = self.cache.get_cached_data("web", cache_endpoint, month_key, ignore_ttl=True)
                     
                     raw_data = self._aggregate_site_to_daily(raw_data, existing_cache)
                 
                 return raw_data
             
-            # Usa sempre target_date completo per cache (formato YYYY-MM-DD richiesto dal cache manager)
-            cache_date = target_date
+            # Determina chiave cache in base al date_range
+            # Monthly devices: usa chiave mensile (YYYY-MM) per validazione completezza
+            # Daily/7days devices: usa chiave giornaliera (YYYY-MM-DD)
+            if date_range == 'monthly':
+                cache_date = target_date[:7]  # Estrai YYYY-MM
+            else:
+                cache_date = target_date  # Usa YYYY-MM-DD completo
             
             if self.cache:
                 group_data = self.cache.get_or_fetch("web", cache_endpoint, cache_date, _fetch_group)
