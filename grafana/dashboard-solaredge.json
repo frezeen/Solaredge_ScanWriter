@@ -1209,7 +1209,7 @@
         "percentChangeColorMode": "standard",
         "reduceOptions": {
           "calcs": [],
-          "fields": "/^_value$/",
+          "fields": "/^Immissione Oggi \\(Wh\\)$/",
           "limit": 1,
           "values": false
         },
@@ -1225,7 +1225,7 @@
             "type": "influxdb",
             "uid": "ff27vpmruzxtsc"
           },
-          "query": "import \"timezone\"\r\nimport \"date\"\r\nimport \"array\"\r\n\r\noption location = timezone.location(name: \"Europe/Rome\")\r\n\r\nstart = date.truncate(t: now(), unit: 1d)\r\n\r\n// Dati Export Energy\r\ndata = from(bucket: \"Solaredge_Realtime\")\r\n  |> range(start: start)\r\n  |> filter(fn: (r) =>\r\n    r._measurement == \"realtime\" and\r\n    r._field == \"Meter\" and\r\n    r.endpoint == \"Export Energy Active\" and\r\n    r.unit == \"Wh\"\r\n  )\r\n\r\n// Primo e ultimo valore\r\nfirst_record = data |> first() |> findRecord(fn: (key) => true, idx: 0)\r\nlast_record = data |> last() |> findRecord(fn: (key) => true, idx: 0)\r\n\r\n// Calcolo immissione\r\nimmissione_wh = last_record._value - first_record._value\r\n\r\n// Output\r\narray.from(rows: [{\r\n  _time: date.truncate(t: now(), unit: 1s),\r\n  _field: \"immissione_oggi_wh\",\r\n  _value: immissione_wh,\r\n  start_wh: first_record._value,\r\n  end_wh: last_record._value\r\n}])\r\n  |> yield(name: \"immissione_oggi_Wh\")",
+          "query": "import \"date\"\r\nimport \"array\"\r\nimport \"timezone\"\r\n\r\noption location = timezone.location(name: \"Europe/Rome\")\r\n\r\nstart = date.truncate(t: now(), unit: 1d)\r\n\r\n// Dati Export Energy\r\ndata = from(bucket: \"Solaredge_Realtime\")\r\n  |> range(start: start)\r\n  |> filter(fn: (r) =>\r\n    r._measurement == \"realtime\" and\r\n    r._field == \"Meter\" and\r\n    r.endpoint == \"Export Energy Active\" and\r\n    r.unit == \"Wh\" and\r\n    exists r._value)\r\n\r\n// Calcolo immissione (ultimo - primo)\r\nimmissione_wh = (data |> last() |> findRecord(fn: (key) => true, idx: 0))._value - \r\n                (data |> first() |> findRecord(fn: (key) => true, idx: 0))._value\r\n\r\n// Output\r\narray.from(rows: [{\r\n  _time: now(),\r\n  \"Immissione Oggi (Wh)\": immissione_wh\r\n}])",
           "refId": "Immissione"
         }
       ],
@@ -1276,7 +1276,7 @@
         "percentChangeColorMode": "standard",
         "reduceOptions": {
           "calcs": [],
-          "fields": "/^_value$/",
+          "fields": "/^Consumo Oggi \\(Wh\\)$/",
           "limit": 1,
           "values": false
         },
@@ -1292,7 +1292,7 @@
             "type": "influxdb",
             "uid": "ff27vpmruzxtsc"
           },
-          "query": "import \"timezone\"\r\nimport \"date\"\r\nimport \"array\"\r\n\r\noption location = timezone.location(name: \"Europe/Rome\")\r\n\r\nstart = date.truncate(t: now(), unit: 1d)\r\n\r\n// Produzione: ultimo - primo\r\ndata_prod = from(bucket: \"Solaredge_Realtime\")\r\n  |> range(start: start)\r\n  |> filter(fn: (r) =>\r\n      r._measurement == \"realtime\" and\r\n      r._field == \"Inverter\" and\r\n      r.endpoint == \"Energy Total\"\r\n  )\r\n  |> filter(fn: (r) => exists r._value)\r\n\r\nfirst_prod = data_prod |> first() |> findRecord(fn: (key) => true, idx: 0)\r\nlast_prod = data_prod |> last() |> findRecord(fn: (key) => true, idx: 0)\r\nprod_value = last_prod._value - first_prod._value\r\n\r\n// Import: ultimo - primo\r\ndata_imp = from(bucket: \"Solaredge_Realtime\")\r\n  |> range(start: start)\r\n  |> filter(fn: (r) =>\r\n      r._measurement == \"realtime\" and\r\n      r._field == \"Meter\" and\r\n      r.endpoint == \"Import Energy Active\"\r\n  )\r\n  |> filter(fn: (r) => exists r._value)\r\n\r\nfirst_imp = data_imp |> first() |> findRecord(fn: (key) => true, idx: 0)\r\nlast_imp = data_imp |> last() |> findRecord(fn: (key) => true, idx: 0)\r\nimp_value = last_imp._value - first_imp._value\r\n\r\n// Export: ultimo - primo\r\ndata_exp = from(bucket: \"Solaredge_Realtime\")\r\n  |> range(start: start)\r\n  |> filter(fn: (r) =>\r\n      r._measurement == \"realtime\" and\r\n      r._field == \"Meter\" and\r\n      r.endpoint == \"Export Energy Active\"\r\n  )\r\n  |> filter(fn: (r) => exists r._value)\r\n\r\nfirst_exp = data_exp |> first() |> findRecord(fn: (key) => true, idx: 0)\r\nlast_exp = data_exp |> last() |> findRecord(fn: (key) => true, idx: 0)\r\nexp_value = last_exp._value - first_exp._value\r\n\r\n// Consumo = Import + Produzione - Export\r\nconsumo_wh = imp_value + prod_value - exp_value\r\n\r\n// Output\r\narray.from(rows: [{\r\n  _time: now(),\r\n  _field: \"consumo_oggi_wh\",\r\n  _value: consumo_wh,\r\n  import_wh: imp_value,\r\n  produzione_wh: prod_value,\r\n  export_wh: exp_value\r\n}])\r\n  |> yield(name: \"consumo_totale_oggi_Wh\")",
+          "query": "import \"date\"\r\nimport \"array\"\r\nimport \"timezone\"\r\n\r\noption location = timezone.location(name: \"Europe/Rome\")\r\n\r\nstart = date.truncate(t: now(), unit: 1d)\r\n\r\n// Produzione: ultimo - primo\r\ndata_prod = from(bucket: \"Solaredge_Realtime\")\r\n  |> range(start: start)\r\n  |> filter(fn: (r) =>\r\n      r._measurement == \"realtime\" and\r\n      r._field == \"Inverter\" and\r\n      r.endpoint == \"Energy Total\" and\r\n      exists r._value)\r\n\r\nprod_value = (data_prod |> last() |> findRecord(fn: (key) => true, idx: 0))._value - \r\n             (data_prod |> first() |> findRecord(fn: (key) => true, idx: 0))._value\r\n\r\n// Import: ultimo - primo\r\ndata_imp = from(bucket: \"Solaredge_Realtime\")\r\n  |> range(start: start)\r\n  |> filter(fn: (r) =>\r\n      r._measurement == \"realtime\" and\r\n      r._field == \"Meter\" and\r\n      r.endpoint == \"Import Energy Active\" and\r\n      exists r._value)\r\n\r\nimp_value = (data_imp |> last() |> findRecord(fn: (key) => true, idx: 0))._value - \r\n            (data_imp |> first() |> findRecord(fn: (key) => true, idx: 0))._value\r\n\r\n// Export: ultimo - primo\r\ndata_exp = from(bucket: \"Solaredge_Realtime\")\r\n  |> range(start: start)\r\n  |> filter(fn: (r) =>\r\n      r._measurement == \"realtime\" and\r\n      r._field == \"Meter\" and\r\n      r.endpoint == \"Export Energy Active\" and\r\n      exists r._value)\r\n\r\nexp_value = (data_exp |> last() |> findRecord(fn: (key) => true, idx: 0))._value - \r\n            (data_exp |> first() |> findRecord(fn: (key) => true, idx: 0))._value\r\n\r\n// Output\r\narray.from(rows: [{\r\n  _time: now(),\r\n  \"Consumo Oggi (Wh)\": imp_value + prod_value - exp_value\r\n}])",
           "refId": "Consumo"
         }
       ],
@@ -1345,7 +1345,7 @@
           "calcs": [
             "last"
           ],
-          "fields": "/^_value$/",
+          "fields": "/^Prelievo Oggi \\(Wh\\)$/",
           "limit": 1,
           "values": false
         },
@@ -1361,7 +1361,7 @@
             "type": "influxdb",
             "uid": "ff27vpmruzxtsc"
           },
-          "query": "import \"timezone\"\r\nimport \"date\"\r\nimport \"array\"\r\n\r\noption location = timezone.location(name: \"Europe/Rome\")\r\n\r\ntoday_start = date.truncate(t: now(), unit: 1d)\r\n\r\n// Ottieni prima e ultima lettura\r\ndata = from(bucket: \"Solaredge_Realtime\")\r\n  |> range(start: today_start)\r\n  |> filter(fn: (r) => r._measurement == \"realtime\")\r\n  |> filter(fn: (r) => r._field == \"Meter\")\r\n  |> filter(fn: (r) => r.endpoint == \"Import Energy Active\")\r\n  |> filter(fn: (r) => exists r._value)\r\n\r\nfirst_value = data\r\n  |> first()\r\n  |> findRecord(fn: (key) => true, idx: 0)\r\n\r\nlast_value = data\r\n  |> last()\r\n  |> findRecord(fn: (key) => true, idx: 0)\r\n\r\n// Calcola la differenza\r\narray.from(rows: [{\r\n  _time: now(),\r\n  _field: \"prelievo_oggi_kwh\",\r\n  _value: (last_value._value - first_value._value)\r\n}])\r\n",
+          "query": "import \"date\"\r\nimport \"array\"\r\nimport \"timezone\"\r\n\r\noption location = timezone.location(name: \"Europe/Rome\")\r\n\r\nstart = date.truncate(t: now(), unit: 1d)\r\n\r\n// Dati Import Energy\r\ndata = from(bucket: \"Solaredge_Realtime\")\r\n  |> range(start: start)\r\n  |> filter(fn: (r) => \r\n      r._measurement == \"realtime\" and\r\n      r._field == \"Meter\" and\r\n      r.endpoint == \"Import Energy Active\" and\r\n      exists r._value)\r\n\r\n// Output\r\narray.from(rows: [{\r\n  _time: now(),\r\n  \"Prelievo Oggi (Wh)\": (data |> last() |> findRecord(fn: (key) => true, idx: 0))._value - \r\n                        (data |> first() |> findRecord(fn: (key) => true, idx: 0))._value\r\n}])",
           "refId": "Prelievo"
         }
       ],
@@ -1416,7 +1416,7 @@
           "calcs": [
             "last"
           ],
-          "fields": "/^_value$/",
+          "fields": "/^% Prelievo OGGI$/",
           "limit": 1,
           "values": false
         },
@@ -1432,7 +1432,7 @@
             "type": "influxdb",
             "uid": "ff27vpmruzxtsc"
           },
-          "query": "import \"timezone\"\r\nimport \"date\"\r\nimport \"array\"\r\n\r\noption location = timezone.location(name: \"Europe/Rome\")\r\n\r\nstart = date.truncate(t: now(), unit: 1d)\r\n\r\n// Produzione: ultimo - primo\r\ndata_prod = from(bucket: \"Solaredge_Realtime\")\r\n  |> range(start: start)\r\n  |> filter(fn: (r) =>\r\n      r._measurement == \"realtime\" and\r\n      r._field == \"Inverter\" and\r\n      r.endpoint == \"Energy Total\")\r\n  |> filter(fn: (r) => exists r._value)\r\n\r\nfirst_prod = data_prod |> first() |> findRecord(fn: (key) => true, idx: 0)\r\nlast_prod = data_prod |> last() |> findRecord(fn: (key) => true, idx: 0)\r\nprod_value = last_prod._value - first_prod._value\r\n\r\n// Import: ultimo - primo\r\ndata_imp = from(bucket: \"Solaredge_Realtime\")\r\n  |> range(start: start)\r\n  |> filter(fn: (r) =>\r\n      r._measurement == \"realtime\" and\r\n      r._field == \"Meter\" and\r\n      r.endpoint == \"Import Energy Active\")\r\n  |> filter(fn: (r) => exists r._value)\r\n\r\nfirst_imp = data_imp |> first() |> findRecord(fn: (key) => true, idx: 0)\r\nlast_imp = data_imp |> last() |> findRecord(fn: (key) => true, idx: 0)\r\nimp_value = last_imp._value - first_imp._value\r\n\r\n// Export: ultimo - primo\r\ndata_exp = from(bucket: \"Solaredge_Realtime\")\r\n  |> range(start: start)\r\n  |> filter(fn: (r) =>\r\n      r._measurement == \"realtime\" and\r\n      r._field == \"Meter\" and\r\n      r.endpoint == \"Export Energy Active\")\r\n  |> filter(fn: (r) => exists r._value)\r\n\r\nfirst_exp = data_exp |> first() |> findRecord(fn: (key) => true, idx: 0)\r\nlast_exp = data_exp |> last() |> findRecord(fn: (key) => true, idx: 0)\r\nexp_value = last_exp._value - first_exp._value\r\n\r\n// Calcoli finali\r\nconsumo_wh = imp_value + prod_value - exp_value\r\nprelievo_wh = imp_value\r\nperc_prelievo = if consumo_wh > 0.0 then (prelievo_wh / consumo_wh) * 100.0 else 0.0\r\n\r\n// Output\r\narray.from(rows: [{\r\n  _time: now(),\r\n  _field: \"percentuale_prelievo\",\r\n  _value: perc_prelievo\r\n}])\r\n",
+          "query": "import \"date\"\r\nimport \"array\"\r\nimport \"timezone\"\r\n\r\noption location = timezone.location(name: \"Europe/Rome\")\r\n\r\nstart = date.truncate(t: now(), unit: 1d)\r\n\r\n// Produzione: ultimo - primo\r\ndata_prod = from(bucket: \"Solaredge_Realtime\")\r\n  |> range(start: start)\r\n  |> filter(fn: (r) =>\r\n      r._measurement == \"realtime\" and\r\n      r._field == \"Inverter\" and\r\n      r.endpoint == \"Energy Total\" and\r\n      exists r._value)\r\n\r\nprod_value = (data_prod |> last() |> findRecord(fn: (key) => true, idx: 0))._value - \r\n             (data_prod |> first() |> findRecord(fn: (key) => true, idx: 0))._value\r\n\r\n// Import: ultimo - primo\r\ndata_imp = from(bucket: \"Solaredge_Realtime\")\r\n  |> range(start: start)\r\n  |> filter(fn: (r) =>\r\n      r._measurement == \"realtime\" and\r\n      r._field == \"Meter\" and\r\n      r.endpoint == \"Import Energy Active\" and\r\n      exists r._value)\r\n\r\nimp_value = (data_imp |> last() |> findRecord(fn: (key) => true, idx: 0))._value - \r\n            (data_imp |> first() |> findRecord(fn: (key) => true, idx: 0))._value\r\n\r\n// Export: ultimo - primo\r\ndata_exp = from(bucket: \"Solaredge_Realtime\")\r\n  |> range(start: start)\r\n  |> filter(fn: (r) =>\r\n      r._measurement == \"realtime\" and\r\n      r._field == \"Meter\" and\r\n      r.endpoint == \"Export Energy Active\" and\r\n      exists r._value)\r\n\r\nexp_value = (data_exp |> last() |> findRecord(fn: (key) => true, idx: 0))._value - \r\n            (data_exp |> first() |> findRecord(fn: (key) => true, idx: 0))._value\r\n\r\n// Calcoli finali e output\r\nconsumo_wh = imp_value + prod_value - exp_value\r\n\r\narray.from(rows: [{\r\n  _time: now(),\r\n  \"% Prelievo OGGI\": if consumo_wh > 0.0 then (imp_value / consumo_wh) * 100.0 else 0.0\r\n}])",
           "refId": "% Prelievo"
         }
       ],
@@ -1502,7 +1502,7 @@
             "type": "influxdb",
             "uid": "ff27vpmruzxtsc"
           },
-          "query": "import \"timezone\"\r\nimport \"date\"\r\nimport \"array\"\r\n\r\noption location = timezone.location(name: \"Europe/Rome\")\r\n\r\nstart = date.truncate(t: now(), unit: 1d)\r\nmonth_start = date.truncate(t: now(), unit: 1mo)\r\n\r\n// Recupera prezzo PUN\r\nprezzo_pun = from(bucket: \"GME\")\r\n  |> range(start: month_start)\r\n  |> filter(fn: (r) => r._measurement == \"gme_monthly_avg\" and r._field == \"pun_kwh_avg\")\r\n  |> last()\r\n  |> findRecord(fn: (key) => true, idx: 0)\r\n\r\n// Calcolo prelievo\r\nbase = from(bucket: \"Solaredge_Realtime\")\r\n  |> range(start: start)\r\n  |> filter(fn: (r) => r._measurement == \"realtime\" and r._field == \"Meter\" and r.endpoint == \"Import Energy Active\" and r.unit == \"Wh\")\r\n\r\nfirst = base |> filter(fn: (r) => exists r._value and r._value > 0.0) |> sort(columns: [\"_time\"]) |> limit(n: 1) |> findRecord(fn: (key) => true, idx: 0)\r\nlast = base |> last() |> findRecord(fn: (key) => true, idx: 0)\r\n\r\nprelievo = if (last._value - first._value) < 0.0 then 0.0 else (last._value - first._value)\r\ncosto = (prelievo / 1000.0) * prezzo_pun._value\r\n\r\narray.from(rows: [{PUN: prezzo_pun._value, Costo: costo}])\r\n",
+          "query": "import \"date\"\r\nimport \"array\"\r\nimport \"timezone\"\r\n\r\noption location = timezone.location(name: \"Europe/Rome\")\r\n\r\nstart = date.truncate(t: now(), unit: 1d)\r\nmonth_start = date.truncate(t: now(), unit: 1mo)\r\n\r\n// Recupera prezzo PUN\r\npun_value = (from(bucket: \"GME\")\r\n  |> range(start: month_start)\r\n  |> filter(fn: (r) => \r\n      r._measurement == \"gme_monthly_avg\" and \r\n      r._field == \"pun_kwh_avg\")\r\n  |> last()\r\n  |> findRecord(fn: (key) => true, idx: 0))._value\r\n\r\n// Dati prelievo\r\ndata = from(bucket: \"Solaredge_Realtime\")\r\n  |> range(start: start)\r\n  |> filter(fn: (r) => \r\n      r._measurement == \"realtime\" and \r\n      r._field == \"Meter\" and \r\n      r.endpoint == \"Import Energy Active\" and \r\n      r.unit == \"Wh\" and\r\n      exists r._value)\r\n\r\nprelievo_wh = (data |> last() |> findRecord(fn: (key) => true, idx: 0))._value - \r\n              (data |> first() |> findRecord(fn: (key) => true, idx: 0))._value\r\n\r\n// Output\r\narray.from(rows: [{\r\n  _time: now(),\r\n  \"PUN (€/kWh)\": pun_value,\r\n  \"Costo Prelievo Oggi (€)\": if prelievo_wh < 0.0 \r\n                              then 0.0 \r\n                              else (prelievo_wh / 1000.0) * pun_value\r\n}])",
           "refId": "Costo Prelievo"
         }
       ],
@@ -1919,7 +1919,7 @@
             "type": "influxdb",
             "uid": "ff27vpmruzxtsc"
           },
-          "query": "import \"timezone\"\r\nimport \"date\"\r\n\r\noption location = timezone.location(name: \"Europe/Rome\")\r\n\r\ntoday_start = date.truncate(t: now(), unit: 1d)\r\n\r\nfrom(bucket: \"Solaredge_Realtime\")\r\n  |> range(start: today_start)\r\n  |> filter(fn: (r) =>\r\n    r._measurement == \"realtime\" and\r\n    r._field == \"Inverter\" and\r\n    r.endpoint == \"Power Ac\" and\r\n    r.unit == \"W\"\r\n  )\r\n  // CRUCIALE: Unisce tutte le serie in una sola tabella prima di cercare il max\r\n  |> group()\r\n  |> max()\r\n  |> map(fn: (r) => ({\r\n      ORARIO: \r\n        (if date.hour(t: r._time) < 10 then \"0\" else \"\") + string(v: date.hour(t: r._time)) + \":\" +\r\n        (if date.minute(t: r._time) < 10 then \"0\" else \"\") + string(v: date.minute(t: r._time)),\r\n      VALORE: r._value\r\n  }))",
+          "query": "import \"timezone\"\r\nimport \"date\"\r\n\r\noption location = timezone.location(name: \"Europe/Rome\")\r\n\r\ntoday_start = date.truncate(t: now(), unit: 1d)\r\n\r\nfrom(bucket: \"Solaredge_Realtime\")\r\n  |> range(start: today_start)\r\n  |> filter(fn: (r) =>\r\n      r._measurement == \"realtime\" and\r\n      r._field == \"Inverter\" and\r\n      r.endpoint == \"Power Ac\" and\r\n      r.unit == \"W\")\r\n  |> group()\r\n  |> max()\r\n  |> map(fn: (r) => {\r\n      h = date.hour(t: r._time)\r\n      m = date.minute(t: r._time)\r\n      \r\n      return {\r\n          ORARIO: (if h < 10 then \"0\" else \"\") + string(v: h) + \":\" +\r\n                  (if m < 10 then \"0\" else \"\") + string(v: m),\r\n          VALORE: r._value\r\n      }\r\n  })",
           "refId": "Picco Produzione"
         }
       ],
@@ -1986,7 +1986,7 @@
             "type": "influxdb",
             "uid": "ff27vpmruzxtsc"
           },
-          "query": "import \"timezone\"\r\nimport \"date\"\r\n\r\noption location = timezone.location(name: \"Europe/Rome\")\r\n\r\ntoday_start = date.truncate(t: now(), unit: 1d)\r\n\r\nfrom(bucket: \"Solaredge_Realtime\")\r\n  |> range(start: today_start)\r\n  |> filter(fn: (r) =>\r\n    r._measurement == \"realtime\" and\r\n    r._field == \"Meter\" and\r\n    r.endpoint == \"Power\"\r\n  )\r\n  |> filter(fn: (r) => r._value > 0)\r\n  // CRUCIALE: Unisce tutte le serie in una sola tabella prima di cercare il max\r\n  |> group()\r\n  |> max()\r\n  |> map(fn: (r) => ({\r\n      ORARIO: \r\n        (if date.hour(t: r._time) < 10 then \"0\" else \"\") + string(v: date.hour(t: r._time)) + \":\" +\r\n        (if date.minute(t: r._time) < 10 then \"0\" else \"\") + string(v: date.minute(t: r._time)),\r\n      VALORE: r._value\r\n  }))",
+          "query": "import \"timezone\"\r\nimport \"date\"\r\n\r\noption location = timezone.location(name: \"Europe/Rome\")\r\n\r\ntoday_start = date.truncate(t: now(), unit: 1d)\r\n\r\nfrom(bucket: \"Solaredge_Realtime\")\r\n  |> range(start: today_start)\r\n  |> filter(fn: (r) =>\r\n      r._measurement == \"realtime\" and\r\n      r._field == \"Meter\" and\r\n      r.endpoint == \"Power\" and\r\n      r._value > 0)\r\n  |> group()\r\n  |> max()\r\n  |> map(fn: (r) => {\r\n      h = date.hour(t: r._time)\r\n      m = date.minute(t: r._time)\r\n      \r\n      return {\r\n          ORARIO: (if h < 10 then \"0\" else \"\") + string(v: h) + \":\" +\r\n                  (if m < 10 then \"0\" else \"\") + string(v: m),\r\n          VALORE: r._value\r\n      }\r\n  })",
           "refId": "Picco Massimo Immissione"
         }
       ],
@@ -2052,7 +2052,7 @@
             "type": "influxdb",
             "uid": "ff27vpmruzxtsc"
           },
-          "query": "import \"timezone\"\r\nimport \"date\"\r\n// import \"strings\" // Non serve più se non usi strings.substring\r\n\r\noption location = timezone.location(name: \"Europe/Rome\")\r\n\r\ntoday_start = date.truncate(t: now(), unit: 1d)\r\n\r\nfrom(bucket: \"Solaredge_Realtime\")\r\n  |> range(start: today_start)\r\n  |> filter(fn: (r) =>\r\n      r._measurement == \"realtime\" and\r\n      ((r._field == \"Inverter\" and r.endpoint == \"Power Ac\") or\r\n       (r._field == \"Meter\" and r.endpoint == \"Power\"))\r\n  )\r\n  |> aggregateWindow(every: 5s, fn: mean, createEmpty: false)\r\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])\r\n  |> pivot(rowKey:[\"_time\"], columnKey: [\"_field\"], valueColumn: \"_value\")\r\n  |> map(fn: (r) => ({\r\n      _time: r._time,\r\n      Produzione: if exists r.Inverter then r.Inverter else 0.0,\r\n      Rete: if exists r.Meter then r.Meter else 0.0,\r\n      // Assumendo Meter Positivo = Export\r\n      Consumo: (if exists r.Inverter then r.Inverter else 0.0) - (if exists r.Meter then r.Meter else 0.0)\r\n  }))\r\n  |> filter(fn: (r) => r.Consumo > 0.0)\r\n  |> max(column: \"Consumo\")\r\n  |> map(fn: (r) => ({\r\n      ORARIO: \r\n        (if date.hour(t: r._time) < 10 then \"0\" else \"\") + string(v: date.hour(t: r._time)) + \":\" +\r\n        (if date.minute(t: r._time) < 10 then \"0\" else \"\") + string(v: date.minute(t: r._time)),\r\n      VALORE: r.Consumo\r\n  }))",
+          "query": "import \"timezone\"\r\nimport \"date\"\r\n\r\noption location = timezone.location(name: \"Europe/Rome\")\r\n\r\ntoday_start = date.truncate(t: now(), unit: 1d)\r\n\r\nfrom(bucket: \"Solaredge_Realtime\")\r\n  |> range(start: today_start)\r\n  |> filter(fn: (r) =>\r\n      r._measurement == \"realtime\" and\r\n      ((r._field == \"Inverter\" and r.endpoint == \"Power Ac\") or\r\n       (r._field == \"Meter\" and r.endpoint == \"Power\")))\r\n  |> aggregateWindow(every: 5s, fn: mean)\r\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])\r\n  |> pivot(rowKey: [\"_time\"], columnKey: [\"_field\"], valueColumn: \"_value\")\r\n  |> map(fn: (r) => {\r\n      inv = if exists r.Inverter then r.Inverter else 0.0\r\n      met = if exists r.Meter then r.Meter else 0.0\r\n      \r\n      return {\r\n          _time: r._time,\r\n          _value: inv - met  // Rinomino in _value invece di Consumo\r\n      }\r\n  })\r\n  |> filter(fn: (r) => r._value > 0.0)\r\n  |> max()  // Ora funziona senza parametri!\r\n  |> map(fn: (r) => {\r\n      h = date.hour(t: r._time)\r\n      m = date.minute(t: r._time)\r\n      \r\n      return {\r\n          ORARIO: (if h < 10 then \"0\" else \"\") + string(v: h) + \":\" +\r\n                  (if m < 10 then \"0\" else \"\") + string(v: m),\r\n          VALORE: r._value\r\n      }\r\n  })",
           "refId": "Picco Consumo"
         }
       ],
@@ -2105,7 +2105,7 @@
           "calcs": [
             "last"
           ],
-          "fields": "/^Autoconsumo$/",
+          "fields": "/^Autoconsumo \\(Wh\\)$/",
           "limit": 1,
           "values": false
         },
@@ -2121,7 +2121,7 @@
             "type": "influxdb",
             "uid": "ff27vpmruzxtsc"
           },
-          "query": "import \"timezone\"\r\nimport \"date\"\r\nimport \"array\"\r\n\r\noption location = timezone.location(name: \"Europe/Rome\")\r\n\r\nstart = date.truncate(t: now(), unit: 1d)\r\nstop  = date.add(d: 1d, to: start)\r\n\r\n// Produzione: ultimo - primo\r\ndata_prod = from(bucket: \"Solaredge_Realtime\")\r\n  |> range(start: start, stop: stop)\r\n  |> filter(fn: (r) =>\r\n      r._measurement == \"realtime\" and\r\n      r._field == \"Inverter\" and\r\n      r.endpoint == \"Energy Total\" and\r\n      r.unit == \"Wh\"\r\n  )\r\n\r\nfirst_prod = data_prod |> first() |> findRecord(fn: (key) => true, idx: 0)\r\nlast_prod = data_prod |> last() |> findRecord(fn: (key) => true, idx: 0)\r\nprod_value = last_prod._value - first_prod._value\r\n\r\n// Export: ultimo - primo\r\ndata_exp = from(bucket: \"Solaredge_Realtime\")\r\n  |> range(start: start, stop: stop)\r\n  |> filter(fn: (r) =>\r\n      r._measurement == \"realtime\" and\r\n      r._field == \"Meter\" and\r\n      r.endpoint == \"Export Energy Active\" and\r\n      r.unit == \"Wh\"\r\n  )\r\n\r\nfirst_exp = data_exp |> first() |> findRecord(fn: (key) => true, idx: 0)\r\nlast_exp = data_exp |> last() |> findRecord(fn: (key) => true, idx: 0)\r\nexp_value = last_exp._value - first_exp._value\r\n\r\n// Autoconsumo = Produzione - Export\r\nautoconsumo = prod_value - exp_value\r\nautoconsumo_final = if autoconsumo < 0.0 then 0.0 else autoconsumo\r\n\r\n// Risultato\r\narray.from(rows: [{\r\n  _time: now(),\r\n  Autoconsumo: autoconsumo_final,\r\n  _field: \"autoconsumo_wh\"\r\n}])\r\n  |> yield(name: \"autoconsumo_wh\")",
+          "query": "import \"timezone\"\r\nimport \"date\"\r\nimport \"array\"\r\n\r\noption location = timezone.location(name: \"Europe/Rome\")\r\n\r\nstart = date.truncate(t: now(), unit: 1d)\r\n\r\n// Produzione: ultimo - primo\r\ndata_prod = from(bucket: \"Solaredge_Realtime\")\r\n  |> range(start: start)\r\n  |> filter(fn: (r) =>\r\n      r._measurement == \"realtime\" and\r\n      r._field == \"Inverter\" and\r\n      r.endpoint == \"Energy Total\" and\r\n      r.unit == \"Wh\" and\r\n      exists r._value)\r\n\r\nprod_value = (data_prod |> last() |> findRecord(fn: (key) => true, idx: 0))._value - \r\n             (data_prod |> first() |> findRecord(fn: (key) => true, idx: 0))._value\r\n\r\n// Export: ultimo - primo\r\ndata_exp = from(bucket: \"Solaredge_Realtime\")\r\n  |> range(start: start)\r\n  |> filter(fn: (r) =>\r\n      r._measurement == \"realtime\" and\r\n      r._field == \"Meter\" and\r\n      r.endpoint == \"Export Energy Active\" and\r\n      r.unit == \"Wh\" and\r\n      exists r._value)\r\n\r\nexp_value = (data_exp |> last() |> findRecord(fn: (key) => true, idx: 0))._value - \r\n            (data_exp |> first() |> findRecord(fn: (key) => true, idx: 0))._value\r\n\r\n// Risultato\r\narray.from(rows: [{\r\n  _time: now(),\r\n  \"Autoconsumo (Wh)\": if (prod_value - exp_value) < 0.0 then 0.0 else (prod_value - exp_value)\r\n}])",
           "refId": "Autoconsumo"
         }
       ],
@@ -2176,7 +2176,7 @@
           "calcs": [
             "last"
           ],
-          "fields": "/^Perc_Autoconsumo_OGGI$/",
+          "fields": "/^% Autoconsumo OGGI$/",
           "limit": 1,
           "values": false
         },
@@ -2192,7 +2192,7 @@
             "type": "influxdb",
             "uid": "ff27vpmruzxtsc"
           },
-          "query": "import \"timezone\"\r\nimport \"date\"\r\nimport \"array\"\r\n\r\noption location = timezone.location(name: \"Europe/Rome\")\r\n\r\ntoday_start = date.truncate(t: now(), unit: 1d)\r\n\r\n// Energia importata (prelievo)\r\ndata_importata = from(bucket: \"Solaredge_Realtime\")\r\n  |> range(start: today_start)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"realtime\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"Meter\")\r\n  |> filter(fn: (r) => r[\"endpoint\"] == \"Import Energy Active\")\r\n  |> filter(fn: (r) => exists r._value)\r\n\r\nfirst_importata = data_importata |> first() |> findRecord(fn: (key) => true, idx: 0)\r\nlast_importata = data_importata |> last() |> findRecord(fn: (key) => true, idx: 0)\r\nimportata_value = last_importata._value - first_importata._value\r\n\r\n// Energia prodotta\r\ndata_prodotta = from(bucket: \"Solaredge_Realtime\")\r\n  |> range(start: today_start)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"realtime\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"Inverter\")\r\n  |> filter(fn: (r) => r[\"endpoint\"] == \"Energy Total\")\r\n  |> filter(fn: (r) => exists r._value)\r\n\r\nfirst_prodotta = data_prodotta |> first() |> findRecord(fn: (key) => true, idx: 0)\r\nlast_prodotta = data_prodotta |> last() |> findRecord(fn: (key) => true, idx: 0)\r\nprodotta_value = last_prodotta._value - first_prodotta._value\r\n\r\n// Energia esportata\r\ndata_esportata = from(bucket: \"Solaredge_Realtime\")\r\n  |> range(start: today_start)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"realtime\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"Meter\")\r\n  |> filter(fn: (r) => r[\"endpoint\"] == \"Export Energy Active\")\r\n  |> filter(fn: (r) => exists r._value)\r\n\r\nfirst_esportata = data_esportata |> first() |> findRecord(fn: (key) => true, idx: 0)\r\nlast_esportata = data_esportata |> last() |> findRecord(fn: (key) => true, idx: 0)\r\nesportata_value = last_esportata._value - first_esportata._value\r\n\r\n// Calcoli finali\r\nautoconsumo = prodotta_value - esportata_value\r\nconsumo_totale = importata_value + autoconsumo\r\nperc_autoconsumo = if consumo_totale > 0.0 then (autoconsumo / consumo_totale) * 100.0 else 0.0\r\n\r\n// Risultato\r\narray.from(rows: [{\r\n  _time: now(),\r\n  _field: \"percentuale_autoconsumo\",\r\n  autoconsumo_wh: autoconsumo,\r\n  consumo_totale_wh: consumo_totale,\r\n  Perc_Autoconsumo_OGGI: perc_autoconsumo,\r\n  Autoconsumo_Wh_Debug: autoconsumo,\r\n  Consumo_Totale_Wh_Debug: consumo_totale,\r\n  Production_Wh_Debug: prodotta_value,\r\n  Export_Wh_Debug: esportata_value\r\n}])",
+          "query": "import \"date\"\r\nimport \"array\"\r\nimport \"timezone\"\r\n\r\noption location = timezone.location(name: \"Europe/Rome\")\r\n\r\ntoday_start = date.truncate(t: now(), unit: 1d)\r\n\r\n// Energia importata (prelievo)\r\ndata_importata = from(bucket: \"Solaredge_Realtime\")\r\n  |> range(start: today_start)\r\n  |> filter(fn: (r) => \r\n      r._measurement == \"realtime\" and\r\n      r._field == \"Meter\" and\r\n      r.endpoint == \"Import Energy Active\" and\r\n      exists r._value)\r\n\r\nimportata_value = (data_importata |> last() |> findRecord(fn: (key) => true, idx: 0))._value - \r\n                  (data_importata |> first() |> findRecord(fn: (key) => true, idx: 0))._value\r\n\r\n// Energia prodotta\r\ndata_prodotta = from(bucket: \"Solaredge_Realtime\")\r\n  |> range(start: today_start)\r\n  |> filter(fn: (r) => \r\n      r._measurement == \"realtime\" and\r\n      r._field == \"Inverter\" and\r\n      r.endpoint == \"Energy Total\" and\r\n      exists r._value)\r\n\r\nprodotta_value = (data_prodotta |> last() |> findRecord(fn: (key) => true, idx: 0))._value - \r\n                 (data_prodotta |> first() |> findRecord(fn: (key) => true, idx: 0))._value\r\n\r\n// Energia esportata\r\ndata_esportata = from(bucket: \"Solaredge_Realtime\")\r\n  |> range(start: today_start)\r\n  |> filter(fn: (r) => \r\n      r._measurement == \"realtime\" and\r\n      r._field == \"Meter\" and\r\n      r.endpoint == \"Export Energy Active\" and\r\n      exists r._value)\r\n\r\nesportata_value = (data_esportata |> last() |> findRecord(fn: (key) => true, idx: 0))._value - \r\n                  (data_esportata |> first() |> findRecord(fn: (key) => true, idx: 0))._value\r\n\r\n// Calcoli finali\r\nautoconsumo = prodotta_value - esportata_value\r\nconsumo_totale = importata_value + autoconsumo\r\n\r\n// Risultato\r\narray.from(rows: [{\r\n  _time: now(),\r\n  \"% Autoconsumo OGGI\": if consumo_totale > 0.0 then (autoconsumo / consumo_totale) * 100.0 else 0.0\r\n}])",
           "refId": "% Autoconsumo"
         }
       ],
@@ -2411,7 +2411,7 @@
             "barAlignment": 0,
             "barWidthFactor": 0.6,
             "drawStyle": "line",
-            "fillOpacity": 40,
+            "fillOpacity": 68,
             "gradientMode": "opacity",
             "hideFrom": {
               "legend": false,
@@ -2472,7 +2472,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "Consumo_W"
+              "options": "Consumo"
             },
             "properties": [
               {
@@ -2614,7 +2614,7 @@
             "uid": "ff27vpmruzxtsc"
           },
           "hide": false,
-          "query": "import \"timezone\"\r\nimport \"date\"\r\n\r\noption location = timezone.location(name: \"Europe/Rome\")\r\n\r\ntoday_start = date.truncate(t: now(), unit: 1d)\r\n\r\nfrom(bucket: \"Solaredge_Realtime\")\r\n  |> range(start: today_start)\r\n  |> filter(fn: (r) =>\r\n      r._measurement == \"realtime\" and\r\n      ((r._field == \"Inverter\" and r.endpoint == \"Power Ac\") or\r\n       (r._field == \"Meter\" and r.endpoint == \"Power\"))\r\n  )\r\n  // TRUCCO: Finestra di 1 secondo (o 5s se la tua frequenza è 5s).\r\n  // Questo NON fa media (perché cè 1 solo dato), ma allinea i timestamp\r\n  // così il pivot funziona e possiamo calcolare la differenza.\r\n  |> aggregateWindow(every: 5s, fn: mean, createEmpty: false)\r\n  \r\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])\r\n  |> pivot(rowKey:[\"_time\"], columnKey: [\"_field\"], valueColumn: \"_value\")\r\n  \r\n  // Calcolo Consumo sui dati praticamente grezzi\r\n  |> map(fn: (r) => ({\r\n      _time: r._time,\r\n      _value: (if exists r.Inverter then r.Inverter else 0.0) - (if exists r.Meter then r.Meter else 0.0)\r\n  }))\r\n  |> filter(fn: (r) => r._value >= 0.0)\r\n  |> rename(columns: {_value: \"Consumo_W\"})\r\n  |> yield(name: \"consumo_raw\")",
+          "query": "import \"timezone\"\r\nimport \"date\"\r\n\r\noption location = timezone.location(name: \"Europe/Rome\")\r\n\r\ntoday_start = date.truncate(t: now(), unit: 1d)\r\n\r\nfrom(bucket: \"Solaredge_Realtime\")\r\n  |> range(start: today_start)\r\n  |> filter(fn: (r) =>\r\n      r._measurement == \"realtime\" and\r\n      ((r._field == \"Inverter\" and r.endpoint == \"Power Ac\") or\r\n       (r._field == \"Meter\" and r.endpoint == \"Power\")))\r\n  |> aggregateWindow(every: 5s, fn: mean, createEmpty: false)  // NO zeri inventati\r\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])\r\n  |> pivot(rowKey: [\"_time\"], columnKey: [\"_field\"], valueColumn: \"_value\")\r\n  |> map(fn: (r) => {\r\n      inv = if exists r.Inverter then r.Inverter else 0.0\r\n      met = if exists r.Meter then r.Meter else 0.0\r\n      \r\n      return {\r\n          _time: r._time,\r\n          Consumo: inv - met\r\n      }\r\n  })\r\n  |> filter(fn: (r) => r.Consumo >= 0.0)  // Mostra anche 0, nasconde solo negativi\r\n  |> keep(columns: [\"_time\", \"Consumo\"])",
           "refId": "Consumo"
         },
         {
@@ -2673,7 +2673,7 @@
             "barAlignment": 0,
             "barWidthFactor": 0.6,
             "drawStyle": "line",
-            "fillOpacity": 40,
+            "fillOpacity": 68,
             "gradientMode": "opacity",
             "hideFrom": {
               "legend": false,
@@ -2856,7 +2856,7 @@
             "uid": "ff27vpmruzxtsc"
           },
           "hide": false,
-          "query": "import \"timezone\"\r\nimport \"date\"\r\n\r\noption location = timezone.location(name: \"Europe/Rome\")\r\n\r\nyesterday_start = date.truncate(t: date.sub(d: 1d, from: now()), unit: 1d)\r\nyesterday_end = date.add(d: 1d, to: yesterday_start)\r\n\r\nfrom(bucket: \"Solaredge_Realtime\")\r\n  |> range(start: yesterday_start, stop: yesterday_end)\r\n  |> filter(fn: (r) => \r\n      r._measurement == \"realtime\" and\r\n      r._field == \"Inverter\" and\r\n      r.endpoint == \"Power Ac\"\r\n  )\r\n  |> aggregateWindow(every: 1m, fn: mean, createEmpty: false)\r\n  |> group(columns: [])  // Spostato DOPO aggregateWindow per evitare overhead\r\n  |> keep(columns: [\"_time\", \"_value\"])\r\n  |> rename(columns: {_value: \"Produzione\"})",
+          "query": "import \"timezone\"\r\nimport \"date\"\r\n\r\noption location = timezone.location(name: \"Europe/Rome\")\r\n\r\nyesterday_start = date.truncate(t: date.sub(d: 1d, from: now()), unit: 1d)\r\nyesterday_end = date.add(d: 1d, to: yesterday_start)\r\n\r\nfrom(bucket: \"Solaredge_Realtime\")\r\n  |> range(start: yesterday_start, stop: yesterday_end)\r\n  |> filter(fn: (r) => \r\n      r._measurement == \"realtime\" and\r\n      r._field == \"Inverter\" and\r\n      r.endpoint == \"Power Ac\")\r\n  |> aggregateWindow(every: 1m, fn: mean, createEmpty: false)\r\n  |> group(columns: [])\r\n  |> keep(columns: [\"_time\", \"_value\"])\r\n  |> rename(columns: {_value: \"Produzione\"})",
           "refId": "Produzione"
         },
         {
@@ -2865,7 +2865,7 @@
             "uid": "ff27vpmruzxtsc"
           },
           "hide": false,
-          "query": "import \"timezone\"\r\nimport \"date\"\r\n\r\noption location = timezone.location(name: \"Europe/Rome\")\r\n\r\nyesterday_start = date.truncate(t: date.sub(d: 1d, from: now()), unit: 1d)\r\nyesterday_end = date.add(d: 1d, to: yesterday_start)\r\n\r\nfrom(bucket: \"Solaredge_Realtime\")\r\n  |> range(start: yesterday_start, stop: yesterday_end)\r\n  |> filter(fn: (r) =>\r\n      r._measurement == \"realtime\" and\r\n      ((r._field == \"Inverter\" and r.endpoint == \"Power Ac\") or\r\n       (r._field == \"Meter\" and r.endpoint == \"Power\"))\r\n  )\r\n  |> aggregateWindow(every: 1m, fn: mean, createEmpty: false)\r\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])\r\n  |> pivot(rowKey:[\"_time\"], columnKey: [\"_field\"], valueColumn: \"_value\")\r\n  |> map(fn: (r) => ({\r\n      _time: r._time,\r\n      _value: (if exists r.Inverter then r.Inverter else 0.0) - \r\n              (if exists r.Meter then r.Meter else 0.0)\r\n  }))\r\n  |> filter(fn: (r) => r._value >= 0.0)\r\n  |> rename(columns: {_value: \"Consumo\"})",
+          "query": "import \"timezone\"\r\nimport \"date\"\r\n\r\noption location = timezone.location(name: \"Europe/Rome\")\r\n\r\nyesterday_start = date.truncate(t: date.sub(d: 1d, from: now()), unit: 1d)\r\nyesterday_end = date.add(d: 1d, to: yesterday_start)\r\n\r\nfrom(bucket: \"Solaredge_Realtime\")\r\n  |> range(start: yesterday_start, stop: yesterday_end)\r\n  |> filter(fn: (r) =>\r\n      r._measurement == \"realtime\" and\r\n      ((r._field == \"Inverter\" and r.endpoint == \"Power Ac\") or\r\n       (r._field == \"Meter\" and r.endpoint == \"Power\")))\r\n  |> aggregateWindow(every: 1m, fn: mean, createEmpty: false)\r\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])\r\n  |> pivot(rowKey: [\"_time\"], columnKey: [\"_field\"], valueColumn: \"_value\")\r\n  |> map(fn: (r) => {\r\n      inv = if exists r.Inverter then r.Inverter else 0.0\r\n      met = if exists r.Meter then r.Meter else 0.0\r\n      \r\n      return {\r\n          _time: r._time,\r\n          _value: inv - met\r\n      }\r\n  })\r\n  |> filter(fn: (r) => r._value >= 0.0)\r\n  |> rename(columns: {_value: \"Consumo\"})",
           "refId": "Consumo"
         },
         {
@@ -2874,7 +2874,7 @@
             "uid": "ff27vpmruzxtsc"
           },
           "hide": false,
-          "query": "import \"timezone\"\r\nimport \"date\"\r\n\r\noption location = timezone.location(name: \"Europe/Rome\")\r\n\r\nyesterday_start = date.truncate(t: date.sub(d: 1d, from: now()), unit: 1d)\r\nyesterday_end   = date.add(d: 1d, to: yesterday_start)\r\n\r\nfrom(bucket: \"Solaredge_Realtime\")\r\n  |> range(start: yesterday_start, stop: yesterday_end)\r\n  |> filter(fn: (r) => \r\n      r._measurement == \"realtime\" and\r\n      r._field == \"Meter\" and\r\n      r.endpoint == \"Power\"\r\n  )\r\n  |> aggregateWindow(every: 1m, fn: mean, createEmpty: false)\r\n  |> group(columns: [])  // Collapse tutte le tabelle\r\n  |> map(fn: (r) => ({\r\n      _time: r._time,\r\n      _value: if r._value < 0.0 then 0.0 else r._value\r\n  }))\r\n  |> rename(columns: {_value: \"Immissione\"})\r\n  |> keep(columns: [\"_time\", \"Immissione\"])",
+          "query": "import \"timezone\"\r\nimport \"date\"\r\n\r\noption location = timezone.location(name: \"Europe/Rome\")\r\n\r\nyesterday_start = date.truncate(t: date.sub(d: 1d, from: now()), unit: 1d)\r\nyesterday_end   = date.add(d: 1d, to: yesterday_start)\r\n\r\nfrom(bucket: \"Solaredge_Realtime\")\r\n  |> range(start: yesterday_start, stop: yesterday_end)\r\n  |> filter(fn: (r) => \r\n      r._measurement == \"realtime\" and\r\n      r._field == \"Meter\" and\r\n      r.endpoint == \"Power\")\r\n  |> aggregateWindow(every: 1m, fn: mean, createEmpty: false)\r\n  |> group(columns: [])\r\n  |> map(fn: (r) => ({\r\n      _time: r._time,\r\n      Immissione: if r._value < 0.0 then 0.0 else r._value\r\n  }))\r\n  |> keep(columns: [\"_time\", \"Immissione\"])",
           "refId": "Immissione"
         },
         {
@@ -2883,7 +2883,7 @@
             "uid": "ff27vpmruzxtsc"
           },
           "hide": false,
-          "query": "import \"timezone\"\r\nimport \"date\"\r\n\r\noption location = timezone.location(name: \"Europe/Rome\")\r\n\r\nyesterday_start = date.truncate(t: date.sub(d: 1d, from: now()), unit: 1d)\r\nyesterday_end   = date.add(d: 1d, to: yesterday_start)\r\n\r\nfrom(bucket: \"Solaredge_Realtime\")\r\n  |> range(start: yesterday_start, stop: yesterday_end)\r\n  |> filter(fn: (r) =>\r\n      r._measurement == \"realtime\" and\r\n      ((r._field == \"Inverter\" and r.endpoint == \"Power Ac\") or\r\n       (r._field == \"Meter\" and r.endpoint == \"Power\"))\r\n  )\r\n  |> aggregateWindow(every: 1m, fn: mean, createEmpty: false)\r\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])\r\n  |> pivot(rowKey: [\"_time\"], columnKey: [\"_field\"], valueColumn: \"_value\")\r\n  |> map(fn: (r) => ({\r\n      _time: r._time,\r\n      _value: if exists r.Meter and r.Meter >= 0.0\r\n              then (if exists r.Inverter then r.Inverter else 0.0) - r.Meter\r\n              else (if exists r.Inverter then r.Inverter else 0.0)\r\n  }))\r\n  |> filter(fn: (r) => r._value >= 0.0)\r\n  |> rename(columns: {_value: \"Autoconsumo\"})",
+          "query": "import \"timezone\"\r\nimport \"date\"\r\n\r\noption location = timezone.location(name: \"Europe/Rome\")\r\n\r\nyesterday_start = date.truncate(t: date.sub(d: 1d, from: now()), unit: 1d)\r\nyesterday_end   = date.add(d: 1d, to: yesterday_start)\r\n\r\nfrom(bucket: \"Solaredge_Realtime\")\r\n  |> range(start: yesterday_start, stop: yesterday_end)\r\n  |> filter(fn: (r) =>\r\n      r._measurement == \"realtime\" and\r\n      ((r._field == \"Inverter\" and r.endpoint == \"Power Ac\") or\r\n       (r._field == \"Meter\" and r.endpoint == \"Power\"))\r\n  )\r\n  |> aggregateWindow(every: 1m, fn: mean, createEmpty: false)\r\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])\r\n  |> pivot(rowKey: [\"_time\"], columnKey: [\"_field\"], valueColumn: \"_value\")\r\n  |> map(fn: (r) => {\r\n      inv = if exists r.Inverter then r.Inverter else 0.0\r\n      met = if exists r.Meter then r.Meter else 0.0\r\n      \r\n      return {\r\n          _time: r._time,\r\n          _value: if exists r.Meter and met >= 0.0 then inv - met else inv\r\n      }\r\n  })\r\n  |> filter(fn: (r) => r._value >= 0.0)\r\n  |> rename(columns: {_value: \"Autoconsumo\"})",
           "refId": "Autoconsumo"
         },
         {
@@ -5848,7 +5848,7 @@
             "uid": "ff27vpmruzxtsc"
           },
           "hide": false,
-          "query": "import \"date\"\r\nimport \"join\"\r\nimport \"timezone\"\r\n\r\noption location = timezone.location(name: \"Europe/Rome\")\r\n\r\n// 1. Immissione mensile (energia venduta alla rete)\r\n//    Sorgente: Web Scraping (Site) -> EXPORT_ENERGY\r\nimmissione = from(bucket: \"Solaredge\")\r\n  |> range(start: 0)\r\n  |> filter(fn: (r) => \r\n      r._measurement == \"web\" and \r\n      r._field == \"Site\" and \r\n      r.endpoint == \"EXPORT_ENERGY\"\r\n  )\r\n  |> aggregateWindow(every: 1mo, fn: sum, location: location, timeSrc: \"_start\")\r\n  |> map(fn: (r) => ({\r\n      _time: r._time,\r\n      year: string(v: date.year(t: r._time)),\r\n      month: string(v: date.month(t: r._time)),\r\n      immissione_wh: r._value\r\n  }))\r\n  |> group()\r\n\r\n// 2. PUN mensile\r\npun = from(bucket: \"GME\")\r\n  |> range(start: 0)\r\n  |> filter(fn: (r) => r._measurement == \"gme_monthly_avg\" and r._field == \"pun_kwh_avg\")\r\n  |> map(fn: (r) => ({\r\n      _time: r._time,\r\n      year: r.year,\r\n      month: string(v: date.month(t: r._time)),\r\n      pun: r._value\r\n  }))\r\n  |> group()\r\n\r\n// 3. Join, calcola rimborso e somma totale\r\njoin.inner(\r\n  left: immissione,\r\n  right: pun,\r\n  on: (l, r) => l.year == r.year and l.month == r.month,\r\n  as: (l, r) => ({\r\n    _time: l._time,\r\n    _value: (l.immissione_wh / 1000.0) * r.pun\r\n  })\r\n)\r\n  |> sum()\r\n  |> map(fn: (r) => ({\"Rimborsi Immissione\": r._value}))",
+          "query": "import \"date\"\r\nimport \"join\"\r\nimport \"timezone\"\r\n\r\noption location = timezone.location(name: \"Europe/Rome\")\r\n\r\n// 1. Immissione mensile da Site\r\nimmissione = from(bucket: \"Solaredge\")\r\n  |> range(start: 0)\r\n  |> filter(fn: (r) => \r\n      r._measurement == \"web\" and \r\n      r._field == \"Site\" and\r\n      r.endpoint == \"EXPORT_ENERGY\"\r\n  )\r\n  |> aggregateWindow(every: 1mo, fn: sum, location: location, timeSrc: \"_start\")\r\n  |> map(fn: (r) => ({\r\n      _time: r._time,\r\n      year: string(v: date.year(t: r._time)),\r\n      month: string(v: date.month(t: r._time)),\r\n      immissione_wh: r._value\r\n  }))\r\n  |> group()\r\n\r\n// 2. PUN mensile\r\npun = from(bucket: \"GME\")\r\n  |> range(start: 0)\r\n  |> filter(fn: (r) => r._measurement == \"gme_monthly_avg\" and r._field == \"pun_kwh_avg\")\r\n  |> map(fn: (r) => ({\r\n      _time: r._time,\r\n      year: r.year,\r\n      month: string(v: date.month(t: r._time)),\r\n      pun: r._value\r\n  }))\r\n  |> group()\r\n\r\n// 3. Join e calcolo rimborsi totali\r\njoin.inner(\r\n  left: immissione,\r\n  right: pun,\r\n  on: (l, r) => l.year == r.year and l.month == r.month,\r\n  as: (l, r) => ({\r\n    _time: l._time,\r\n    _value: (l.immissione_wh / 1000.0) * r.pun\r\n  })\r\n)\r\n  |> sum()\r\n  |> map(fn: (r) => ({\"Rimborsi Immissione\": r._value}))",
           "refId": "Rimborsi Immissione"
         },
         {
@@ -5883,6 +5883,6 @@
   "timezone": "",
   "title": "Solaredge 3.0",
   "uid": "afb91a6f-d8f7-43ae-8a98-67eab1bb4baa",
-  "version": 549,
+  "version": 572,
   "weekStart": "monday"
 }

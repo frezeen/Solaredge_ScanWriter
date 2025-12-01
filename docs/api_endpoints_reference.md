@@ -1,74 +1,66 @@
-# API Data Storage - Technical Reference
+# Sistema Storage API SolarEdge - Riferimento Tecnico
 
-## Purpose
+## Scopo
 
-This document describes **how the SolarEdge API data storage system works** technically in InfluxDB. It does NOT describe how to query it or what to do with it, but rather the technical implementation of data collection, parsing, and storage.
+Questo documento descrive **come il sistema raccoglie, processa e memorizza i dati dalle API ufficiali SolarEdge** in InfluxDB. Per come interrogare i dati, vedi altri documenti di riferimento.
 
 ---
 
-## InfluxDB Storage Structure
+## Struttura Storage InfluxDB
 
-### Measurement Name
-All API data is stored in a single measurement: **`api`**
+### Nome Measurement
+Tutti i dati API sono memorizzati in un singolo measurement: **`api`**
 
-### Data Point Structure
+### Struttura Data Point
 
-Each data point written to InfluxDB has:
+**Tag** (indicizzati):
+- `endpoint`: Nome endpoint API (es. "site_energy_details", "equipment_data")
+- `metric`: Tipo meter o metrica specifica (es. "Production", "temperature", "L1Data_acCurrent")
+- `unit`: Unità di misura (es. "W", "Wh", "V", "A", "°C") - opzionale
 
-**Tags** (indexed, used for filtering):
-- `endpoint`: The API endpoint name (e.g., "site_energy_details", "equipment_data")
-- `metric`: The meter type or specific metric (e.g., "Production", "temperature", "L1Data_acCurrent")
-- `unit`: The unit of measurement (e.g., "W", "Wh", "V", "A", "°C") - optional
-
-**Fields** (actual values):
-- Field name is determined by the **category** from `api_endpoints.yaml`
-- Field value is either:
-  - Numeric value (float) for structured data
-  - JSON string for metadata endpoints
+**Field**:
+- Nome determinato dalla **category** in `api_endpoints.yaml`
+- Valore: float per dati strutturati, string JSON per metadata
 
 **Timestamp**:
-- Nanosecond precision
-- Converted from parsed datetime: `timestamp_seconds * 1_000_000_000`
+- Precisione nanosecondi
+- Convertito da datetime: `timestamp_seconds * 1_000_000_000`
 
 ---
 
-## Category System
+## Sistema Category
 
-### What is Category?
+### Come Funziona
 
-Category is defined in `config/sources/api_endpoints.yaml` for each endpoint and determines the **field name** used in InfluxDB.
+1. Parser legge configurazione endpoint da `api_endpoints.yaml`
+2. Estrae campo `category`
+3. Usa `category` come nome field InfluxDB
+4. Errore se category mancante
 
-### Category Mapping
+Posizione codice: `parser/api_parser.py` → `_create_raw_point()` (riga 69-90)
 
-| Category | Field Name | Data Type | Typical Endpoints |
-|----------|------------|-----------|-------------------|
-| `Inverter` | `Inverter` | float | site_energy_*, site_timeframe_energy, equipment_data |
+### Mappatura Category
+
+| Category | Field InfluxDB | Tipo Dato | Endpoint Tipici |
+|----------|----------------|-----------|-----------------|
+| `Inverter` | `Inverter` | float | site_energy_*, equipment_data |
 | `Meter` | `Meter` | float | site_energy_details, site_power_details |
 | `Flusso` | `Flusso` | string (JSON) | site_power_flow |
-| `Info` | `Info` | string (JSON) | site_details, site_overview, equipment_list, etc. |
-
-### How Category is Determined
-
-1. **Parser reads** endpoint configuration from `api_endpoints.yaml`
-2. **Extracts** `category` field from endpoint config
-3. **Uses** category as InfluxDB field name
-4. **Error**: If category missing, raises ValueError
-
-Code location: `parser/api_parser.py` → `_create_raw_point()` (line 69-90), `_create_structured_dicts()` (line 410-456)
+| `Info` | `Info` | string (JSON) | site_details, site_overview, equipment_list |
 
 ---
 
-## Data Flow Pipeline
+## Pipeline Flusso Dati
 
-### Step 1: API Request
+### Step 1: Richiesta API
 
-CollectorAPI builds and executes HTTP requests:
+CollectorAPI costruisce ed esegue richieste HTTP:
 
 ```python
-# URL construction
+# Costruzione URL
 url = f"{base_url}/site/{site_id}/energyDetails"
 
-# Parameters
+# Parametri
 params = {
     'api_key': api_key,
     'startTime': '2025-11-29 00:00:00',
@@ -76,168 +68,161 @@ params = {
     'meters': 'PRODUCTION,CONSUMPTION'
 }
 
-# HTTP call
+# Chiamata HTTP
 response = session.get(url, params=params, timeout=30)
 data = response.json()
 ```
 
-Code location: `collector/collector_api.py` → `_call_api()` (line 106-125)
+Posizione codice: `collector/collector_api.py` → `_call_api()` (riga 106-125)
 
-### Step 2: Data Parsing
+### Step 2: Parsing Dati
 
-Parser processes API response based on `data_format`:
+Parser processa risposta API in base a `data_format`:
 
-**Structured Format** (numeric data):
-- Extracts values from nested JSON
-- Creates structured dictionaries with tags and fields
-- Parses timestamps to UTC
+**Formato Strutturato** (dati numerici):
+- Estrae valori da JSON annidato
+- Crea dizionari strutturati con tag e field
+- Converte timestamp a UTC
 
-**Raw JSON Format** (metadata):
-- Stores entire JSON response as string
-- Minimal processing
+**Formato Raw JSON** (metadata):
+- Memorizza intera risposta JSON come string
+- Processamento minimo
 
-Code location: `parser/api_parser.py` → `parse()` (line 458-517)
+Posizione codice: `parser/api_parser.py` → `parse()` (riga 458-517)
 
-### Step 3: Filtering
+### Step 3: Filtraggio
 
-Raw points pass through filtering rules:
+I raw point passano attraverso regole di filtraggio:
 
 ```python
-# Filter structured points
+# Filtra point strutturati
 filtered_structured = filter_structured_points(all_structured_dicts)
 
-# Filter raw points  
+# Filtra raw point
 filtered_raw = filter_raw_points(all_raw_points)
 ```
 
-Code location: `parser/api_parser.py` → `parse()` (line 488-493)
+Posizione codice: `parser/api_parser.py` → `parse()` (riga 488-493)
 
-### Step 4: Point Conversion
+### Step 4: Conversione Point
 
-Filtered data is converted to InfluxDB Point objects:
+Dati filtrati convertiti a oggetti InfluxDB Point:
 
 ```python
 point = Point("api")
 point.tag("endpoint", "site_energy_details")
 point.tag("metric", "Production")
 point.tag("unit", "Wh")
-point.field("Meter", 15420.0)  # category as field name
+point.field("Meter", 15420.0)  # category come nome field
 point.time(1732875600000000000, WritePrecision.NS)
 ```
 
-Code location: `parser/api_parser.py` → `_convert_dict_to_point()` (line 131-165)
+Posizione codice: `parser/api_parser.py` → `_convert_dict_to_point()` (riga 131-165)
 
-### Step 5: Storage
+### Step 5: Scrittura
 
-InfluxWriter writes points to InfluxDB bucket.
+InfluxWriter scrive i point nel bucket InfluxDB.
 
-Code location: `storage/writer_influx.py` → `write_points()`
+Posizione codice: `storage/writer_influx.py` → `write_points()`
 
 ---
 
-## Endpoint Types
+## Tipi di Endpoint
 
-### Structured Data Endpoints
-
-These endpoints return numeric time-series data:
+### Endpoint Dati Strutturati
 
 **site_energy_details**:
 - URL: `/site/{siteId}/energyDetails`
-- Data format: Nested meters with time-series values
+- Formato: Meter annidati con serie temporali
 - Category: `Meter`
-- Parsing: Extracts meter type, timestamp, value, unit
+- Parsing: Estrae tipo meter, timestamp, valore, unità
 
 **site_power_details**:
 - URL: `/site/{siteId}/powerDetails`
-- Data format: Nested meters with time-series values
+- Formato: Meter annidati con serie temporali
 - Category: `Meter`
-- Parsing: Same as energy_details
+- Parsing: Uguale a energy_details
 
 **equipment_data**:
 - URL: `/equipment/{siteId}/{serialNumber}/data`
-- Data format: Array of telemetries
+- Formato: Array di telemetrie
 - Category: `Inverter`
-- Parsing: Extracts multiple fields per telemetry (totalActivePower, dcVoltage, temperature, etc.)
+- Parsing: Estrae multipli field per telemetria
 
 **site_timeframe_energy**:
 - URL: `/site/{siteId}/timeFrameEnergy`
-- Data format: Single energy value with metadata
+- Formato: Singolo valore energia con metadata
 - Category: `Inverter`
-- Parsing: Extracts energy value and start date
+- Parsing: Estrae valore energia e data inizio
 
-### Metadata Endpoints
-
-These endpoints return JSON metadata:
+### Endpoint Metadata
 
 **site_details**:
 - URL: `/site/{siteId}/details`
-- Data format: Nested JSON with site information
 - Category: `Info`
-- Storage: Flattened into multiple points (one per field)
+- Storage: Appiattito in multipli point (uno per field)
 
 **site_overview**:
 - URL: `/site/{siteId}/overview`
-- Data format: JSON with current metrics
 - Category: `Info`
-- Storage: Single point with JSON string
+- Storage: Singolo point con stringa JSON
 
 **equipment_list**:
 - URL: `/equipment/{siteId}/list`
-- Data format: JSON array of equipment
 - Category: `Info`
-- Storage: Single point with JSON string
+- Storage: Singolo point con stringa JSON
 
 ---
 
-## Timestamp Handling
+## Gestione Timestamp
 
-### Input Formats
+### Formati Input
 
-API provides timestamps in various formats:
-- `"2025-11-29 10:00:00"` (local time, no timezone)
-- `"2025-11-29T10:00:00+01:00"` (ISO 8601 with timezone)
+API fornisce timestamp in vari formati:
+- `"2025-11-29 10:00:00"` (ora locale, senza timezone)
+- `"2025-11-29T10:00:00+01:00"` (ISO 8601 con timezone)
 
-### Conversion Process
+### Processo Conversione
 
-1. **Parse** string to datetime object
-2. **Localize** to configured timezone (default: Europe/Rome)
-3. **Convert** to UTC
-4. **Extract** Unix timestamp in seconds
-5. **Multiply** by 1,000,000,000 to get nanoseconds
-6. **Write** to InfluxDB with nanosecond precision
+1. **Parse** stringa a oggetto datetime
+2. **Localizza** a timezone configurato (default: Europe/Rome)
+3. **Converti** a UTC
+4. **Estrai** Unix timestamp in secondi
+5. **Moltiplica** per 1.000.000.000 per ottenere nanosecondi
+6. **Scrivi** in InfluxDB con precisione nanosecondo
 
-Code location: `parser/api_parser.py` → `_parse_timestamp()` (line 92-98)
-
----
-
-## Parameter Building
-
-### Automatic Date Substitution
-
-Collector automatically replaces placeholders in endpoint parameters:
-
-| Placeholder | Replaced With | Example |
-|-------------|---------------|---------|
-| `${API_START_DATE}` | Current date | `2025-11-29` |
-| `${API_END_DATE}` | Current date | `2025-11-29` |
-| `${API_START_TIME}` | Current date + 00:00:00 | `2025-11-29 00:00:00` |
-| `${API_END_TIME}` | Current date + 23:59:59 | `2025-11-29 23:59:59` |
-| `${CURRENT_YEAR_START}` | Year start | `2025-01-01` |
-| `${CURRENT_YEAR_END}` | Year end | `2025-12-31` |
-
-Code location: `collector/collector_api.py` → `_build_params()` (line 71-104)
-
-### Automatic Date Addition
-
-For endpoints that require dates but don't have them in config:
-- Automatically adds `startTime` and `endTime` for current day
-- Applies to: energyDetails, powerDetails, meters endpoints
+Posizione codice: `parser/api_parser.py` → `_parse_timestamp()` (riga 92-98)
 
 ---
 
-## Caching System
+## Costruzione Parametri
 
-### Cache Key Structure
+### Sostituzione Automatica Date
+
+Collector sostituisce automaticamente placeholder nei parametri endpoint:
+
+| Placeholder | Sostituito Con | Esempio |
+|-------------|----------------|---------|
+| `${API_START_DATE}` | Data corrente | `2025-11-29` |
+| `${API_END_DATE}` | Data corrente | `2025-11-29` |
+| `${API_START_TIME}` | Data corrente + 00:00:00 | `2025-11-29 00:00:00` |
+| `${API_END_TIME}` | Data corrente + 23:59:59 | `2025-11-29 23:59:59` |
+| `${CURRENT_YEAR_START}` | Inizio anno | `2025-01-01` |
+| `${CURRENT_YEAR_END}` | Fine anno | `2025-12-31` |
+
+Posizione codice: `collector/collector_api.py` → `_build_params()` (riga 71-104)
+
+### Aggiunta Automatica Date
+
+Per endpoint che richiedono date ma non le hanno in configurazione:
+- Aggiunge automaticamente `startTime` e `endTime` per giorno corrente
+- Si applica a: energyDetails, powerDetails, meters endpoint
+
+---
+
+## Sistema Caching
+
+### Struttura Chiave Cache
 
 ```
 source: "api_ufficiali"
@@ -245,106 +230,104 @@ endpoint: "{endpoint_name}"
 date: "YYYY-MM-DD"
 ```
 
-### Cache Behavior
+### Comportamento Cache
 
-**Daily Mode** (`collect()`):
-- Each endpoint cached per day
-- TTL: 15 minutes (configurable)
-- Cache key: endpoint name + today's date
+**Modalità Giornaliera** (`collect()`):
+- Ogni endpoint cachato per giorno
+- TTL: 15 minuti (configurabile)
+- Chiave cache: nome endpoint + data odierna
 
-**History Mode** (`collect_with_dates()`):
-- Monthly data split into daily cache entries
-- Each day cached separately
-- Cache key: endpoint name + specific date
+**Modalità Storico** (`collect_with_dates()`):
+- Dati mensili suddivisi in voci cache giornaliere
+- Ogni giorno cachato separatamente
+- Chiave cache: nome endpoint + data specifica
 
-Code location: `collector/collector_api.py` → `collect()` (line 163-188), `collect_with_dates()` (line 220-362)
+Posizione codice: `collector/collector_api.py` → `collect()` (riga 163-188), `collect_with_dates()` (riga 220-362)
 
-### Data Splitting
+### Suddivisione Dati
 
-Monthly API responses are split into daily chunks for caching:
+Risposte API mensili suddivise in chunk giornalieri per caching:
 
 **site_energy_details / site_power_details**:
-- Groups values by date field
-- Creates separate cache entry per day
-- Preserves meter structure
+- Raggruppa valori per campo data
+- Crea voce cache separata per giorno
+- Preserva struttura meter
 
 **equipment_data**:
-- Groups telemetries by date field
-- Creates separate cache entry per day
-- Preserves telemetry structure
+- Raggruppa telemetrie per campo data
+- Crea voce cache separata per giorno
+- Preserva struttura telemetria
 
-Code location: `collector/collector_api.py` → `_split_data_by_day()` (line 586-670)
+Posizione codice: `collector/collector_api.py` → `_split_data_by_day()` (riga 586-670)
 
 ---
 
-## Special Endpoint Handling
+## Gestione Speciale Endpoint
 
 ### Equipment Endpoints
 
-Require serial number from equipment_list:
+Richiedono serial number da equipment_list:
 
-1. **Fetch** equipment_list endpoint
-2. **Extract** first serial number from reporters.list
-3. **Use** serial number in URL: `/equipment/{siteId}/{serialNumber}/data`
+1. **Recupera** endpoint equipment_list
+2. **Estrae** primo serial number da reporters.list
+3. **Usa** serial number in URL: `/equipment/{siteId}/{serialNumber}/data`
 
-Code location: `collector/collector_api.py` → `_collect_equipment_endpoint()` (line 127-161)
+Posizione codice: `collector/collector_api.py` → `_collect_equipment_endpoint()` (riga 127-161)
 
-### Equipment Data Time Limits
+### Equipment Data - Limite Temporale
 
-API limitation: Maximum 7 days per request
+Limitazione API: Massimo 7 giorni per richiesta
 
-**Solution**: Automatic week splitting for longer periods
-- Divides period into 6-day chunks (with overlap)
-- Makes multiple API calls
-- Aggregates telemetries into single response
+**Soluzione**: Suddivisione automatica settimanale per periodi lunghi
+- Divide periodo in chunk da 6 giorni (con overlap)
+- Effettua multiple chiamate API
+- Aggrega telemetrie in singola risposta
 
-Code location: `collector/collector_api.py` → `_collect_equipment_by_weeks()` (line 445-492)
+Posizione codice: `collector/collector_api.py` → `_collect_equipment_by_weeks()` (riga 445-492)
 
 ### Site Energy Day
 
-API limitation: Maximum 1 year per request (timeUnit=DAY)
+Limitazione API: Massimo 1 anno per richiesta (timeUnit=DAY)
 
-**Solution**: Automatic year splitting
-- Divides period into yearly chunks
-- Makes one API call per year
-- Aggregates values into single response
+**Soluzione**: Suddivisione automatica annuale
+- Divide periodo in chunk annuali
+- Una chiamata API per anno
+- Aggrega valori in singola risposta
 
-Code location: `collector/collector_api.py` → `_collect_site_energy_day_with_dates()` (line 676-745)
+Posizione codice: `collector/collector_api.py` → `_collect_site_energy_day_with_dates()` (riga 676-745)
 
 ### Site Timeframe Energy
 
-**Smart caching** per year:
-- Checks cache for each year individually
-- Only fetches missing years from API
-- As system ages, only new year requires API call
+**Smart caching** per anno:
+- Controlla cache per ogni anno individualmente
+- Recupera solo anni mancanti dall'API
+- Col tempo, solo nuovo anno richiede chiamata API
 
-Code location: `collector/collector_api.py` → `_collect_site_timeframe_energy_smart_cache()` (line 747-847)
+Posizione codice: `collector/collector_api.py` → `_collect_site_timeframe_energy_smart_cache()` (riga 747-847)
 
 ---
 
-## Meter Types
+## Tipi Meter
 
-### Available Meters
+### Meter Disponibili
 
-API provides data for different meter types:
+| Tipo Meter | Descrizione | Disponibile In |
+|------------|-------------|----------------|
+| `Production` | Energia/Potenza prodotta | energy_details, power_details |
+| `Consumption` | Energia/Potenza consumata | energy_details, power_details |
+| `SelfConsumption` | Energia/Potenza autoconsumata (virtuale) | energy_details, power_details |
+| `FeedIn` | Energia/Potenza esportata in rete | energy_details, power_details |
+| `Purchased` | Energia/Potenza importata da rete | energy_details, power_details |
 
-| Meter Type | Description | Available In |
-|------------|-------------|--------------|
-| `Production` | Energy/Power produced | energy_details, power_details |
-| `Consumption` | Energy/Power consumed | energy_details, power_details |
-| `SelfConsumption` | Energy/Power self-consumed (virtual) | energy_details, power_details |
-| `FeedIn` | Energy/Power exported to grid | energy_details, power_details |
-| `Purchased` | Energy/Power imported from grid | energy_details, power_details |
+### Storage Tipo Meter
 
-### Meter Type Storage
-
-Each meter type is stored with its own tag:
+Ogni tipo meter memorizzato con proprio tag:
 
 ```
 measurement: api
 tags:
   endpoint: site_energy_details
-  metric: Production  ← meter type
+  metric: Production  ← tipo meter
   unit: Wh
 fields:
   Meter: 15420.0
@@ -352,69 +335,67 @@ fields:
 
 ---
 
-## Equipment Data Fields
+## Field Equipment Data
 
-### Main Telemetry Fields
+### Field Telemetria Principali
 
-| Field | Unit | Description |
-|-------|------|-------------|
-| `totalActivePower` | W | Total active power |
-| `dcVoltage` | V | DC voltage from panels |
-| `powerLimit` | % | Applied power limit |
-| `totalEnergy` | Wh | Lifetime energy |
-| `temperature` | °C | Inverter temperature |
+| Field | Unità | Descrizione |
+|-------|-------|-------------|
+| `totalActivePower` | W | Potenza attiva totale |
+| `dcVoltage` | V | Tensione DC dai pannelli |
+| `powerLimit` | % | Limite potenza applicato |
+| `totalEnergy` | Wh | Energia lifetime |
+| `temperature` | °C | Temperatura inverter |
 
-### Phase Data Fields (L1Data, L2Data, L3Data)
+### Field Dati Fase (L1Data, L2Data, L3Data)
 
-| Field | Unit | Description |
-|-------|------|-------------|
-| `acCurrent` | A | AC current |
-| `acVoltage` | V | AC voltage |
-| `acFrequency` | Hz | AC frequency |
-| `apparentPower` | VA | Apparent power |
-| `activePower` | W | Active power |
-| `reactivePower` | VAr | Reactive power |
-| `cosPhi` | - | Power factor |
+| Field | Unità | Descrizione |
+|-------|-------|-------------|
+| `acCurrent` | A | Corrente AC |
+| `acVoltage` | V | Tensione AC |
+| `acFrequency` | Hz | Frequenza AC |
+| `apparentPower` | VA | Potenza apparente |
+| `activePower` | W | Potenza attiva |
+| `reactivePower` | VAr | Potenza reattiva |
+| `cosPhi` | - | Fattore di potenza |
 
-### Storage Format
+### Formato Storage
 
-Each field is stored as separate point with metric tag:
+Ogni field memorizzato come point separato con tag metric:
 
 ```
 measurement: api
 tags:
   endpoint: equipment_data
-  metric: L1Data_acCurrent  ← field name
+  metric: L1Data_acCurrent  ← nome field
   unit: A
 fields:
   Inverter: 5.2
 ```
 
-Code location: `parser/api_parser.py` → `_process_equipment_data()` (line 351-408)
+Posizione codice: `parser/api_parser.py` → `_process_equipment_data()` (riga 351-408)
 
 ---
 
-## Unit Normalization
+## Normalizzazione Unità
 
-Units from API are normalized to standard format:
+| Unità API | Normalizzata | Note |
+|-----------|--------------|------|
+| `w`, `W` | `W` | Watt |
+| `wh`, `Wh` | `Wh` | Watt-ora |
+| `kw`, `kW` | `kW` | Kilowatt |
+| `kwh`, `kWh` | `kWh` | Kilowatt-ora |
+| Altre | Invariate | Passate così come sono |
 
-| API Unit | Normalized | Notes |
-|----------|------------|-------|
-| `w`, `W` | `W` | Watts |
-| `wh`, `Wh` | `Wh` | Watt-hours |
-| `kw`, `kW` | `kW` | Kilowatts |
-| `kwh`, `kWh` | `kWh` | Kilowatt-hours |
-| Others | Unchanged | Passed through as-is |
-
-Code location: `parser/api_parser.py` → `_normalize_unit()` (line 100-105)
+Posizione codice: `parser/api_parser.py` → `_normalize_unit()` (riga 100-105)
 
 ---
 
-## Storage Examples
+## Esempi Storage
 
-### Example 1: Energy Details
+### Esempio 1: Energy Details
 
-**API Response**:
+**Risposta API**:
 ```json
 {
   "energyDetails": {
@@ -432,21 +413,17 @@ Code location: `parser/api_parser.py` → `_normalize_unit()` (line 100-105)
 }
 ```
 
-**InfluxDB Point**:
+**Point InfluxDB**:
 ```
 measurement: api
-tags:
-  endpoint=site_energy_details
-  metric=Production
-  unit=Wh
-fields:
-  Meter=1250.5
-timestamp: 1732875600000000000 (nanoseconds)
+tags: endpoint=site_energy_details, metric=Production, unit=Wh
+fields: Meter=1250.5
+timestamp: 1732875600000000000
 ```
 
-### Example 2: Equipment Data
+### Esempio 2: Equipment Data
 
-**API Response**:
+**Risposta API**:
 ```json
 {
   "data": {
@@ -461,22 +438,20 @@ timestamp: 1732875600000000000 (nanoseconds)
 }
 ```
 
-**InfluxDB Points** (2 points, one per field):
+**Point InfluxDB** (2 point, uno per field):
 ```
 1. measurement: api
    tags: endpoint=equipment_data, metric=totalActivePower, unit=W
    fields: Inverter=3500.0
-   timestamp: 1732875600000000000
 
 2. measurement: api
    tags: endpoint=equipment_data, metric=temperature, unit=C
    fields: Inverter=45.2
-   timestamp: 1732875600000000000
 ```
 
-### Example 3: Site Details (Metadata)
+### Esempio 3: Site Details (Metadata)
 
-**API Response**:
+**Risposta API**:
 ```json
 {
   "details": {
@@ -490,93 +465,51 @@ timestamp: 1732875600000000000 (nanoseconds)
 }
 ```
 
-**InfluxDB Points** (multiple points, flattened):
+**Point InfluxDB** (multipli point, appiattiti):
 ```
-1. measurement: api
-   tags: endpoint=site_details, metric=name, unit=raw
+1. tags: endpoint=site_details, metric=name, unit=raw
    fields: Info="My Solar Site"
 
-2. measurement: api
-   tags: endpoint=site_details, metric=peakPower, unit=raw
+2. tags: endpoint=site_details, metric=peakPower, unit=raw
    fields: Info="5000"
 
-3. measurement: api
-   tags: endpoint=site_details, metric=location_country, unit=raw
+3. tags: endpoint=site_details, metric=location_country, unit=raw
    fields: Info="Italy"
 
-4. measurement: api
-   tags: endpoint=site_details, metric=location_city, unit=raw
+4. tags: endpoint=site_details, metric=location_city, unit=raw
    fields: Info="Rome"
 ```
 
-Code location: `parser/api_parser.py` → `_convert_site_details_to_points()` (line 183-213)
+Posizione codice: `parser/api_parser.py` → `_convert_site_details_to_points()` (riga 183-213)
 
 ---
 
-## Configuration Dependency
+## Gestione Errori
 
-### api_endpoints.yaml Role
+### Category Mancante
+- **Trigger**: Config endpoint manca campo `category`
+- **Azione**: Solleva ValueError
+- **Log**: Messaggio errore con nome endpoint
 
-The collector and parser **require** `api_endpoints.yaml` to function:
+### Errori HTTP
+- **Trigger**: API restituisce codice status non-200
+- **Azione**: Log errore e salta endpoint
+- **Log**: Codice status HTTP e nome endpoint
 
-**Collector uses**:
-- `enabled`: Whether to collect this endpoint
-- `endpoint`: API URL path
-- `parameters`: Query parameters with placeholders
+### Errori Parsing
+- **Trigger**: Struttura dati inaspettata
+- **Azione**: Log errore e salta endpoint
+- **Log**: Dettagli eccezione
 
-**Parser uses**:
-- `category`: InfluxDB field name
-- `data_format`: "structured" or "raw_json"
-- `extraction`: How to extract values from response
-
-### Config Structure Example
-
-```yaml
-sources:
-  api_ufficiali:
-    endpoints:
-      site_energy_details:
-        enabled: true
-        endpoint: "/site/{siteId}/energyDetails"
-        category: "Meter"  # ← Used as InfluxDB field name
-        data_format: "structured"
-        parameters:
-          meters: "PRODUCTION,CONSUMPTION"
-          timeUnit: "QUARTER_OF_AN_HOUR"
-        extraction:
-          values_path: "energyDetails.meters"
-          time_field: "date"
-          value_field: "value"
-```
+Posizione codice: `collector/collector_api.py` → `_call_api()` (riga 106-125), `collect()` (riga 184-186)
 
 ---
 
-## Error Handling
-
-### Missing Category
-- **Trigger**: Endpoint config lacks `category` field
-- **Action**: Raise ValueError
-- **Log**: Error message with endpoint name
-
-### HTTP Errors
-- **Trigger**: API returns non-200 status code
-- **Action**: Log error and skip endpoint
-- **Log**: HTTP status code and endpoint name
-
-### Parsing Errors
-- **Trigger**: Unexpected data structure
-- **Action**: Log error and skip that endpoint
-- **Log**: Exception details
-
-Code location: `collector/collector_api.py` → `_call_api()` (line 106-125), `collect()` (line 184-186)
-
----
-
-## Performance Optimizations
+## Ottimizzazioni Performance
 
 ### HTTP Session Pooling
 
-Single session reused for all requests:
+Singola sessione riusata per tutte le richieste:
 ```python
 self._session = requests.Session()
 self._session.headers.update({
@@ -585,16 +518,16 @@ self._session.headers.update({
 })
 ```
 
-Benefits:
-- Connection reuse (TCP keep-alive)
-- Reduced latency
-- Lower resource usage
+Benefici:
+- Riuso connessione (TCP keep-alive)
+- Latenza ridotta
+- Minor uso risorse
 
-Code location: `collector/collector_api.py` → `__init__()` (line 36-41)
+Posizione codice: `collector/collector_api.py` → `__init__()` (riga 36-41)
 
-### Scheduler Integration
+### Integrazione Scheduler
 
-Optional scheduler for rate limiting:
+Scheduler opzionale per rate limiting:
 ```python
 if self.scheduler:
     return self.scheduler.execute_with_timing(SourceType.API, _http_call, cache_hit=False)
@@ -602,54 +535,54 @@ else:
     return _http_call()
 ```
 
-Code location: `collector/collector_api.py` → `_call_api()` (line 122-125)
+Posizione codice: `collector/collector_api.py` → `_call_api()` (riga 122-125)
 
 ### Smart Caching
 
-- Daily cache for normal mode
-- Per-year cache for timeframe_energy
-- Automatic cache splitting for history mode
+- Cache giornaliera per modalità normale
+- Cache per-anno per timeframe_energy
+- Suddivisione cache automatica per modalità storico
 
 ---
 
-## API Limitations
+## Limitazioni API
 
-### Rate Limits
+### Rate Limit
 
-- **Daily quota**: 300 requests per account/site
-- **Concurrency**: Max 3 simultaneous requests from same IP
+- **Quota giornaliera**: 300 richieste per account/sito
+- **Concorrenza**: Max 3 richieste simultanee da stesso IP
 
-### Time Range Limits
+### Limiti Range Temporale
 
-| Endpoint | Max Range | Resolution |
-|----------|-----------|------------|
-| site_energy_details (DAY) | 1 year | Daily |
-| site_energy_details (HOUR/QUARTER) | 1 month | Hourly/15min |
-| site_power_details | 1 month | 15 minutes |
-| equipment_data | 1 week | Variable |
+| Endpoint | Range Max | Risoluzione |
+|----------|-----------|-------------|
+| site_energy_details (DAY) | 1 anno | Giornaliera |
+| site_energy_details (HOUR/QUARTER) | 1 mese | Oraria/15min |
+| site_power_details | 1 mese | 15 minuti |
+| equipment_data | 1 settimana | Variabile |
 
-### Workarounds
+### Soluzioni
 
-System automatically handles limitations:
-- **Year splitting** for site_energy_day
-- **Week splitting** for equipment_data
-- **Smart caching** to minimize API calls
+Sistema gestisce automaticamente limitazioni:
+- **Suddivisione annuale** per site_energy_day
+- **Suddivisione settimanale** per equipment_data
+- **Smart caching** per minimizzare chiamate API
 
 ---
 
-## Summary
+## Riepilogo
 
-The API data storage system:
+Il sistema storage API:
 
-1. **Builds** HTTP requests with automatic parameter substitution
-2. **Fetches** data from SolarEdge API with caching
-3. **Parses** responses based on endpoint configuration
-4. **Filters** data points using filtering rules
-5. **Converts** to InfluxDB points with:
+1. **Costruisce** richieste HTTP con sostituzione automatica parametri
+2. **Recupera** dati da API SolarEdge con caching
+3. **Processa** risposte in base a configurazione endpoint
+4. **Filtra** data point usando regole filtraggio
+5. **Converte** a point InfluxDB con:
    - Measurement: `api`
-   - Tags: `endpoint`, `metric`, `unit`
-   - Field: Named by category, value from API
-   - Timestamp: Nanosecond precision
-6. **Writes** to InfluxDB in batches
+   - Tag: `endpoint`, `metric`, `unit`
+   - Field: Nome da category, valore da API
+   - Timestamp: Precisione nanosecondo
+6. **Scrive** in InfluxDB in batch
 
-**Key Design**: Configuration-driven system where endpoint behavior is defined in YAML, allowing flexible data collection without code changes.
+**Design Chiave**: Sistema configuration-driven dove comportamento endpoint è definito in YAML, permettendo raccolta dati flessibile senza modifiche codice.
