@@ -752,12 +752,17 @@ except Exception as e:
                     def update_datasource_uids(obj, influx_uid, sunmoon_uid):
                         """Recursively update data source UIDs in dashboard JSON"""
                         if isinstance(obj, dict):
-                            # Update InfluxDB datasources
+                            # Update InfluxDB datasources (with type field)
                             if obj.get('type') == 'influxdb' and influx_uid:
                                 obj['uid'] = influx_uid
-                            # Update Sun and Moon datasources
+                            # Update Sun and Moon datasources (with type field)
                             elif obj.get('type') == 'fetzerch-sunandmoon-datasource' and sunmoon_uid:
                                 obj['uid'] = sunmoon_uid
+                            # Update datasource objects without type (panel-level datasources)
+                            # These are typically InfluxDB datasources in panels
+                            elif 'uid' in obj and 'type' not in obj and influx_uid:
+                                # This is a datasource reference object like {"uid": "xxx"}
+                                obj['uid'] = influx_uid
                             # Recurse into nested objects
                             for value in obj.values():
                                 update_datasource_uids(value, influx_uid, sunmoon_uid)
