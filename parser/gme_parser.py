@@ -1,6 +1,6 @@
 """GME Parser - Conversione prezzi GME in InfluxDB Points"""
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Dict, List, Any, Tuple, Optional
 import logging
 import pytz
@@ -100,7 +100,14 @@ class GMEParser:
         # Crea timestamp per l'ora specifica
         # Ora 1 = 00:00-01:00, Ora 2 = 01:00-02:00, etc.
         # Usiamo l'inizio dell'ora (hour - 1)
-        timestamp_str = f"{item_date_str} {hour-1:02d}:00:00"
+        # Gestione speciale per ora 25 (cambio ora solare): diventa 00:00 del giorno dopo
+        if hour == 25:
+            # Ora 25 = mezzanotte del giorno successivo
+            date_obj = datetime.strptime(item_date_str, '%Y-%m-%d')
+            next_day = date_obj + timedelta(days=1)
+            timestamp_str = next_day.strftime('%Y-%m-%d') + " 00:00:00"
+        else:
+            timestamp_str = f"{item_date_str} {hour-1:02d}:00:00"
 
         try:
             # Parse timestamp con timezone
