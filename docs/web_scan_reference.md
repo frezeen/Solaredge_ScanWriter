@@ -1,86 +1,86 @@
-# Web Scan System - Technical Reference
+# Sistema Web Scan - Riferimento Tecnico
 
-## Overview
+## Panoramica
 
-This document describes **how the web scan system works** technically. It does NOT describe what we want to do with it, but rather how the system functions internally.
+Questo documento descrive **come funziona tecnicamente il sistema di scansione web** quando si usa `python main.py --scan`. Si concentra esclusivamente sul processo di scansione e generazione della configurazione.
 
 ---
 
-## System Architecture
+## Architettura del Sistema
 
-### Components
+### Componenti
 
 1. **`WebTreeScanner`** (`tools/web_tree_scanner.py`)
-   - Fetches the "tree" JSON from SolarEdge API
-   - Saves raw snapshot to `cache/snapshots/web_tree/latest.json`
-   - Does NOT modify any configuration files
+   - Recupera il JSON "tree" dall'API SolarEdge
+   - Salva lo snapshot grezzo in `cache/snapshots/web_tree/latest.json`
+   - NON modifica alcun file di configurazione
 
 2. **`YawlManager`** (`tools/yawl_manager.py`)
-   - Reads the snapshot from `cache/snapshots/web_tree/latest.json`
-   - Extracts device information recursively
-   - Generates `config/sources/web_endpoints.yaml`
-   - Preserves existing `enabled` states during regeneration
+   - Legge lo snapshot da `cache/snapshots/web_tree/latest.json`
+   - Estrae le informazioni sui dispositivi in modo ricorsivo
+   - Genera `config/sources/web_endpoints.yaml`
+   - Preserva gli stati `enabled` esistenti durante la rigenerazione
 
 3. **`scan_flow`** (`flows/scan_flow.py`)
-   - Orchestrates the scan process
-   - Calls `WebTreeScanner.scan()` first
-   - Then calls `YawlManager.generate_web_endpoints_only()`
+   - Orchestra il processo di scansione
+   - Chiama prima `WebTreeScanner.scan()`
+   - Poi chiama `YawlManager.generate_web_endpoints_only()`
 
 ---
 
-## Command: `python main.py --scan`
+## Comando: `python main.py --scan`
 
-### What It Does
+### Cosa Fa
 
-1. **Authenticates** to SolarEdge monitoring portal
-2. **Fetches** the `/services/charts/site/{site_id}/tree` endpoint
-3. **Saves** raw JSON snapshot to `cache/snapshots/web_tree/latest.json`
-4. **Parses** the snapshot to extract all devices
-5. **Generates** `config/sources/web_endpoints.yaml` with all discovered devices
+1. **Autentica** al portale di monitoraggio SolarEdge
+2. **Recupera** l'endpoint `/services/charts/site/{site_id}/tree`
+3. **Salva** lo snapshot JSON grezzo in `cache/snapshots/web_tree/latest.json`
+4. **Analizza** lo snapshot per estrarre tutti i dispositivi
+5. **Genera** `config/sources/web_endpoints.yaml` con tutti i dispositivi scoperti
 
-### Snapshot Structure
+### Struttura dello Snapshot
 
-The `tree` JSON contains:
-- `siteStructure`: Main device hierarchy (inverters, optimizers, strings)
-- `meters`: Meter devices
-- `storage`: Battery storage devices
-- `evChargers`: EV charger devices
-- `smartHome`: Smart home devices
-- `gateways`: Gateway devices
-- `environmental.meteorologicalData`: Weather station
+Il JSON `tree` contiene:
+- `siteStructure`: Gerarchia principale dei dispositivi (inverter, ottimizzatori, stringhe)
+- `meters`: Dispositivi meter
+- `storage`: Dispositivi di accumulo batteria
+- `evChargers`: Caricatori per veicoli elettrici
+- `smartHome`: Dispositivi smart home
+- `gateways`: Dispositivi gateway
+- `environmental.meteorologicalData`: Stazione meteo
 
 ---
 
-## YAML Generation Process
+## Processo di Generazione YAML
 
-### Device Extraction (`YawlManager._extract_devices_recursive`)
+### Estrazione Dispositivi (`YawlManager._extract_devices_recursive`)
 
-For each item in the tree:
-1. Check if it has `itemId` (indicates it's a device)
-2. Extract:
-   - `itemType`: Device type (INVERTER, OPTIMIZER, METER, SITE, STRING, WEATHER)
-   - `id`: Device ID
-   - `name`: Device name
-   - `parameters`: Available measurements
+Per ogni elemento nell'albero:
+1. Verifica se ha `itemId` (indica che è un dispositivo)
+2. Estrae:
+   - `itemType`: Tipo dispositivo (INVERTER, OPTIMIZER, METER, SITE, STRING, WEATHER)
+   - `id`: ID dispositivo
+   - `name`: Nome dispositivo
+   - `parameters`: Misurazioni disponibili
 
-3. Create endpoint entry with structure:
+3. Crea una voce endpoint con questa struttura:
    ```yaml
    {device_type}_{device_id}:
      device_id: "{id}"
      device_name: "{name}"
      device_type: {itemType}
-     enabled: {true/false}  # Default: true for OPTIMIZER and WEATHER, false for others
-     category: "{category}"  # Derived from device_type
-     date_range: "{range}"   # See web_endpoints_reference.md "Supported Date Ranges"
+     enabled: {true/false}  # Default: true per OPTIMIZER e WEATHER, false per altri
+     category: "{category}"  # Derivato da device_type
+     date_range: "{range}"   # Vedi sotto per i range supportati
      measurements:
        {MEASUREMENT_NAME}:
-         enabled: {true/false}  # Matches device enabled state
+         enabled: {true/false}  # Corrisponde allo stato enabled del dispositivo
    ```
 
-### Category Mapping (`_get_category_for_device`)
+### Mappatura Categorie (`_get_category_for_device`)
 
-| Device Type | Category |
-|-------------|----------|
+| Tipo Dispositivo | Categoria |
+|------------------|-----------|
 | INVERTER | Inverter |
 | METER | Meter |
 | SITE | Site |
@@ -88,43 +88,43 @@ For each item in the tree:
 | WEATHER | Weather |
 | OPTIMIZER | Optimizer group |
 
-### Special Handling
+### Gestione Speciale
 
-#### OPTIMIZER and STRING Devices
-- Extract `connectedToInverter` field
-- Add `inverter: {inverter_id}` to endpoint config
+#### Dispositivi OPTIMIZER e STRING
+- Estrae il campo `connectedToInverter`
+- Aggiunge `inverter: {inverter_id}` alla configurazione endpoint
 
-#### STRING Devices
-- Extract `identifier` field if available and not "0"
-- Add `identifier: {value}` to endpoint config
+#### Dispositivi STRING
+- Estrae il campo `identifier` se disponibile e diverso da "0"
+- Aggiunge `identifier: {value}` alla configurazione endpoint
 
-#### WEATHER Devices
-- Always use `device_id: "weather_default"` regardless of actual ID
-
----
-
-## Configuration Preservation
-
-### Merge Logic (`_merge_with_existing_config`)
-
-When regenerating `web_endpoints.yaml`:
-
-1. **Load existing configuration** from `config/sources/web_endpoints.yaml`
-2. **For each device**:
-   - If device exists in old config: **preserve** its `enabled` state
-   - If device exists in old config: **preserve** all measurement `enabled` states
-   - If device is new: use **default** enabled state (true for OPTIMIZER/WEATHER, false for others)
-
-3. **Result**: New devices are added, removed devices are deleted, but user's enabled/disabled choices are preserved
+#### Dispositivi WEATHER
+- Usa sempre `device_id: "weather_default"` indipendentemente dall'ID reale
 
 ---
 
-## Default Enabled States
+## Preservazione della Configurazione
 
-### Device Level
+### Logica di Merge (`_merge_with_existing_config`)
 
-| Device Type | Default Enabled |
-|-------------|-----------------|
+Quando si rigenera `web_endpoints.yaml`:
+
+1. **Carica la configurazione esistente** da `config/sources/web_endpoints.yaml`
+2. **Per ogni dispositivo**:
+   - Se il dispositivo esiste nella vecchia config: **preserva** il suo stato `enabled`
+   - Se il dispositivo esiste nella vecchia config: **preserva** tutti gli stati `enabled` delle misurazioni
+   - Se il dispositivo è nuovo: usa lo stato `enabled` **di default** (true per OPTIMIZER/WEATHER, false per altri)
+
+3. **Risultato**: I nuovi dispositivi vengono aggiunti, quelli rimossi vengono eliminati, ma le scelte enabled/disabled dell'utente vengono preservate
+
+---
+
+## Stati Enabled di Default
+
+### Livello Dispositivo
+
+| Tipo Dispositivo | Default Enabled |
+|------------------|-----------------|
 | OPTIMIZER | ✅ true |
 | WEATHER | ✅ true |
 | SITE | ✅ true |
@@ -132,222 +132,74 @@ When regenerating `web_endpoints.yaml`:
 | METER | ❌ false |
 | STRING | ❌ false |
 
-### Measurement Level
+### Livello Misurazione
 
-All measurements inherit the device's enabled state by default.
+Tutte le misurazioni ereditano di default lo stato enabled del dispositivo.
 
 ---
 
 ## Smart Range Mode
 
-The system uses a "Smart Range" mode to optimize API requests:
+Il sistema utilizza una modalità "Smart Range" per ottimizzare le richieste API:
 
-*   **History Mode** (explicit dates):
-    *   **Daily/7days Devices** (e.g. Optimizers, Weather): Iterates day-by-day. **Note**: The `HistoryManager` tool limits this to the last 7 days by default to avoid excessive API load.
-    *   **Monthly Devices** (e.g. Site): Iterates month-by-month. `HistoryManager` fetches the FULL history for these devices based on their `date_range` configuration.
-*   **Loop Mode** (no dates): Uses the `date_range` field defined in `web_endpoints.yaml`:
-    *   `7days`: Requests last 7 days (e.g., for Optimizers).
-    *   `monthly`: Requests from 1st of current month to today (e.g., for Site).
-    *   `daily`: Requests only today.
+*   **History Mode** (date esplicite):
+    *   **Dispositivi Daily/7days** (es. Ottimizzatori, Meteo): Itera giorno per giorno. **Nota**: Lo strumento `HistoryManager` limita di default agli ultimi 7 giorni per evitare un carico API eccessivo.
+    *   **Dispositivi Monthly** (es. Site): Itera mese per mese. `HistoryManager` recupera la storia COMPLETA per questi dispositivi in base alla loro configurazione `date_range`.
+*   **Loop Mode** (senza date): Usa il campo `date_range` definito in `web_endpoints.yaml`:
+    *   `7days`: Richiede gli ultimi 7 giorni (es. per Ottimizzatori).
+    *   `monthly`: Richiede dal 1° del mese corrente a oggi (es. per Site).
+    *   `daily`: Richiede solo oggi.
 
-This ensures high-resolution devices (Optimizers) have a short but detailed history, while aggregated devices (Site) maintain monthly consistency.
+Questo garantisce che i dispositivi ad alta risoluzione (Ottimizzatori) abbiano una storia breve ma dettagliata, mentre i dispositivi aggregati (Site) mantengano la coerenza mensile.
 
 ---
 
-## File Locations
+## Posizioni dei File
 
 ### Input
 - **Snapshot**: `cache/snapshots/web_tree/latest.json`
-  - Raw JSON from SolarEdge API
-  - Overwritten on each scan
-  - Single file (no versioning)
+  - JSON grezzo dall'API SolarEdge
+  - Sovrascritto ad ogni scansione
+  - File singolo (senza versioning)
 
 ### Output
-- **Configuration**: `config/sources/web_endpoints.yaml`
-  - Generated from snapshot
-  - Preserves user's enabled states
-  - Used by `CollectorWeb` to build API requests
+- **Configurazione**: `config/sources/web_endpoints.yaml`
+  - Generato dallo snapshot
+  - Preserva gli stati enabled dell'utente
+  - Usato da `CollectorWeb` per costruire le richieste API
 
 ---
 
-## InfluxDB Data Model (Web)
+## Dettagli Endpoint API
 
-The web‑scraping flow writes points to the **main InfluxDB bucket** (configured in `config/influx.yaml`). The schema is defined in `parser/web_parser.py` and the metric names are defined in `config/sources/web_endpoints.yaml`.
-
-### Schema Structure
-
-- **Measurement**: `web`
-- **Tags**:
-  - `endpoint`: The metric name as defined in `web_endpoints.yaml`. Common values for `SITE` are:
-    - `PRODUCTION_ENERGY` (Produzione)
-    - `IMPORT_ENERGY` (Prelievo)
-    - `EXPORT_ENERGY` (Immissione)
-  - `device_id`: The unique identifier of the device.
-  - `unit`: The unit of measurement (e.g. `Wh`).
-  - **Note**: `device_type` is **NOT** stored as a tag. You must identify the device type by the **Field Key** (Category).
-- **Fields**:
-  - **Key**: The `category` derived from configuration (e.g. `Site`, `Inverter`, `Optimizer`, `Meter`).
-  - **Value**: The numeric value (float).
-- **Timestamp (`_time`)**: The date of the measurement.
-
-### Example Point (JSON representation)
-```json
-{
-  "measurement": "web",
-  "tags": {
-    "endpoint": "PRODUCTION_ENERGY",
-    "device_id": "2489781",
-    "unit": "Wh"
-  },
-  "fields": {
-    "Site": 124567.0
-  },
-  "time": "2025-01-15T00:00:00Z"
-}
-```
-
-### Timestamp Normalization
-
-**Critical Implementation Detail**: The parser (`parser/web_parser.py`) normalizes all daily data timestamps to **midnight UTC** to prevent data duplication.
-
-When `date_range: 'monthly'` is configured for a device (e.g., SITE), the web API returns daily data points for the entire month. The parser extracts only the date portion (YYYY-MM-DD) and creates a timestamp at `00:00:00 UTC` for each day.
-
-**Why this matters:**
-- Without normalization, timestamps could vary slightly between runs (e.g., `2025-11-30 00:00:00+01:00` vs `2025-11-30 01:00:00+01:00` due to DST changes)
-- InfluxDB only overwrites points if **both timestamp AND all tags are identical**
-- Normalized timestamps ensure consistent overwriting instead of accumulating duplicates
-
-**Implementation** (from `parser/web_parser.py`):
-```python
-if date_range == 'monthly' and isinstance(time_raw, str):
-    try:
-        date_part = time_raw[:10]  # Extract YYYY-MM-DD
-        dt_utc = datetime.strptime(date_part, "%Y-%m-%d").replace(tzinfo=timezone.utc)
-        ts_ms = int(dt_utc.timestamp() * 1000)
-    except Exception:
-        pass  # Fallback to original timestamp
-```
-
-### Querying Monthly Aggregations
-
-**Important**: Due to how Flux's `aggregateWindow(every: 1mo)` handles month boundaries, the recommended approach for monthly aggregations is to use manual grouping by year-month string extraction.
-
-#### Recommended Query (Robust TimeShift Strategy)
-
-This query uses a `timeShift(12h)` strategy to safely handle monthly aggregations. By shifting timestamps to noon before aggregation, we avoid boundary issues where midnight data might fall into the previous month.
-
-```flux
-import "date"
-import "join"
-import "timezone"
-
-option location = timezone.location(name: "Europe/Rome")
-
-// 1. Immissione mensile (energia venduta alla rete)
-immissione = from(bucket: "Solaredge")
-  |> range(start: 0)
-  |> filter(fn: (r) => 
-      r._measurement == "web" and 
-      r._field == "Site" and 
-      r.endpoint == "EXPORT_ENERGY"
-  )
-  |> aggregateWindow(every: 1mo, fn: sum, location: location, timeSrc: "_start")
-  |> map(fn: (r) => ({
-      _time: r._time,
-      year: string(v: date.year(t: r._time)),
-      month: string(v: date.month(t: r._time)),
-      immissione_wh: r._value
-  }))
-  |> group()
-
-// 2. PUN mensile
-pun = from(bucket: "GME")
-  |> range(start: 0)
-  |> filter(fn: (r) => r._measurement == "gme_monthly_avg" and r._field == "pun_kwh_avg")
-  |> map(fn: (r) => ({
-      _time: r._time,
-      year: r.year,
-      month: string(v: date.month(t: r._time)),
-      pun: r._value
-  }))
-  |> group()
-
-// 3. Join, calcola rimborso e somma totale
-join.inner(
-  left: immissione,
-  right: pun,
-  on: (l, r) => l.year == r.year and l.month == r.month,
-  as: (l, r) => ({
-    _time: l._time,
-    _value: (l.immissione_wh / 1000.0) * r.pun
-  })
-)
-  |> sum()
-  |> map(fn: (r) => ({"Rimborsi Immissione": r._value}))
-```
-
-#### Query for Previous Year
-
-Replace the first two lines with:
-```flux
-startOfLastYear = date.add(d: -1y, to: date.truncate(t: now(), unit: 1y))
-endOfLastYear = date.truncate(t: now(), unit: 1y)
-```
-
-#### Query for Only Months with Data
-
-To hide empty future months, simply change `createEmpty: true` to `createEmpty: false` in the `aggregateWindow` function.
-
-### Common Issues and Solutions
-
-#### Issue: Data appears in wrong month
-**Cause**: `aggregateWindow(every: 1mo)` uses month boundaries that may not align with your expectations, especially around DST changes.
-
-**Solution**: Use the manual year-month extraction approach shown above instead of relying on `aggregateWindow(every: 1mo)` for monthly grouping.
-
-#### Issue: Duplicate data points
-**Cause**: Old data written before the timestamp normalization fix.
-
-**Solution**: 
-1. The parser now prevents future duplicates by normalizing timestamps
-2. For existing duplicates, the query includes `aggregateWindow(every: 1d, fn: last)` which takes only the most recent value per day
-3. Alternatively, drop and re-download the affected data
-
-#### Issue: Missing first day of month
-**Cause**: Timezone conversion issues where midnight on the 1st of the month gets shifted to the previous month.
-
-**Solution**: The timestamp normalization to UTC midnight prevents this issue. All data points are stored at `00:00:00 UTC` regardless of local timezone.
-
-## API Endpoint Details
-
-### Tree Endpoint
+### Endpoint Tree
 ```
 GET https://monitoring.solaredge.com/services/charts/site/{site_id}/tree
 ```
 
-**Authentication**: Requires valid session cookie
+**Autenticazione**: Richiede cookie di sessione valido
 
-**Response**: JSON object containing complete device hierarchy
+**Risposta**: Oggetto JSON contenente la gerarchia completa dei dispositivi
 
-**Headers Required**:
-- `Cookie`: Session cookie from login
-- `X-CSRF-TOKEN`: CSRF token (if available)
+**Header Richiesti**:
+- `Cookie`: Cookie di sessione dal login
+- `X-CSRF-TOKEN`: Token CSRF (se disponibile)
 - `Accept`: `application/json`
 
 ---
 
-## How CollectorWeb Uses web_endpoints.yaml
+## Come CollectorWeb Usa web_endpoints.yaml
 
-### Request Building (`_build_request`)
+### Costruzione Richieste (`_build_request`)
 
-For each enabled device in `web_endpoints.yaml`:
+Per ogni dispositivo abilitato in `web_endpoints.yaml`:
 
-1. **Read device configuration**:
-   - `device_type`: Used as `itemType` in API request
-   - `device_id`: Used as `id`, `originalSerial`, `identifier`
-   - Enabled measurements: Added to `measurementTypes` array
+1. **Legge la configurazione del dispositivo**:
+   - `device_type`: Usato come `itemType` nella richiesta API
+   - `device_id`: Usato come `id`, `originalSerial`, `identifier`
+   - Misurazioni abilitate: Aggiunte all'array `measurementTypes`
 
-2. **Build API request**:
+2. **Costruisce la richiesta API**:
    ```json
    {
      "device": {
@@ -361,129 +213,129 @@ For each enabled device in `web_endpoints.yaml`:
    }
    ```
 
-3. **Special cases**:
-   - **STRING**: Add `connectedToInverter` field
-   - **WEATHER**: Omit `id`, `originalSerial`, `identifier` fields
+3. **Casi speciali**:
+   - **STRING**: Aggiunge il campo `connectedToInverter`
+   - **WEATHER**: Omette i campi `id`, `originalSerial`, `identifier`
 
-### Date Range Parameters
+### Parametri Date Range
 
-Currently, `CollectorWeb._get_date_params()` returns:
+Attualmente, `CollectorWeb._get_date_params()` restituisce:
 ```python
 {
-    "start-date": "{date}",  # Single day
-    "end-date": "{date}"     # Same day
+    "start-date": "{date}",  # Singolo giorno
+    "end-date": "{date}"     # Stesso giorno
 }
 ```
 
-**IMPORTANT**: This is a **global setting** - all devices use the same date range.
+**IMPORTANTE**: Questa è un'impostazione **globale** - tutti i dispositivi usano lo stesso intervallo di date.
 
 ---
 
-## Extending the System
+## Estendere il Sistema
 
-### Adding Custom Parameters to Devices
+### Aggiungere Parametri Personalizzati ai Dispositivi
 
-To add custom parameters (like `date_range`) to devices:
+Per aggiungere parametri personalizzati (come `date_range`) ai dispositivi:
 
-1. **Modify `YawlManager._create_device_endpoint()`**:
-   - Add the new field to the endpoint dictionary
-   - Set default value based on device type or other criteria
+1. **Modifica `YawlManager._create_device_endpoint()`**:
+   - Aggiungi il nuovo campo al dizionario endpoint
+   - Imposta il valore di default in base al tipo di dispositivo o altri criteri
 
-2. **Modify `CollectorWeb`**:
-   - Read the custom parameter from device config
-   - Use it when building API requests
+2. **Modifica `CollectorWeb`**:
+   - Leggi il parametro personalizzato dalla configurazione del dispositivo
+   - Usalo quando costruisci le richieste API
 
-3. **Update this documentation**:
-   - Document the new parameter's purpose
-   - Explain how it affects API calls
-   - Provide examples
+3. **Aggiorna questa documentazione**:
+   - Documenta lo scopo del nuovo parametro
+   - Spiega come influisce sulle chiamate API
+   - Fornisci esempi
 
-### Example: Adding `date_range` Parameter
+### Esempio: Aggiungere il Parametro `date_range`
 
-**Step 1**: Modify `YawlManager._create_device_endpoint()` (line ~60):
+**Step 1**: Modifica `YawlManager._create_device_endpoint()` (riga ~60):
 ```python
-# After setting 'category'
+# Dopo aver impostato 'category'
 if device_type == 'SITE':
-    endpoint['date_range'] = 'monthly'  # Custom range for SITE
+    endpoint['date_range'] = 'monthly'  # Range personalizzato per SITE
 else:
-    endpoint['date_range'] = 'daily'    # Default for others
+    endpoint['date_range'] = 'daily'    # Default per gli altri
 ```
 
-**Step 2**: Modify `CollectorWeb._fetch_batch()` to read and use it:
+**Step 2**: Modifica `CollectorWeb._fetch_batch()` per leggerlo e usarlo:
 ```python
 def _fetch_batch(self, device_type: str, batch: List[Dict[str, Any]]) -> List:
-    # Read date_range from first device in batch
+    # Leggi date_range dal primo dispositivo nel batch
     date_range = batch[0].get('date_range', 'daily') if batch else 'daily'
     
-    # Modify _get_date_params to accept and use date_range
+    # Modifica _get_date_params per accettare e usare date_range
     params = self._get_date_params(
         getattr(self, '_target_date', None),
         date_range=date_range
     )
-    # ... rest of the code
+    # ... resto del codice
 ```
 
-**Step 3**: Update `_get_date_params()` signature and logic:
+**Step 3**: Aggiorna la firma e logica di `_get_date_params()`:
 ```python
 def _get_date_params(self, target_date: str = None, date_range: str = 'daily') -> Dict[str, str]:
-    # ... calculate dates based on date_range parameter
+    # ... calcola le date in base al parametro date_range
 ```
 
 ---
 
-## Important Notes
+## Note Importanti
 
-### Snapshot Lifecycle
-- **Single snapshot**: Only `latest.json` is kept
-- **No versioning**: Each scan overwrites the previous snapshot
-- **No history**: Old device configurations are lost if not in new scan
+### Ciclo di Vita dello Snapshot
+- **Singolo snapshot**: Viene mantenuto solo `latest.json`
+- **Nessun versioning**: Ogni scansione sovrascrive lo snapshot precedente
+- **Nessuna cronologia**: Le vecchie configurazioni dei dispositivi vengono perse se non presenti nella nuova scansione
 
-### Configuration Preservation
-- **Enabled states**: Always preserved across scans
-- **New devices**: Added with default enabled state
-- **Removed devices**: Deleted from configuration
-- **Measurement changes**: New measurements added, removed ones deleted
+### Preservazione della Configurazione
+- **Stati enabled**: Sempre preservati tra le scansioni
+- **Nuovi dispositivi**: Aggiunti con stato enabled di default
+- **Dispositivi rimossi**: Eliminati dalla configurazione
+- **Modifiche alle misurazioni**: Nuove misurazioni aggiunte, quelle rimosse eliminate
 
-### Scan Frequency
-- **Manual only**: Scan is triggered by `--scan` command
-- **No automatic scanning**: System does not auto-detect new devices
-- **User responsibility**: Must run scan after adding/removing physical devices
-
----
-
-## Troubleshooting
-
-### Scan Fails with HTTP 401/403
-- **Cause**: Session cookie expired or invalid
-- **Solution**: Collector will attempt automatic re-login
-
-### Empty web_endpoints.yaml Generated
-- **Cause**: Snapshot file missing or empty
-- **Solution**: Run `python main.py --scan` to create fresh snapshot
-
-### Device Not Appearing in YAML
-- **Cause**: Device has no `parameters` in tree JSON
-- **Solution**: Check if device is properly configured in SolarEdge portal
-
-### Enabled States Reset to Default
-- **Cause**: Device ID changed (e.g., device replaced)
-- **Solution**: Manually re-enable in `web_endpoints.yaml`
+### Frequenza di Scansione
+- **Solo manuale**: La scansione viene attivata dal comando `--scan`
+- **Nessuna scansione automatica**: Il sistema non rileva automaticamente nuovi dispositivi
+- **Responsabilità dell'utente**: Deve eseguire la scansione dopo aver aggiunto/rimosso dispositivi fisici
 
 ---
 
-## Summary
+## Risoluzione Problemi
 
-The web scan system is a **two-phase process**:
+### Scansione Fallisce con HTTP 401/403
+- **Causa**: Cookie di sessione scaduto o non valido
+- **Soluzione**: Il Collector tenterà il re-login automatico
 
-1. **Scan Phase** (`WebTreeScanner`):
-   - Fetch raw device tree from API
-   - Save to snapshot file
-   - No configuration changes
+### web_endpoints.yaml Generato Vuoto
+- **Causa**: File snapshot mancante o vuoto
+- **Soluzione**: Esegui `python main.py --scan` per creare un nuovo snapshot
 
-2. **Generation Phase** (`YawlManager`):
-   - Parse snapshot
-   - Extract devices and measurements
-   - Generate YAML configuration
-   - Preserve user's enabled states
+### Dispositivo Non Appare nel YAML
+- **Causa**: Il dispositivo non ha `parameters` nel JSON tree
+- **Soluzione**: Verifica se il dispositivo è configurato correttamente nel portale SolarEdge
 
-**Key Principle**: The system **discovers** devices automatically but **respects** user's manual configuration choices.
+### Stati Enabled Ripristinati al Default
+- **Causa**: ID dispositivo cambiato (es. dispositivo sostituito)
+- **Soluzione**: Riabilita manualmente in `web_endpoints.yaml`
+
+---
+
+## Riepilogo
+
+Il sistema di scansione web è un **processo a due fasi**:
+
+1. **Fase di Scansione** (`WebTreeScanner`):
+   - Recupera l'albero dei dispositivi grezzo dall'API
+   - Salva nel file snapshot
+   - Nessuna modifica alla configurazione
+
+2. **Fase di Generazione** (`YawlManager`):
+   - Analizza lo snapshot
+   - Estrae dispositivi e misurazioni
+   - Genera la configurazione YAML
+   - Preserva gli stati enabled dell'utente
+
+**Principio Chiave**: Il sistema **scopre** i dispositivi automaticamente ma **rispetta** le scelte di configurazione manuale dell'utente.

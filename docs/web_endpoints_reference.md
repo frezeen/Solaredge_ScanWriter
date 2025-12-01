@@ -1,71 +1,16 @@
-# Web Data Storage - Technical Reference
+# Sistema Storage Dati Web - Riferimento Tecnico
 
-## Purpose
+## Scopo
 
-This document describes **how the web data storage system works** technically in InfluxDB. It does NOT describe how to query it or what to do with it, but rather the technical implementation of data storage.
-
----
-
-## InfluxDB Storage Structure
-
-### Measurement Name
-All web scraping data is stored in a single measurement: **`web`**
-
-### Data Point Structure
-
-Each data point written to InfluxDB has:
-
-**Tags** (indexed, used for filtering):
-- `endpoint`: The measurement type from API (e.g., "PRODUCTION_POWER", "PRODUCTION_ENERGY")
-- `device_id`: The device identifier (e.g., "7403D7C5-13", "606483640", "weather_default")
-- `unit`: The unit of measurement (e.g., "W", "Wh", "V", "A", "°C") - optional
-
-**Fields** (actual values):
-- Field name is determined by the **category** from `web_endpoints.yaml`
-- Field value is the numeric measurement value
-- If value cannot be converted to float, it's stored as string
-
-**Timestamp**:
-- Nanosecond precision
-- Converted from API milliseconds: `timestamp_ms * 1_000_000`
+Questo documento descrive **come il sistema scrive i dati web in InfluxDB** dal punto di vista tecnico dell'implementazione. Per come interrogare i dati, vedi `query_grafana_reference.md`.
 
 ---
 
-## Category System
+## Pipeline Flusso Dati
 
-### What is Category?
+### Step 1: Risposta API
 
-Category is defined in `config/sources/web_endpoints.yaml` for each device and determines the **field name** used in InfluxDB.
-
-### Category Mapping
-
-| Category | Field Name | Data Type | Typical Values |
-|----------|------------|-----------|----------------|
-| `Inverter` | `Inverter` | float | Power, Energy, Voltage, Current |
-| `Meter` | `Meter` | float | Power, Energy, Voltage, Current |
-| `Site` | `Site` | float | Production/Import/Export Power/Energy |
-| `Optimizer group` | `Optimizer group` | float | Power, Energy, Voltage, Current |
-| `String` | `String` | float | Power, Energy |
-| `Weather` | `Weather` | float | Temperature, Wind Speed, Humidity |
-| `Info` (default) | `Info` | float/string | Generic data |
-
-### How Category is Determined
-
-1. **Parser reads** `web_endpoints.yaml` configuration
-2. **Matches** `device_id` from API response to config entry
-3. **Extracts** `category` field from matched config
-4. **Uses** category as InfluxDB field name
-5. **Fallback**: If no match found, uses `"Info"` as default
-
-Code location: `parser/web_parser.py` → `_get_category_from_config()` (line 138-156)
-
----
-
-## Data Flow Pipeline
-
-### Step 1: API Response
-
-CollectorWeb receives JSON from SolarEdge API:
+CollectorWeb riceve JSON dall'API SolarEdge:
 ```json
 {
   "list": [
@@ -87,9 +32,9 @@ CollectorWeb receives JSON from SolarEdge API:
 }
 ```
 
-### Step 2: Raw Point Creation
+### Step 2: Creazione Raw Point
 
-Parser extracts data and creates raw point:
+Parser estrae i dati e crea un raw point:
 ```python
 {
     "source": "web",
@@ -97,155 +42,162 @@ Parser extracts data and creates raw point:
     "device_type": "OPTIMIZER",
     "metric": "PRODUCTION_POWER",
     "value": 245.5,
-    "timestamp": 1732875600000,  # milliseconds
+    "timestamp": 1732875600000,  # millisecondi
     "unit": "W",
-    "category": "Optimizer group"  # from config
+    "category": "Optimizer group"  # da config
 }
 ```
 
-Code location: `parser/web_parser.py` → `_create_raw_point()` (line 78-97)
+Posizione codice: `parser/web_parser.py` → `_create_raw_point()` (riga 78-97)
 
-### Step 3: InfluxDB Point Conversion
+### Step 3: Conversione a InfluxDB Point
 
-Raw point is converted to InfluxDB Point object:
+Raw point convertito a oggetto InfluxDB Point:
 ```python
 Point("web")
     .tag("endpoint", "PRODUCTION_POWER")
     .tag("device_id", "21830A42-F0")
     .tag("unit", "W")
-    .field("Optimizer group", 245.5)  # category as field name
+    .field("Optimizer group", 245.5)  # category come nome field
     .time(1732875600000000000, WritePrecision.NS)
 ```
 
-Code location: `parser/web_parser.py` → `_convert_raw_point_to_influx_point()` (line 106-136)
+Posizione codice: `parser/web_parser.py` → `_convert_raw_point_to_influx_point()` (riga 106-136)
 
-### Step 4: Storage
+### Step 4: Scrittura
 
-InfluxWriter writes the point to InfluxDB bucket.
+InfluxWriter scrive il point nel bucket InfluxDB.
 
-Code location: `storage/writer_influx.py` → `write_points()` (line 158)
-
----
-
-## Device ID Patterns
-
-### How Device IDs are Determined
-
-Device IDs come from the API response `device.id` field, with special handling:
-
-| Device Type | ID Source | Example | Notes |
-|-------------|-----------|---------|-------|
-| INVERTER | API `id` | `7403D7C5-13` | Serial number with suffix |
-| METER | API `id` | `606483640` | Numeric ID |
-| OPTIMIZER | API `id` | `21830A42-F0` | Serial number with suffix |
-| STRING | API `id` | `0`, `1`, `2` | Numeric index |
-| SITE | API `id` | `2489781` | Site ID number |
-| WEATHER | Hardcoded | `weather_default` | Always same ID |
-
-Code location: `parser/web_parser.py` → `_extract_device_info()` (line 38-55)
+Posizione codice: `storage/writer_influx.py` → `write_points()` (riga 158)
 
 ---
 
-## Unit Normalization
+## Sistema Category
 
-Units from API are normalized to standard format:
+### Come Funziona
 
-| API Unit | Normalized | Notes |
-|----------|------------|-------|
-| `w`, `W` | `W` | Watts |
-| `wh`, `Wh` | `Wh` | Watt-hours |
-| `kw`, `kW` | `kW` | Kilowatts |
-| `kwh`, `kWh` | `kWh` | Kilowatt-hours |
-| Others | Unchanged | Passed through as-is |
+La **category** determina il nome del field in InfluxDB:
 
-Code location: `parser/web_parser.py` → `_normalize_unit()` (line 99-104)
+1. Parser legge `web_endpoints.yaml`
+2. Cerca il `device_id` dalla risposta API nella configurazione
+3. Estrae il campo `category`
+4. Usa `category` come nome del field InfluxDB
+5. Se non trova corrispondenza → usa `"Info"` come default
+
+Posizione codice: `parser/web_parser.py` → `_get_category_from_config()` (riga 138-156)
+
+### Esempio Configurazione
+```yaml
+web_scraping:
+  endpoints:
+    site_2489781:
+      device_id: "2489781"
+      category: "Site"  # ← Diventa il nome field in InfluxDB
+```
+
+### Mappatura Category → Field
+
+| Device Type | Category Config | Field InfluxDB |
+|-------------|-----------------|----------------|
+| INVERTER | `Inverter` | `Inverter` |
+| METER | `Meter` | `Meter` |
+| SITE | `Site` | `Site` |
+| OPTIMIZER | `Optimizer group` | `Optimizer group` |
+| STRING | `String` | `String` |
+| WEATHER | `Weather` | `Weather` |
+| Sconosciuto | `Info` (default) | `Info` |
 
 ---
 
-## Timestamp Handling
+## Gestione Timestamp
 
-### Input Format
+### Formato Input
 
-API provides timestamps in ISO 8601 format:
-- `"2025-11-29T10:00:00+01:00"` (with timezone)
+API fornisce timestamp in formato ISO 8601:
+- `"2025-11-29T10:00:00+01:00"` (con timezone)
 - `"2025-11-29T10:00:00Z"` (UTC)
 
-### Conversion Process
+### Processo di Conversione
 
-1. **Parse** ISO 8601 string to datetime object
-2. **Convert** to UTC if timezone-aware
-3. **Extract** Unix timestamp in milliseconds
-4. **Multiply** by 1,000,000 to get nanoseconds
-5. **Write** to InfluxDB with nanosecond precision
+1. **Parse** stringa ISO 8601 a oggetto datetime
+2. **Converti** a UTC se timezone-aware
+3. **Estrai** Unix timestamp in millisecondi
+4. **Moltiplica** per 1.000.000 per ottenere nanosecondi
+5. **Scrivi** in InfluxDB con precisione nanosecondo
 
-Code location: `parser/web_parser.py` → `_convert_timestamp()` (line 57-76)
-
----
-
-## Data Filtering
-
-Before writing to InfluxDB, raw points pass through filtering:
-
-### Filter Rules
-
-1. **Null values**: Points with `value = None` are discarded
-2. **Invalid timestamps**: Points with `timestamp <= 0` are discarded
-3. **Duplicate detection**: Implemented in `filtro/regole_filtraggio.py`
-
-Code location: `parser/web_parser.py` → `parse_web()` (line 194)
+Posizione codice: `parser/web_parser.py` → `_convert_timestamp()` (riga 57-76)
 
 ---
 
-## Measurement Types by Device
+## Normalizzazione Unità
 
-### INVERTER
-- `AC_PRODUCTION_POWER` (W)
-- `AC_PRODUCTION_ENERGY` (Wh)
-- `AC_CONSUMPTION_POWER` (W)
-- `AC_CONSUMPTION_ENERGY` (Wh)
-- `AC_VOLTAGE` (V)
-- `AC_CURRENT` (A)
-- `AC_FREQUENCY` (Hz)
-- `DC_VOLTAGE` (V)
-- `KWH_KWP_RATIO` (ratio)
+Le unità dall'API vengono normalizzate a formato standard:
 
-### METER
-- `IMPORT_POWER` (W)
-- `IMPORT_ENERGY` (Wh)
-- `EXPORT_POWER` (W)
-- `EXPORT_ENERGY` (Wh)
+| Unità API | Normalizzata | Note |
+|-----------|--------------|------|
+| `w`, `W` | `W` | Watt |
+| `wh`, `Wh` | `Wh` | Watt-ora |
+| `kw`, `kW` | `kW` | Kilowatt |
+| `kwh`, `kWh` | `kWh` | Kilowatt-ora |
+| Altre | Invariate | Passate così come sono |
 
-### OPTIMIZER
-- `PRODUCTION_POWER` (W)
-- `PRODUCTION_ENERGY` (Wh)
-- `MODULE_CURRENT` (A)
-- `MODULE_OUTPUT_VOLTAGE` (V)
-- `OPTIMIZER_OUTPUT_VOLTAGE` (V)
-
-### SITE
-- `PRODUCTION_POWER` (W)
-- `PRODUCTION_ENERGY` (Wh)
-- `IMPORT_POWER` (W)
-- `IMPORT_ENERGY` (Wh)
-- `EXPORT_POWER` (W)
-- `EXPORT_ENERGY` (Wh)
-- `KWH_KWP_RATIO` (ratio)
-
-### STRING
-- `PRODUCTION_POWER` (W)
-- `PRODUCTION_ENERGY` (Wh)
-
-### WEATHER
-- `TEMPERATURE` (°C)
-- `WIND_SPEED` (m/s)
-- `HUMIDITY` (%)
-- `IRRADIANCE` (W/m²)
+Posizione codice: `parser/web_parser.py` → `_normalize_unit()` (riga 99-104)
 
 ---
 
-## Storage Example
+## Estrazione Device ID
 
-### Input (API Response)
+I Device ID provengono dal campo `device.id` della risposta API, con gestione speciale:
+
+| Device Type | Sorgente ID | Esempio | Note |
+|-------------|-------------|---------|------|
+| INVERTER | API `id` | `7403D7C5-13` | Numero seriale con suffisso |
+| METER | API `id` | `606483640` | ID numerico |
+| OPTIMIZER | API `id` | `21830A42-F0` | Numero seriale con suffisso |
+| STRING | API `id` | `0`, `1`, `2` | Indice numerico |
+| SITE | API `id` | `2489781` | Numero ID sito |
+| WEATHER | Hardcoded | `weather_default` | Sempre stesso ID |
+
+Posizione codice: `parser/web_parser.py` → `_extract_device_info()` (riga 38-55)
+
+---
+
+## Filtraggio Dati
+
+Prima di scrivere in InfluxDB, i raw point passano attraverso filtraggio:
+
+### Regole Filtro
+
+1. **Valori null**: Point con `value = None` vengono scartati
+2. **Timestamp non validi**: Point con `timestamp <= 0` vengono scartati
+3. **Rilevamento duplicati**: Implementato in `filtro/regole_filtraggio.py`
+
+Posizione codice: `parser/web_parser.py` → `parse_web()` (riga 194)
+
+---
+
+## Gestione Errori
+
+### Category Mancante
+- **Trigger**: `device_id` non trovato in `web_endpoints.yaml`
+- **Azione**: Usa `"Info"` come category di default
+- **Log**: Messaggio warning con device ID disponibili
+
+### Valore Non Valido
+- **Trigger**: Valore non convertibile a float
+- **Azione**: Memorizza come string in InfluxDB
+- **Log**: Messaggio debug
+
+### Timestamp Mancante
+- **Trigger**: Timestamp è None o <= 0
+- **Azione**: Scarta il data point
+- **Log**: Nessun log (scarto silenzioso)
+
+---
+
+## Esempio Storage Completo
+
+### Input (Risposta API)
 ```json
 {
   "device": {"itemType": "SITE", "id": "2489781"},
@@ -257,7 +209,7 @@ Code location: `parser/web_parser.py` → `parse_web()` (line 194)
 }
 ```
 
-### Output (InfluxDB Point)
+### Output (Point InfluxDB)
 ```
 Measurement: web
 Tags:
@@ -266,101 +218,44 @@ Tags:
   unit=Wh
 Fields:
   Site=15420.0
-Timestamp: 1732875600000000000 (nanoseconds)
+Timestamp: 1732875600000000000 (nanosecondi)
 ```
 
-### InfluxDB Line Protocol
+### Line Protocol InfluxDB
 ```
 web,endpoint=PRODUCTION_ENERGY,device_id=2489781,unit=Wh Site=15420.0 1732875600000000000
 ```
 
 ---
 
-## Configuration Dependency
+## Considerazioni Performance
 
-### web_endpoints.yaml Role
+### Scrittura Batch
+- I point vengono raccolti in memoria
+- Scritti in batch in InfluxDB
+- Dimensione batch: 500 point (configurabile)
 
-The parser **requires** `web_endpoints.yaml` to determine categories:
+### Cardinalità Tag
+- `endpoint`: ~10-20 valori unici per tipo dispositivo
+- `device_id`: Numero di dispositivi fisici (tipicamente 1-50)
+- `unit`: ~10 valori unici totali
 
-1. **Without config**: All data stored with field name `"Info"`
-2. **With config**: Data stored with proper category field names
-
-### Config Structure Used
-```yaml
-web_scraping:
-  endpoints:
-    site_2489781:
-      device_id: "2489781"
-      category: "Site"  # ← Used as InfluxDB field name
-```
+**Cardinalità totale**: Bassa (< 1000 combinazioni tag uniche)
 
 ---
 
-## Error Handling
+## Riepilogo
 
-### Missing Category
-- **Trigger**: `device_id` not found in `web_endpoints.yaml`
-- **Action**: Use `"Info"` as default category
-- **Log**: Warning message with available device IDs
+Il sistema di storage dati web:
 
-### Invalid Value
-- **Trigger**: Value cannot be converted to float
-- **Action**: Store as string in InfluxDB
-- **Log**: Debug message
-
-### Missing Timestamp
-- **Trigger**: Timestamp is None or <= 0
-- **Action**: Discard the data point
-- **Log**: No log (silent discard)
-
----
-
-## Supported Date Ranges
-
-Based on technical testing, the SolarEdge API has specific limitations on date ranges for different device types:
-
-| Device Type | 1 Day | 3 Days | 7 Days | 1 Month | Notes |
-|-------------|-------|--------|--------|---------|-------|
-| **OPTIMIZER** | ✅ | ✅ | ✅ | ❌ | Fails with HTTP 400 for ranges > 7 days |
-| **SITE** | ✅ | ✅ | ✅ | ✅ | Supports full monthly range |
-| **WEATHER** | ✅ | ✅ | ✅ | ✅ | Supports full monthly range |
-| **INVERTER** | ✅ | ✅ | ✅ | ✅ | Generally supports monthly range |
-| **METER** | ✅ | ✅ | ✅ | ✅ | Generally supports monthly range |
-
-**Technical Implication**:
-- For **Optimizers**, the collector must split monthly requests into smaller chunks (e.g., daily or weekly) to avoid errors.
-- For **Site/Weather**, bulk monthly collection is efficient and supported.
-
----
-
-## Performance Considerations
-
-### Batch Writing
-- Points are collected in memory
-- Written in batches to InfluxDB
-- Batch size: 500 points (configurable)
-
-### Tag Cardinality
-- `endpoint`: ~10-20 unique values per device type
-- `device_id`: Number of physical devices (typically 1-50)
-- `unit`: ~10 unique values total
-
-**Total cardinality**: Low (< 1000 unique tag combinations)
-
----
-
-## Summary
-
-The web data storage system:
-
-1. **Receives** JSON from SolarEdge API
-2. **Parses** device info and measurements
-3. **Looks up** category from configuration
-4. **Creates** InfluxDB points with:
+1. **Riceve** JSON dall'API SolarEdge
+2. **Estrae** info dispositivo e misurazioni
+3. **Cerca** category dalla configurazione
+4. **Crea** point InfluxDB con:
    - Measurement: `web`
-   - Tags: `endpoint`, `device_id`, `unit`
-   - Field: Named by category, value from API
-   - Timestamp: Nanosecond precision
-5. **Writes** to InfluxDB in batches
+   - Tag: `endpoint`, `device_id`, `unit`
+   - Field: Nome dalla category, valore dall'API
+   - Timestamp: Precisione nanosecondo
+5. **Scrive** in InfluxDB in batch
 
-**Key Design**: Category system allows flexible field naming while maintaining consistent measurement structure.
+**Design Chiave**: Il sistema category permette nomi field flessibili mantenendo struttura measurement consistente.

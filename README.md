@@ -481,6 +481,7 @@ L'installer configura automaticamente:
 - `docs/realtime_endpoints_reference.md`: Come funziona il sistema Modbus realtime (registri, scaling, normalizzazione)
 - `docs/gme_api_reference.md`: Come funziona l'integrazione GME (autenticazione, parsing, storage)
 - `docs/gui_core_reference.md`: Come funzionano i componenti core della GUI (ConfigHandler, StateManager, Toggle, Middleware)
+- `docs/query_grafana_reference.md`: Ottimizzazione query Flux per dashboard Grafana (performance, best practices)
 - `docs/retention_policy_setup.md`: Configurazione retention InfluxDB
 
 ## 🔧 Troubleshooting
