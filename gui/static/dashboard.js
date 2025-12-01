@@ -426,6 +426,7 @@ class SolarDashboard {
 
         const category = data.category || 'Info';
         const icon = this.getCategoryIcon(category);
+        const requiresSerial = data.requires_serial === true;
 
         card.innerHTML = `
             <div class="endpoint-header">
@@ -437,6 +438,12 @@ class SolarDashboard {
                 ${this.createToggle(data.enabled, 'endpoint', { endpointId: id })}
             </div>
             <div class="endpoint-description">${data.description || 'Nessuna descrizione disponibile'}</div>
+            ${requiresSerial ? `
+                <div class="endpoint-warning">
+                    <span class="warning-icon">⚠️</span>
+                    <span class="warning-text">Richiede <strong>equipment_list</strong> abilitato per funzionare</span>
+                </div>
+            ` : ''}
             <div class="endpoint-meta">
                 <span class="endpoint-category">Formato: ${data.data_format === 'structured' ? 'Strutturato' : 'JSON'}</span>
             </div>
