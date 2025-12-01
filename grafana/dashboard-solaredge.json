@@ -1502,7 +1502,7 @@
             "type": "influxdb",
             "uid": "ff27vpmruzxtsc"
           },
-          "query": "import \"date\"\r\nimport \"array\"\r\nimport \"timezone\"\r\n\r\noption location = timezone.location(name: \"Europe/Rome\")\r\n\r\nstart = date.truncate(t: now(), unit: 1d)\r\nmonth_start = date.truncate(t: now(), unit: 1mo)\r\n\r\n// Recupera prezzo PUN\r\npun_value = (from(bucket: \"GME\")\r\n  |> range(start: month_start)\r\n  |> filter(fn: (r) => \r\n      r._measurement == \"gme_monthly_avg\" and \r\n      r._field == \"pun_kwh_avg\")\r\n  |> last()\r\n  |> findRecord(fn: (key) => true, idx: 0))._value\r\n\r\n// Dati prelievo\r\ndata = from(bucket: \"Solaredge_Realtime\")\r\n  |> range(start: start)\r\n  |> filter(fn: (r) => \r\n      r._measurement == \"realtime\" and \r\n      r._field == \"Meter\" and \r\n      r.endpoint == \"Import Energy Active\" and \r\n      r.unit == \"Wh\" and\r\n      exists r._value)\r\n\r\nprelievo_wh = (data |> last() |> findRecord(fn: (key) => true, idx: 0))._value - \r\n              (data |> first() |> findRecord(fn: (key) => true, idx: 0))._value\r\n\r\n// Output\r\narray.from(rows: [{\r\n  _time: now(),\r\n  \"PUN (€/kWh)\": pun_value,\r\n  \"Costo Prelievo Oggi (€)\": if prelievo_wh < 0.0 \r\n                              then 0.0 \r\n                              else (prelievo_wh / 1000.0) * pun_value\r\n}])",
+          "query": "import \"date\"\r\nimport \"array\"\r\nimport \"timezone\"\r\n\r\noption location = timezone.location(name: \"Europe/Rome\")\r\n\r\nstart = date.truncate(t: now(), unit: 1d)\r\nmonth_start = date.truncate(t: now(), unit: 1mo)\r\n\r\n// Recupera prezzo PUN\r\npun_value = (from(bucket: \"GME\")\r\n  |> range(start: month_start)\r\n  |> filter(fn: (r) => \r\n      r._measurement == \"gme_monthly_avg\" and \r\n      r._field == \"pun_kwh_avg\")\r\n  |> last()\r\n  |> findRecord(fn: (key) => true, idx: 0))._value\r\n\r\n// Dati prelievo\r\ndata = from(bucket: \"Solaredge_Realtime\")\r\n  |> range(start: start)\r\n  |> filter(fn: (r) => \r\n      r._measurement == \"realtime\" and \r\n      r._field == \"Meter\" and \r\n      r.endpoint == \"Import Energy Active\" and \r\n      r.unit == \"Wh\" and\r\n      exists r._value)\r\n\r\nprelievo_wh = (data |> last() |> findRecord(fn: (key) => true, idx: 0))._value - \r\n              (data |> first() |> findRecord(fn: (key) => true, idx: 0))._value\r\n\r\n// Output\r\narray.from(rows: [{\r\n  \"PUN (€/kWh)\": pun_value,\r\n  \"Costo Prelievo Oggi (€)\": if prelievo_wh < 0.0 \r\n                              then 0.0 \r\n                              else (prelievo_wh / 1000.0) * pun_value\r\n}])",
           "refId": "Costo Prelievo"
         }
       ],
@@ -5883,6 +5883,6 @@
   "timezone": "",
   "title": "Solaredge 3.0",
   "uid": "afb91a6f-d8f7-43ae-8a98-67eab1bb4baa",
-  "version": 576,
+  "version": 579,
   "weekStart": "monday"
 }
