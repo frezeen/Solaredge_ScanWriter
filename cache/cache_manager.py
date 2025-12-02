@@ -133,8 +133,15 @@ class CacheManager:
         try:
             with gzip.open(cache_path, 'rt', encoding=ENCODING) as f:
                 return json.load(f)
-        except (OSError, json.JSONDecodeError, ValueError) as e:
-            self._log.warning(f"Corrupt cache file {cache_path}: {e}")
+        except (OSError, json.JSONDecodeError, ValueError, EOFError) as e:
+            # EOFError cattura "Compressed file ended before the end-of-stream marker was reached"
+            self._log.warning(f"Corrupt cache file {cache_path.name}: {type(e).__name__} - {e}")
+            # Rimuovi file corrotto per evitare problemi futuri
+            try:
+                cache_path.unlink()
+                self._log.info(f"🗑️ Removed corrupt cache file: {cache_path.name}")
+            except OSError:
+                pass
             return None
     
     def _is_file_age_valid(self, file_path: Path, source: Optional[str] = None, target_date: Optional[str] = None) -> bool:
@@ -293,7 +300,13 @@ class CacheManager:
         # Verifica completezza
         is_complete = False
         if len(date) == 10:  # YYYY-MM-DD
-            is_complete = True
+            # Dati giornalieri sono completi SOLO se la data è nel passato
+            try:
+                date_obj = datetime.strptime(date, DATE_PATTERN).date()
+                today = datetime.now().date()
+                is_complete = date_obj < today  # Completo solo se passato
+            except ValueError:
+                is_complete = False  # Data invalida → non completo
         elif len(date) == 7:  # YYYY-MM
             is_complete = is_metadata or self._has_full_month_data(data, date)
         
@@ -312,9 +325,16 @@ class CacheManager:
         cache_path.parent.mkdir(parents=True, exist_ok=True)
         cache_entry = self._build_cache_entry(source, endpoint, date, data, data_hash)
 
+        # Atomic write: scrivi su file temporaneo poi rinomina
+        temp_path = cache_path.with_suffix('.tmp')
+        
         try:
-            with gzip.open(cache_path, 'wt', encoding=ENCODING) as f:
+            # Scrivi su file temporaneo
+            with gzip.open(temp_path, 'wt', encoding=ENCODING) as f:
                 json.dump(cache_entry, f, indent=2, ensure_ascii=False)
+            
+            # Atomic rename (sostituisce file esistente se presente)
+            temp_path.replace(cache_path)
 
             seal_status = "🔒 SEALED" if is_complete else "📝 PARTIAL"
             self._log.info(f"💾 CACHE SAVED [{source}] {seal_status}: {data_hash} ({date})")
@@ -327,6 +347,12 @@ class CacheManager:
             return data_hash
 
         except Exception as e:
+            # Cleanup: rimuovi file temporaneo se esiste
+            if temp_path.exists():
+                try:
+                    temp_path.unlink()
+                except OSError:
+                    pass
             self._log.error(f"Cache save failed {cache_path}: {e}")
             raise RuntimeError(f"Cache save failed for {date}") from e
 
@@ -381,7 +407,11 @@ class CacheManager:
             # 2. Se valido (TTL o storico), ritorna
             if self._is_file_age_valid(cache_path, source, date):
                 if cache_entry := self._read_cache_file(cache_path):
-                    self._log.info(f"✅ CACHE HIT [{source}/{endpoint}]: {date}")
+                    # File sealed hanno 3+ parti (date_time_hash), partial hanno 2 (date_time)
+                    is_sealed = len(cache_path.stem.replace('.json', '').split('_')) >= 3
+                    status_icon = "🔒" if is_sealed else "📝"
+                    status_text = "SEALED" if is_sealed else "PARTIAL"
+                    self._log.info(f"✅ CACHE HIT {status_icon} [{source}/{endpoint}]: {date} ({status_text})")
                     self.stats['cache_hits'] += 1
                     return cache_entry['data']
             
