@@ -127,3 +127,6 @@ config_latest/
 
 # Custom prompts
 python_refactor_prompt.md
+
+# TODO list (personal task tracking)
+TODO.md
