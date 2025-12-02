@@ -232,6 +232,7 @@ class HistoryManager:
 
 
                     # 2. Web Flow per device daily (Optimizer, Weather) - SOLO se anno corrente
+                    # ESCLUDI monthly devices per evitare duplicati (già processati sopra)
                     web_result = 0
                     if allow_daily_devices and idx == len(months) and not web_executed:
                         # Calcola gli ultimi 7 giorni dalla data di fine
@@ -243,7 +244,13 @@ class HistoryManager:
 
                         self.log.info(color.dim(f"   🔄 Web flow per ultimi 7 giorni (Daily devices): {web_start} → {web_end}"))
                         try:
-                            web_result = run_web_flow(self.log, self.cache, self.config, start_date=web_start, end_date=web_end)
+                            # Filtra solo device daily/7days per evitare duplicati con monthly
+                            web_result = run_web_flow(
+                                self.log, self.cache, self.config,
+                                start_date=web_start,
+                                end_date=web_end,
+                                allowed_date_ranges=['daily', '7days']
+                            )
                             web_executed = True
                             if web_result == 0:
                                 web_success = True
