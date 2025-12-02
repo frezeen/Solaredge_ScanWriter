@@ -132,6 +132,9 @@ class HistoryManager:
         gme_failed_count = 0
         web_monthly_success_count = 0
         web_monthly_failed_count = 0
+        
+        # Flag per disabilitare GME in caso di errori critici (Circuit Breaker)
+        gme_enabled = True
 
         try:
             # Processa tutti i mesi
@@ -149,24 +152,31 @@ class HistoryManager:
                                              end_date=month_data['end'])
 
                     # 1b. GME Flow (Nuovo) - Eseguito in parallelo logico
-                    try:
-                        year_str, month_str = month_data['label'].split('-')
-                        year, month = int(year_str), int(month_str)
+                    if gme_enabled:
+                        try:
+                            year_str, month_str = month_data['label'].split('-')
+                            year, month = int(year_str), int(month_str)
 
-                        # Import locale per evitare cicli
-                        from flows.gme_flow import run_gme_month_flow
+                            # Import locale per evitare cicli
+                            from flows.gme_flow import run_gme_month_flow
 
-                        # Esegui flow GME (gestisce internamente cache check)
-                        gme_result = run_gme_month_flow(self.log, self.cache, self.config, year, month, scheduler=self.gme_scheduler)
+                            # Esegui flow GME (gestisce internamente cache check)
+                            gme_result = run_gme_month_flow(self.log, self.cache, self.config, year, month, scheduler=self.gme_scheduler)
 
-                        if gme_result == 0:
-                            gme_success_count += 1
-                        else:
+                            if gme_result == 0:
+                                gme_success_count += 1
+                            else:
+                                gme_failed_count += 1
+
+                        except Exception as e:
+                            self.log.error(color.error(f"   ❌ GME {month_data['label']} errore: {e}"))
                             gme_failed_count += 1
-
-                    except Exception as e:
-                        self.log.warning(color.warning(f"   ⚠️ GME {month_data['label']} errore: {e}"))
-                        gme_failed_count += 1
+                            
+                            # Circuit Breaker per errori critici server/quota
+                            error_str = str(e)
+                            if any(x in error_str for x in ["500 Server Error", "502 Bad Gateway", "503 Service Unavailable", "quota"]):
+                                self.log.warning(color.warning("   🛑 GME Critical Error rilevato (Server/Quota). Disabilitazione GME per i mesi successivi."))
+                                gme_enabled = False
 
                     # 1c. Web Flow (Monthly Devices) - SITE (e altri monthly)
                     # Esegui per ogni mese per garantire storico completo dei device mensili
