@@ -391,12 +391,17 @@ class CollectorWeb(CollectorWebInterface):
             raise
 
     def fetch_measurements(self, device_requests: List[Dict[str, Any]]) -> Dict[str, Any]:
-        """Recupera measurements con cache per tipo di device."""
+        """Recupera measurements con cache per tipo di device.
+        
+        Loop mode: Aggiorna solo giorno corrente senza aggregazione storica
+        History mode: Gestisce storico completo con aggregazione quando necessario
+        """
         if not device_requests:
             raise RuntimeError("device_requests vuoto")
 
         all_results = []
         target_date = getattr(self, '_target_date', None) or datetime.now().strftime("%Y-%m-%d")
+        is_today = target_date == datetime.now().strftime("%Y-%m-%d")
         
         # Raggruppa device per tipo per ottimizzare chiamate e cache
         grouped = defaultdict(list)
@@ -407,42 +412,32 @@ class CollectorWeb(CollectorWebInterface):
         # Processa ogni tipo di device con cache dedicata
         for device_type, reqs in grouped.items():
             date_range = reqs[0].get('date_range', 'daily')
-            
-            # Usa solo device_type come endpoint (cartella)
-            # La data va nel filename gestito dal cache manager
             cache_endpoint = device_type
             
             def _fetch_group():
                 self.ensure_session()
                 raw_data = self._fetch_all_measurements(reqs)
                 
-                # Per SITE, aggrega dati orari in giornalieri quando necessario
-                # - Loop Mode (daily): API restituisce dati 15min → aggrega
-                # - History Mode mese corrente (monthly): API restituisce dati orari → aggrega
-                # - History Mode mesi completi (monthly): API restituisce dati giornalieri → no aggregazione
-                if device_type == 'SITE':
-                    # Determina se serve aggregazione controllando la risoluzione dei dati
+                # Monthly endpoints (SITE, INVERTER, METER, STRING):
+                # - Loop mode (oggi): nessuna aggregazione
+                # - History mode (mesi passati): aggregazione se dati sub-giornalieri
+                # 7days endpoints (OPTIMIZER, WEATHER): nessuna aggregazione mai
+                if date_range == 'monthly' and not is_today:
                     needs_aggregation = self._check_if_needs_aggregation(raw_data, date_range)
                     
                     if needs_aggregation:
-                        # Leggi cache esistente per merge (ignora TTL per preservare dati accumulati)
                         existing_cache = None
                         if self.cache:
-                            # SITE usa sempre chiave mensile (YYYY-MM) per compatibilità Loop/History
                             existing_cache = self.cache.get_cached_data("web", cache_endpoint, cache_date, ignore_ttl=True)
-                        
-                        raw_data = self._aggregate_site_to_daily(raw_data, existing_cache)
+                        raw_data = self._aggregate_to_daily(raw_data, existing_cache, device_type)
                 
                 return raw_data
             
-            # Determina chiave cache in base al device type e date_range
-            # SITE: sempre mensile (YYYY-MM) per compatibilità Loop/History
-            # Monthly devices: usa chiave mensile (YYYY-MM) per validazione completezza
-            # Daily/7days devices: usa chiave giornaliera (YYYY-MM-DD)
-            if device_type == 'SITE' or date_range == 'monthly':
-                cache_date = target_date[:7]  # Estrai YYYY-MM
+            # Chiave cache: monthly sempre mensile (YYYY-MM), 7days giornaliera (YYYY-MM-DD)
+            if date_range == 'monthly':
+                cache_date = target_date[:7]
             else:
-                cache_date = target_date  # Usa YYYY-MM-DD completo
+                cache_date = target_date
             
             if self.cache:
                 group_data = self.cache.get_or_fetch("web", cache_endpoint, cache_date, _fetch_group)
@@ -561,29 +556,25 @@ class CollectorWeb(CollectorWebInterface):
     def _check_if_needs_aggregation(self, raw_data: Dict[str, Any], date_range: str) -> bool:
         """Verifica se i dati necessitano aggregazione controllando la risoluzione temporale.
         
+        Usato solo da history mode per mesi passati.
+        
         Args:
             raw_data: Dati raw dall'API
-            date_range: 'daily' o 'monthly'
+            date_range: 'monthly' (history mode)
         
         Returns:
-            True se i dati hanno risoluzione sub-giornaliera (15min o oraria)
+            True se i dati hanno risoluzione sub-giornaliera (oraria)
         """
-        # Loop mode con daily: sempre aggregazione (dati 15min)
-        if date_range == 'daily':
-            return True
-        
-        # History mode con monthly: controlla risoluzione effettiva
         items = raw_data.get('list', [])
         if not items:
             return False
         
-        # Prendi il primo item con measurements
+        # Controlla risoluzione effettiva dei dati
         for item in items:
             measurements = item.get('measurements', [])
             if len(measurements) < 2:
                 continue
             
-            # Controlla intervallo tra primi due timestamp
             try:
                 from datetime import datetime
                 time1 = measurements[0].get('time', '')
@@ -609,15 +600,18 @@ class CollectorWeb(CollectorWebInterface):
                 self._log.debug(f"Errore verifica risoluzione: {e}")
                 continue
         
-        # Default: no aggregazione se non riusciamo a determinare
         return False
     
-    def _aggregate_site_to_daily(self, raw_data: Dict[str, Any], existing_cache: Dict[str, Any] = None) -> Dict[str, Any]:
-        """Aggrega dati SITE da 15min a giornalieri e merge con cache esistente.
+    def _aggregate_to_daily(self, raw_data: Dict[str, Any], existing_cache: Dict[str, Any] = None, device_type: str = None) -> Dict[str, Any]:
+        """Aggrega dati orari a giornalieri per history mode (monthly endpoints).
+        
+        Usato per SITE, INVERTER, METER, STRING quando API restituisce dati sub-giornalieri.
+        Loop mode non usa questa funzione.
         
         Args:
-            raw_data: Dati raw 15min dall'API
+            raw_data: Dati raw orari dall'API
             existing_cache: Cache esistente da mergare (opzionale)
+            device_type: Tipo device per logging (opzionale)
         
         Returns:
             Dati aggregati giornalieri con merge della cache esistente
