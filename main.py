@@ -105,7 +105,12 @@ def main() -> int:
     grp = ap.add_mutually_exclusive_group(required=False)
     for mode, conf in MODES.items():
         if mode == 'gui': continue # Non aggiungere flag per gui (è default)
-        grp.add_argument(f'--{mode}', action='store_true', help=conf['help'])
+        if mode == 'history':
+            # History accetta opzionalmente un anno
+            grp.add_argument(f'--{mode}', nargs='?', const=True, metavar='YEAR', 
+                           help=f"{conf['help']} (opzionale: specifica anno, es. --history 2024)")
+        else:
+            grp.add_argument(f'--{mode}', action='store_true', help=conf['help'])
 
     args = ap.parse_args()
 
@@ -127,7 +132,12 @@ def main() -> int:
     try:
         # Esecuzione dinamica handler
         handler = MODES[active_mode]['handler']
-        return handler(log, cache, config)
+        
+        # Per history mode, passa l'anno se specificato
+        if active_mode == 'history' and args.history and args.history is not True:
+            return handler(log, cache, config, year=args.history)
+        else:
+            return handler(log, cache, config)
 
     except KeyboardInterrupt:
         log.info(color.warning("👋 Uscita pulita richiesta dall'utente"))
