@@ -416,16 +416,22 @@ class CollectorWeb(CollectorWebInterface):
                 self.ensure_session()
                 raw_data = self._fetch_all_measurements(reqs)
                 
-                # Per SITE con daily (Loop Mode), aggrega i dati 15min in giornalieri PRIMA di salvare in cache
-                # History Mode usa monthly → API restituisce già dati giornalieri → aggregazione inutile
-                if device_type == 'SITE' and date_range == 'daily':
-                    # Leggi cache esistente per merge (ignora TTL per preservare dati accumulati)
-                    existing_cache = None
-                    if self.cache:
-                        # SITE usa sempre chiave mensile (YYYY-MM) per compatibilità Loop/History
-                        existing_cache = self.cache.get_cached_data("web", cache_endpoint, cache_date, ignore_ttl=True)
+                # Per SITE, aggrega dati orari in giornalieri quando necessario
+                # - Loop Mode (daily): API restituisce dati 15min → aggrega
+                # - History Mode mese corrente (monthly): API restituisce dati orari → aggrega
+                # - History Mode mesi completi (monthly): API restituisce dati giornalieri → no aggregazione
+                if device_type == 'SITE':
+                    # Determina se serve aggregazione controllando la risoluzione dei dati
+                    needs_aggregation = self._check_if_needs_aggregation(raw_data, date_range)
                     
-                    raw_data = self._aggregate_site_to_daily(raw_data, existing_cache)
+                    if needs_aggregation:
+                        # Leggi cache esistente per merge (ignora TTL per preservare dati accumulati)
+                        existing_cache = None
+                        if self.cache:
+                            # SITE usa sempre chiave mensile (YYYY-MM) per compatibilità Loop/History
+                            existing_cache = self.cache.get_cached_data("web", cache_endpoint, cache_date, ignore_ttl=True)
+                        
+                        raw_data = self._aggregate_site_to_daily(raw_data, existing_cache)
                 
                 return raw_data
             
@@ -552,6 +558,60 @@ class CollectorWeb(CollectorWebInterface):
 
         return session
 
+    def _check_if_needs_aggregation(self, raw_data: Dict[str, Any], date_range: str) -> bool:
+        """Verifica se i dati necessitano aggregazione controllando la risoluzione temporale.
+        
+        Args:
+            raw_data: Dati raw dall'API
+            date_range: 'daily' o 'monthly'
+        
+        Returns:
+            True se i dati hanno risoluzione sub-giornaliera (15min o oraria)
+        """
+        # Loop mode con daily: sempre aggregazione (dati 15min)
+        if date_range == 'daily':
+            return True
+        
+        # History mode con monthly: controlla risoluzione effettiva
+        items = raw_data.get('list', [])
+        if not items:
+            return False
+        
+        # Prendi il primo item con measurements
+        for item in items:
+            measurements = item.get('measurements', [])
+            if len(measurements) < 2:
+                continue
+            
+            # Controlla intervallo tra primi due timestamp
+            try:
+                from datetime import datetime
+                time1 = measurements[0].get('time', '')
+                time2 = measurements[1].get('time', '')
+                
+                if not time1 or not time2:
+                    continue
+                
+                dt1 = datetime.fromisoformat(time1.replace('Z', '+00:00'))
+                dt2 = datetime.fromisoformat(time2.replace('Z', '+00:00'))
+                
+                delta_hours = abs((dt2 - dt1).total_seconds() / 3600)
+                
+                # Se intervallo < 24h → dati sub-giornalieri → serve aggregazione
+                if delta_hours < 24:
+                    self._log.debug(f"Rilevata risoluzione sub-giornaliera ({delta_hours}h) → aggregazione necessaria")
+                    return True
+                else:
+                    self._log.debug(f"Rilevata risoluzione giornaliera ({delta_hours}h) → no aggregazione")
+                    return False
+                    
+            except Exception as e:
+                self._log.debug(f"Errore verifica risoluzione: {e}")
+                continue
+        
+        # Default: no aggregazione se non riusciamo a determinare
+        return False
+    
     def _aggregate_site_to_daily(self, raw_data: Dict[str, Any], existing_cache: Dict[str, Any] = None) -> Dict[str, Any]:
         """Aggrega dati SITE da 15min a giornalieri e merge con cache esistente.
         
@@ -577,7 +637,9 @@ class CollectorWeb(CollectorWebInterface):
             
             if existing_cache:
                 # Carica dati esistenti dalla cache per questo measurement_type
-                for cached_item in existing_cache.get('list', []):
+                # La cache ha struttura: data.list
+                cached_list = existing_cache.get('data', {}).get('list', []) if isinstance(existing_cache.get('data'), dict) else existing_cache.get('list', [])
+                for cached_item in cached_list:
                     if cached_item.get('measurementType') == measurement_type:
                         for cached_m in cached_item.get('measurements', []):
                             time_str = cached_m.get('time', '')
