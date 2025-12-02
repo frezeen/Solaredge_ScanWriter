@@ -7,18 +7,20 @@ from scheduler.scheduler_loop import SchedulerLoop, SchedulerConfig
 class HistoryManager:
     """Gestisce il download dello storico completo con suddivisione mensile"""
 
-    def __init__(self, log, cache, config):
+    def __init__(self, log, cache, config, year=None):
         """Inizializza HistoryManager
 
         Args:
             log: Logger instance
             cache: Cache manager instance
             config: Configuration dictionary
+            year: Optional year (int or str) to download only that year's data
         """
         self.log = log
         self.cache = cache
         self.config = config
         self.collector = None
+        self.year = int(year) if year else None
 
     def run(self) -> int:
         """Esegue modalità history: scarica storico completo con suddivisione mensile"""
@@ -42,6 +44,19 @@ class HistoryManager:
             if not date_range_result:
                 return 1
             start_date, end_date = date_range_result
+            
+            # Se specificato un anno, limita il range a quell'anno
+            if self.year:
+                year_start = f"{self.year}-01-01"
+                year_end = f"{self.year}-12-31"
+                
+                # Usa il range più restrittivo tra API e anno richiesto
+                if start_date < year_start:
+                    start_date = year_start
+                if end_date > year_end:
+                    end_date = year_end
+                    
+                self.log.info(color.highlight(f"📅 Range filtrato per anno {self.year}: {start_date} → {end_date}"))
 
             # 2. Genera lista di mesi da processare
             months = self._generate_months_list(start_date, end_date)
@@ -301,6 +316,10 @@ class HistoryManager:
 
         self.log.info(color.bold("=" * 60))
 
-def run_history_flow(log, cache, config) -> int:
-    """Wrapper per eseguire HistoryManager come flow standard"""
-    return HistoryManager(log, cache, config).run()
+def run_history_flow(log, cache, config, year=None) -> int:
+    """Wrapper per eseguire HistoryManager come flow standard
+    
+    Args:
+        year: Optional year to download (e.g., 2024, 2025)
+    """
+    return HistoryManager(log, cache, config, year=year).run()
