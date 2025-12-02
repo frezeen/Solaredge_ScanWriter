@@ -618,13 +618,14 @@ class CollectorWeb(CollectorWebInterface):
             for date_part, total in new_daily_totals.items():
                 daily_totals[date_part] = total
             
+            self._log.info(f"📊 [DEBUG] Aggregazione: trovati {len(new_daily_totals)} giorni nuovi. Totale giorni: {len(daily_totals)}")
+
             # Normalizza TUTTI i timestamp a mezzanotte (anche quelli dalla cache)
             for date_part in daily_totals.keys():
                 original_ts = daily_timestamps.get(date_part, "N/A")
                 daily_timestamps[date_part] = f"{date_part}T00:00:00+01:00"
-                # Logga solo se c'è un cambiamento significativo (es. non era già mezzanotte)
-                if "T00:00:00" not in original_ts and original_ts != "N/A":
-                     self._log.info(f"🔧 [DEBUG] Normalizzato timestamp {date_part}: {original_ts} -> {daily_timestamps[date_part]}")
+                # Logga SEMPRE per debug
+                self._log.info(f"🔧 [DEBUG] Timestamp {date_part}: {original_ts} -> {daily_timestamps[date_part]}")
             
             # Crea measurements aggregati (tutti i giorni: cache + nuovi)
             aggregated_measurements = []
