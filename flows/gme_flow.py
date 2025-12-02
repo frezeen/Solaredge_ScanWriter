@@ -46,16 +46,22 @@ def run_gme_flow(
             date_str = current_date.strftime('%Y-%m-%d')
             log.info(f"[*] Elaborazione data: {date_str}")
 
-            # 1. Collect
-            raw_data = collector.collect(current_date)
+            # CHECK CACHE FIRST: Verifica se abbiamo già i dati in cache
+            # Questo è cruciale per il loop mode per evitare chiamate inutili
+            if cache.has_gme_day_cached(date_str):
+                log.info(f"   ✅ Dati GME già in cache per {date_str}, caricamento...")
+                raw_data = cache.get_cached_data("gme", "data", date_str)
+            else:
+                # 1. Collect (se non in cache)
+                raw_data = collector.collect(current_date)
 
-            if not raw_data or 'prices' not in raw_data:
-                log.warning(color.warning(f"   ⚠️ Nessun dato GME raccolto per {date_str}"))
-                current_date += timedelta(days=1)
-                continue
+                if not raw_data or 'prices' not in raw_data:
+                    log.warning(color.warning(f"   ⚠️ Nessun dato GME raccolto per {date_str}"))
+                    current_date += timedelta(days=1)
+                    continue
 
-            # 2. Save to Cache
-            cache.save_to_cache("gme", "data", date_str, raw_data)
+                # 2. Save to Cache (solo se scaricato ora)
+                cache.save_to_cache("gme", "data", date_str, raw_data)
 
             # 3. Parse Hourly
             parser = create_parser()
@@ -187,7 +193,8 @@ def run_gme_month_flow(
 
         except Exception as e:
             log.error(f"❌ Errore download GME {year}-{month:02d}: {e}")
-            return 1
+            # CRITICAL: Rilanciamo l'eccezione per fermare il loop principale (history.py)
+            raise
         finally:
             collector.close()
     else:
