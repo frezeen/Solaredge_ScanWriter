@@ -422,17 +422,18 @@ class CollectorWeb(CollectorWebInterface):
                     # Leggi cache esistente per merge (ignora TTL per preservare dati accumulati)
                     existing_cache = None
                     if self.cache:
-                        # Per daily usa chiave giornaliera (YYYY-MM-DD)
+                        # SITE usa sempre chiave mensile (YYYY-MM) per compatibilità Loop/History
                         existing_cache = self.cache.get_cached_data("web", cache_endpoint, cache_date, ignore_ttl=True)
                     
                     raw_data = self._aggregate_site_to_daily(raw_data, existing_cache)
                 
                 return raw_data
             
-            # Determina chiave cache in base al date_range
+            # Determina chiave cache in base al device type e date_range
+            # SITE: sempre mensile (YYYY-MM) per compatibilità Loop/History
             # Monthly devices: usa chiave mensile (YYYY-MM) per validazione completezza
             # Daily/7days devices: usa chiave giornaliera (YYYY-MM-DD)
-            if date_range == 'monthly':
+            if device_type == 'SITE' or date_range == 'monthly':
                 cache_date = target_date[:7]  # Estrai YYYY-MM
             else:
                 cache_date = target_date  # Usa YYYY-MM-DD completo
