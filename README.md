@@ -112,6 +112,7 @@ Gestione semplice tramite interfaccia web, nessuna configurazione manuale richie
 **History Mode Professionale**
 
 - 📜 **Download Completo**: Scarica tutto lo storico disponibile (anche anni di dati)
+- 📅 **Filtro per Anno**: Possibilità di scaricare solo un anno specifico (es. `--history 2024`)
 - 📅 **Suddivisione Mensile**: Gestione automatica grandi volumi senza timeout
 - 💾 **Resume Capability**: Riprende da interruzioni senza perdere progressi
 - ⚡ **Parallelizzazione**: Esecuzione contemporanea con loop normale
@@ -427,7 +428,8 @@ python main.py --gme        # Solo prezzi GME
 python main.py --scan       # Aggiorna config device
 
 # Download storico
-python main.py --history
+python main.py --history          # Tutto lo storico
+python main.py --history 2024     # Solo anno 2024
 
 # Loop 24/7
 python main.py              # GUI + loop automatico
