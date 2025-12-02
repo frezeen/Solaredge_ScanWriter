@@ -419,7 +419,6 @@ class CollectorWeb(CollectorWebInterface):
                 # Per SITE con daily (Loop Mode), aggrega i dati 15min in giornalieri PRIMA di salvare in cache
                 # History Mode usa monthly → API restituisce già dati giornalieri → aggregazione inutile
                 if device_type == 'SITE' and date_range == 'daily':
-                    self._log.info(f"🔍 [DEBUG] Aggregazione SITE attivata per {device_type} (range={date_range})")
                     # Leggi cache esistente per merge (ignora TTL per preservare dati accumulati)
                     existing_cache = None
                     if self.cache:
@@ -427,15 +426,6 @@ class CollectorWeb(CollectorWebInterface):
                         existing_cache = self.cache.get_cached_data("web", cache_endpoint, cache_date, ignore_ttl=True)
                     
                     raw_data = self._aggregate_site_to_daily(raw_data, existing_cache)
-                    
-                    # Verifica timestamp dopo aggregazione
-                    if raw_data.get('list'):
-                        first_m = raw_data['list'][0].get('measurements', [])
-                        if first_m:
-                            self._log.info(f"✅ [DEBUG] Primo timestamp post-aggregazione: {first_m[0].get('time')}")
-                else:
-                    if device_type == 'SITE':
-                        self._log.info(f"ℹ️ [DEBUG] Aggregazione SITE SALTATA: type={device_type}, range={date_range}")
                 
                 return raw_data
             
@@ -618,14 +608,9 @@ class CollectorWeb(CollectorWebInterface):
             for date_part, total in new_daily_totals.items():
                 daily_totals[date_part] = total
             
-            self._log.info(f"📊 [DEBUG] Aggregazione: trovati {len(new_daily_totals)} giorni nuovi. Totale giorni: {len(daily_totals)}")
-
             # Normalizza TUTTI i timestamp a mezzanotte (anche quelli dalla cache)
             for date_part in daily_totals.keys():
-                original_ts = daily_timestamps.get(date_part, "N/A")
                 daily_timestamps[date_part] = f"{date_part}T00:00:00+01:00"
-                # Logga SEMPRE per debug
-                self._log.info(f"🔧 [DEBUG] Timestamp {date_part}: {original_ts} -> {daily_timestamps[date_part]}")
             
             # Crea measurements aggregati (tutti i giorni: cache + nuovi)
             aggregated_measurements = []

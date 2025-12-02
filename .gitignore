@@ -95,6 +95,7 @@ config/sources/web_endpoints.yaml
 *.sqlite3
 
 # Test files
+tests/
 test_output/
 *.test
 
