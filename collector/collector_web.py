@@ -419,7 +419,7 @@ class CollectorWeb(CollectorWebInterface):
                 # Per SITE con daily (Loop Mode), aggrega i dati 15min in giornalieri PRIMA di salvare in cache
                 # History Mode usa monthly → API restituisce già dati giornalieri → aggregazione inutile
                 if device_type == 'SITE' and date_range == 'daily':
-                    _log.info(f"🔍 [DEBUG] Aggregazione SITE attivata per {device_type} (range={date_range})")
+                    self._log.info(f"🔍 [DEBUG] Aggregazione SITE attivata per {device_type} (range={date_range})")
                     # Leggi cache esistente per merge (ignora TTL per preservare dati accumulati)
                     existing_cache = None
                     if self.cache:
@@ -432,10 +432,10 @@ class CollectorWeb(CollectorWebInterface):
                     if raw_data.get('list'):
                         first_m = raw_data['list'][0].get('measurements', [])
                         if first_m:
-                            _log.info(f"✅ [DEBUG] Primo timestamp post-aggregazione: {first_m[0].get('time')}")
+                            self._log.info(f"✅ [DEBUG] Primo timestamp post-aggregazione: {first_m[0].get('time')}")
                 else:
                     if device_type == 'SITE':
-                        _log.info(f"ℹ️ [DEBUG] Aggregazione SITE SALTATA: type={device_type}, range={date_range}")
+                        self._log.info(f"ℹ️ [DEBUG] Aggregazione SITE SALTATA: type={device_type}, range={date_range}")
                 
                 return raw_data
             
