@@ -21,6 +21,7 @@ class HistoryManager:
         self.config = config
         self.collector = None
         self.year = int(year) if year else None
+        self.current_year = datetime.now().year
 
     def run(self) -> int:
         """Esegue modalità history: scarica storico completo con suddivisione mensile"""
@@ -62,8 +63,11 @@ class HistoryManager:
             months = self._generate_months_list(start_date, end_date)
 
             # 3. Processa tutti i mesi
+            # Se anno specificato e NON è l'anno corrente: solo monthly
+            # Se anno corrente o non specificato: monthly + daily per ultimi 7 giorni
+            allow_daily_devices = self._is_current_year()
             success_count, failed_count, web_success, web_failed, interrupted, web_executed, gme_success, gme_failed, web_monthly_success, web_monthly_failed = \
-                self._process_months(months, end_date)
+                self._process_months(months, end_date, allow_daily_devices)
 
             # 4. Stampa statistiche finali
             self._print_final_statistics(success_count, failed_count, web_success, web_failed,
@@ -80,6 +84,12 @@ class HistoryManager:
             return 0  # Uscita pulita per interruzione
         else:
             return 0 if failed_count == 0 else 1
+
+    def _is_current_year(self) -> bool:
+        """Verifica se l'anno richiesto è l'anno corrente"""
+        if not self.year:
+            return True  # Se non specificato, è sempre "corrente"
+        return self.year == self.current_year
 
     def _get_date_range_from_api(self):
         """Recupera range temporale dall'API dataPeriod"""
@@ -132,8 +142,15 @@ class HistoryManager:
         self.log.info(color.highlight(f"📊 Totale mesi da processare: {len(months)}"))
         return months
 
-    def _process_months(self, months, end_date: str):
-        """Processa tutti i mesi con gestione interruzioni"""
+    def _process_months(self, months, end_date: str, allow_daily_devices: bool = True):
+        """Processa tutti i mesi con gestione interruzioni
+        
+        Args:
+            months: Lista di mesi da processare
+            end_date: Data fine del range
+            allow_daily_devices: Se True, processa anche device daily (ultimi 7 giorni)
+                                Se False, solo monthly devices
+        """
         from flows.api_flow import run_api_flow
         from flows.web_flow import run_web_flow
 
@@ -214,9 +231,9 @@ class HistoryManager:
                         web_monthly_failed_count += 1
 
 
-                    # 2. Web Flow solo per gli ultimi 7 giorni (alla fine)
+                    # 2. Web Flow per device daily (Optimizer, Weather) - SOLO se anno corrente
                     web_result = 0
-                    if idx == len(months) and not web_executed:
+                    if allow_daily_devices and idx == len(months) and not web_executed:
                         # Calcola gli ultimi 7 giorni dalla data di fine
                         end_dt = datetime.strptime(end_date, '%Y-%m-%d')
                         start_dt = end_dt - timedelta(days=6)  # 7 giorni totali (incluso end_date)
@@ -224,7 +241,7 @@ class HistoryManager:
                         web_start = start_dt.strftime('%Y-%m-%d')
                         web_end = end_dt.strftime('%Y-%m-%d')
 
-                        self.log.info(color.dim(f"   🔄 Web flow per ultimi 7 giorni: {web_start} → {web_end}"))
+                        self.log.info(color.dim(f"   🔄 Web flow per ultimi 7 giorni (Daily devices): {web_start} → {web_end}"))
                         try:
                             web_result = run_web_flow(self.log, self.cache, self.config, start_date=web_start, end_date=web_end)
                             web_executed = True
@@ -233,10 +250,13 @@ class HistoryManager:
                             else:
                                 web_failed = True
                         except Exception as web_error:
-                            self.log.error(color.error(f"   ❌ Web flow fallito: {web_error}"))
+                            self.log.error(color.error(f"   ❌ Web flow (daily devices) fallito: {web_error}"))
                             web_executed = True
                             web_failed = True
                             web_result = 1
+                    elif not allow_daily_devices and idx == len(months):
+                        self.log.info(color.dim(f"   ⏭️ Skip Web flow daily devices (anno {self.year} non corrente)"))
+                        web_executed = True
 
                     # Considera successo se API è ok (web è opzionale)
                     if api_result == 0:
