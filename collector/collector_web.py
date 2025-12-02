@@ -416,14 +416,14 @@ class CollectorWeb(CollectorWebInterface):
                 self.ensure_session()
                 raw_data = self._fetch_all_measurements(reqs)
                 
-                # Per SITE con monthly, aggrega i dati 15min in giornalieri PRIMA di salvare in cache
-                if device_type == 'SITE' and date_range == 'monthly':
+                # Per SITE con daily (Loop Mode), aggrega i dati 15min in giornalieri PRIMA di salvare in cache
+                # History Mode usa monthly → API restituisce già dati giornalieri → aggregazione inutile
+                if device_type == 'SITE' and date_range == 'daily':
                     # Leggi cache esistente per merge (ignora TTL per preservare dati accumulati)
                     existing_cache = None
                     if self.cache:
-                        # Per monthly usa chiave mensile (YYYY-MM)
-                        month_key = target_date[:7]
-                        existing_cache = self.cache.get_cached_data("web", cache_endpoint, month_key, ignore_ttl=True)
+                        # Per daily usa chiave giornaliera (YYYY-MM-DD)
+                        existing_cache = self.cache.get_cached_data("web", cache_endpoint, cache_date, ignore_ttl=True)
                     
                     raw_data = self._aggregate_site_to_daily(raw_data, existing_cache)
                 

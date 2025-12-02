@@ -142,8 +142,18 @@ def run_web_flow(
                 # --- SMART RANGE MODE (Loop) ---
                 log.info(color.info(f"🔄 Web scraping SMART RANGE (usa configurazioni device)"))
 
-                # Nessuna data specifica, il collector usa i range configurati
-                measurements_raw = collector.fetch_measurements(device_reqs)
+                # In Loop Mode, forza SITE a 'daily' per ottenere risoluzione 15min
+                # (invece di 'monthly' che restituirebbe dati giornalieri)
+                loop_reqs = []
+                for req in device_reqs:
+                    req_copy = req.copy()
+                    device_type = req_copy.get('device', {}).get('itemType')
+                    if device_type == 'SITE' and req_copy.get('date_range') == 'monthly':
+                        req_copy['date_range'] = 'daily'
+                        log.debug(f"   Loop Mode: SITE forzato a 'daily' per risoluzione 15min")
+                    loop_reqs.append(req_copy)
+
+                measurements_raw = collector.fetch_measurements(loop_reqs)
 
                 influx_points = parse_web(measurements_raw, config)
                 log.info(color.dim(f"   Parser web generato {len(influx_points)} InfluxDB Points"))
