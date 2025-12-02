@@ -607,6 +607,9 @@ class CollectorWeb(CollectorWebInterface):
             # Sovrascrivi i giorni nuovi nella cache esistente
             for date_part, total in new_daily_totals.items():
                 daily_totals[date_part] = total
+            
+            # Normalizza TUTTI i timestamp a mezzanotte (anche quelli dalla cache)
+            for date_part in daily_totals.keys():
                 daily_timestamps[date_part] = f"{date_part}T00:00:00+01:00"
             
             # Crea measurements aggregati (tutti i giorni: cache + nuovi)
