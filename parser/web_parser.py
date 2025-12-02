@@ -159,6 +159,52 @@ def _get_endpoint_info(measurement_type: str, device_id: str, config: Dict[str, 
             
     return 'Info', 'daily'
 
+def _aggregate_measurements_to_daily(measurements_raw: Dict[str, Any]) -> Dict[str, Any]:
+    """Aggrega measurements sub-giornalieri a 1 punto/giorno a mezzanotte.
+    
+    Riutilizza logica esistente: raggruppa per (device, metric, giorno), somma valori.
+    """
+    from collections import defaultdict
+    
+    items = measurements_raw.get('list', [])
+    aggregated_items = []
+    
+    for item in items:
+        measurements = item.get('measurements', [])
+        if not measurements:
+            continue
+        
+        # Verifica se serve aggregazione (più di 1 punto per giorno)
+        daily_groups = defaultdict(list)
+        for m in measurements:
+            time_str = m.get('time', '')
+            if not time_str:
+                continue
+            date_part = time_str[:10]
+            daily_groups[date_part].append(m)
+        
+        # Se già 1 punto/giorno, skip aggregazione
+        if all(len(points) == 1 for points in daily_groups.values()):
+            aggregated_items.append(item)
+            continue
+        
+        # Aggrega per giorno
+        aggregated_measurements = []
+        for date_part in sorted(daily_groups.keys()):
+            day_points = daily_groups[date_part]
+            total = sum(p.get('measurement', 0) for p in day_points if p.get('measurement') is not None and p.get('measurement') > 0)
+            
+            aggregated_measurements.append({
+                'time': f"{date_part}T00:00:00+01:00",
+                'measurement': total
+            })
+        
+        aggregated_item = item.copy()
+        aggregated_item['measurements'] = aggregated_measurements
+        aggregated_items.append(aggregated_item)
+    
+    return {'list': aggregated_items}
+
 def parse_web(measurements_raw: Dict[str, Any], config: Dict[str, Any] = None) -> List[Union[Point, Dict[str, Any]]]:
     """Trasforma misure raw web in InfluxDB Points filtrati.
 
@@ -167,6 +213,10 @@ def parse_web(measurements_raw: Dict[str, Any], config: Dict[str, Any] = None) -
     """
     if config is None:
         config = {}
+    
+    # Aggrega dati sub-giornalieri a 1 punto/giorno prima del parsing
+    measurements_raw = _aggregate_measurements_to_daily(measurements_raw)
+    
     container = _validate_input(measurements_raw)
     raw_points: List[Dict[str, Any]] = []
     for item in container:
