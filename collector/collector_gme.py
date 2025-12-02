@@ -205,9 +205,25 @@ class CollectorGME:
             logger.warning(f"Nessun file JSON/XML trovato nello ZIP per {date_str}")
             return {}
 
+        except requests.exceptions.HTTPError as e:
+            # GESTIONE ERRORI HTTP MIGLIORATA
+            if e.response.status_code >= 500:
+                logger.error(f"🔥 GME SERVER ERROR {e.response.status_code} per {date_str}")
+                if e.response.text:
+                    # Logghiamo il body per capire la causa (es. manutenzione, rate limit)
+                    logger.error(f"Server Response Body: {e.response.text[:1000]}")
+                
+                # CRITICAL: Se il server è in errore 500, FERMIAMO IL FLUSSO.
+                # Rilanciare l'eccezione permette al chiamante (flow) di interrompere il loop.
+                raise
+            
+            # Per altri errori (es. 404), logghiamo e ritorniamo vuoto per provare il giorno dopo
+            logger.error(f"Errore HTTP {e.response.status_code} per {date_str}: {e}")
+            return {}
+
         except Exception as e:
             logger.error(f"Errore download dati GME per {date_str}: {e}")
-            if 'response' in locals() and response.text:
+            if 'response' in locals() and hasattr(response, 'text') and response.text:
                  logger.debug(f"Response content: {response.text[:500]}")
             return {}
 
