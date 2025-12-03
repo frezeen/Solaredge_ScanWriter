@@ -46,11 +46,13 @@ class SimpleWebGUI:
         from gui.core.state_manager import StateManager
         from gui.core.unified_toggle_handler import UnifiedToggleHandler
         from gui.core.error_handler import UnifiedErrorHandler
+        from gui.core.loop_executor import LoopExecutor
 
         self.config_handler = ConfigHandler()
         self.state_manager = StateManager(max_log_buffer=1000)
         self.unified_toggle_handler = UnifiedToggleHandler(auto_update_source_callback=self._auto_update_source_enabled)
         self.error_handler = UnifiedErrorHandler(self.logger)
+        self.loop_executor = LoopExecutor(self.state_manager, self.logger, cache)
 
         # Setup log capture per la GUI
         self._setup_log_capture()
@@ -58,72 +60,8 @@ class SimpleWebGUI:
 
 
     async def _auto_start_loop(self):
-        """Avvia automaticamente il loop senza richiesta HTTP"""
-        try:
-            if self.state_manager.loop_running:
-                self.logger.info("[GUI] Loop già in esecuzione")
-                return
-
-            self.logger.info("[GUI] Avvio automatico loop - ricaricamento configurazione...")
-
-            # 1. Ricarica variabili d'ambiente dal file .env
-            try:
-                from config.env_loader import load_env
-                load_env()
-                self.logger.info("[GUI] ✅ Variabili d'ambiente ricaricate da .env")
-            except Exception as e:
-                self.logger.error(f"[GUI] ❌ Errore ricaricamento .env: {e}")
-
-            # 2. Ricarica configurazione YAML principale
-            try:
-                await self.load_config()
-                self.logger.info("[GUI] ✅ Configurazione YAML principale ricaricata")
-            except Exception as e:
-                self.logger.error(f"[GUI] ❌ Errore ricaricamento config: {e}")
-
-            # 3. Ricarica config manager globale
-            try:
-                from config.config_manager import get_config_manager
-                config_manager = get_config_manager()
-                config_manager.reload()
-                self.logger.info("[GUI] ✅ Config manager globale ricaricato")
-            except Exception as e:
-                self.logger.error(f"[GUI] ❌ Errore ricaricamento config manager: {e}")
-                config_manager = None
-
-
-            # 4. Reset flag di stop e avvia il loop
-            self.state_manager.stop_requested = False
-            self.state_manager.loop_running = True
-            self.state_manager.loop_mode = True  # Abilita modalità loop
-
-            # 5. Avvia il loop personalizzato per GUI
-            import asyncio
-
-            # IMPORTANTE: Usa config_manager.get_raw_config() invece di self.load_config()
-            # per assicurarsi che i sources (web_scraping, api, modbus) siano caricati
-            # dai file in config/sources/, altrimenti mancano i device_id e category mappings
-            if config_manager:
-                config = config_manager.get_raw_config()
-                self.logger.info("[GUI] ✅ Config completo caricato con sources da config_manager")
-            else:
-                # Fallback a self.load_config() se config_manager non disponibile
-                config = await self.load_config()
-                self.logger.warning("[GUI] ⚠️ Usando config da self.load_config() (senza sources)")
-
-            # Usa il cache manager condiviso passato dal main
-            if not self.cache:
-                from cache.cache_manager import CacheManager
-                self.cache = CacheManager()
-                self.logger.warning("[GUI] Cache non passato, creando nuova istanza")
-
-            # Avvia il loop asincrono personalizzato
-            asyncio.create_task(self._run_existing_loop(self.cache, config))
-
-            self.logger.info("[GUI] 🚀 Loop avviato automaticamente con configurazione aggiornata")
-
-        except Exception as e:
-            self.logger.error(f"[GUI] Errore avvio automatico loop: {e}")
+        """Avvia automaticamente il loop senza richiesta HTTP - Delega a LoopExecutor"""
+        await self.loop_executor.auto_start(self.load_config)
 
     def _get_real_ip(self):
         """Ottiene l'IP reale della macchina"""
@@ -447,8 +385,8 @@ class SimpleWebGUI:
                 self.cache = CacheManager()
                 self.logger.warning("[GUI] Cache non passato, creando nuova istanza")
 
-            # Avvia il loop asincrono personalizzato
-            asyncio.create_task(self._run_existing_loop(self.cache, config))
+            # Avvia il loop asincrono personalizzato tramite LoopExecutor
+            asyncio.create_task(self.loop_executor.run(self.cache, config))
 
             self.logger.info("[GUI] 🚀 Loop avviato con configurazione aggiornata")
 
@@ -1142,251 +1080,3 @@ time /t >> {log_file}
 
         return GUILogHandler(self)
 
-    async def _run_existing_loop(self, cache, config):
-        """Avvia il loop esistente di main.py in modalità asincrona"""
-        self.logger.info("[GUI] 🔄 Avvio loop personalizzato per GUI")
-
-        # Aggiorna statistiche per il nuovo loop
-        from datetime import datetime
-        self.state_manager.loop_stats['start_time'] = datetime.now()
-        self.state_manager.loop_stats['status'] = 'running'
-        self.state_manager.loop_stats['last_api_web_run'] = datetime.min
-
-        # Usa il loop personalizzato che aggiorna le statistiche della GUI
-        from datetime import datetime, timedelta
-        from flows import run_api_flow, run_web_flow, run_realtime_flow
-        from app_logging import get_logger
-        import asyncio
-
-        log = get_logger("main")
-
-        # Timestamp per tracking esecuzioni
-        last_api_web_run = datetime.min
-
-        # Leggi intervalli dal file .env (stessi del main.py)
-        import os
-        api_mins = int(os.getenv('LOOP_API_INTERVAL_MINUTES', '15'))
-        web_mins = int(os.getenv('LOOP_WEB_INTERVAL_MINUTES', '15'))
-        realtime_secs = int(os.getenv('LOOP_REALTIME_INTERVAL_SECONDS', '5'))
-        gme_mins = int(os.getenv('LOOP_GME_INTERVAL_MINUTES', '1440'))
-
-        api_web_interval = timedelta(minutes=max(api_mins, web_mins))
-        realtime_interval = timedelta(seconds=realtime_secs)
-        gme_interval = timedelta(minutes=gme_mins)
-        last_realtime_run = datetime.min
-        # Initialize GME to trigger immediately on first loop iteration
-        # GME uses cache, so it's safe to run at startup
-        last_gme_run = datetime.min
-
-        # Controlla quali flow sono abilitati nella configurazione
-        # Carica i file sources separatamente perché non sono nel config principale
-        from pathlib import Path
-
-        # Carica stato enabled dai file, ma verifica anche se ci sono endpoint attivi
-        def load_source_enabled_with_check(file_path, key):
-            try:
-                if Path(file_path).exists():
-                    data = load_yaml(file_path, substitute_env=True, use_cache=True)
-
-                    source_enabled = data.get(key, {}).get('enabled', False)
-
-                    # Se il source è enabled, verifica che ci sia almeno un endpoint abilitato
-                    if source_enabled:
-                        endpoints = data.get(key, {}).get('endpoints', {})
-                        has_enabled = any(
-                            ep.get('enabled', False)
-                            for ep in endpoints.values()
-                            if isinstance(ep, dict)
-                        )
-
-                        # Se non ci sono endpoint abilitati, considera il source come disabilitato
-                        if not has_enabled:
-                            self.logger.warning(f"[GUI] ⚠️ {key} è enabled ma non ha endpoint attivi - considerato disabilitato")
-                            return False
-
-                    return source_enabled
-            except Exception as e:
-                self.logger.error(f"[GUI] Errore caricamento {file_path}: {e}")
-            return False
-
-        api_enabled = load_source_enabled_with_check('config/sources/api_endpoints.yaml', 'api_ufficiali')
-        web_enabled = load_source_enabled_with_check('config/sources/web_endpoints.yaml', 'web_scraping')
-        modbus_enabled = load_source_enabled_with_check('config/sources/modbus_endpoints.yaml', 'modbus')
-        gme_enabled = os.getenv('GME_ENABLED', 'false').lower() == 'true'
-
-        # Log configurazione dettagliata per ogni flow
-        status_parts = []
-
-        # API
-        if api_enabled:
-            status_parts.append(f"API: {api_mins} min")
-        else:
-            status_parts.append("API: DISABILITATO")
-
-        # Web
-        if web_enabled:
-            status_parts.append(f"Web: {web_mins} min")
-        else:
-            status_parts.append("Web: DISABILITATO")
-
-        # Realtime
-        if modbus_enabled:
-            status_parts.append(f"Realtime: {realtime_secs} sec")
-        else:
-            status_parts.append("Realtime: DISABILITATO")
-
-        # GME
-        if gme_enabled:
-            status_parts.append(f"GME: {gme_mins} min")
-        else:
-            status_parts.append("GME: DISABILITATO")
-
-        self.logger.info(f"[GUI] Intervalli configurati - {', '.join(status_parts)}")
-
-        # Log dettagliato per flow disabilitati
-        if not api_enabled:
-            self.logger.info("[GUI] ℹ️ API disabilitato nella configurazione, API flow non verrà eseguito")
-        if not web_enabled:
-            self.logger.info("[GUI] ℹ️ Web scraping disabilitato nella configurazione, Web flow non verrà eseguito")
-        if not modbus_enabled:
-            self.logger.info("[GUI] ℹ️ Modbus disabilitato nella configurazione, Realtime flow non verrà eseguito")
-        if not gme_enabled:
-            self.logger.info("[GUI] ℹ️ GME disabilitato nella configurazione, GME flow non verrà eseguito")
-
-        try:
-            while self.state_manager.loop_running and not self.state_manager.stop_requested:
-                current_time = datetime.now()
-
-                # Calcola tempo fino alla prossima operazione
-                time_until_api_web = (last_api_web_run + api_web_interval - current_time).total_seconds()
-                time_until_realtime = (last_realtime_run + realtime_interval - current_time).total_seconds()
-                time_until_gme = (last_gme_run + gme_interval - current_time).total_seconds()
-
-                # Debug logging per GME (solo se abilitato e vicino all'esecuzione)
-                if gme_enabled and time_until_gme < 60:
-                    self.logger.debug(f"[GME DEBUG] time_until_gme={time_until_gme:.1f}s, last_run={last_gme_run}, interval={gme_interval}")
-
-                # Esegui API e Web ogni intervallo configurato (solo se almeno uno è abilitato)
-                if (api_enabled or web_enabled) and time_until_api_web <= 0:
-                    self.logger.info("[GUI] 🌐 Esecuzione raccolta API/Web...")
-
-                    # Esegui Web flow solo se abilitato (in thread separato per non bloccare GUI)
-                    if web_enabled:
-                        self.state_manager.start_new_run('web')  # Ruota log
-                        self.state_manager.loop_stats['web_stats']['executed'] += 1
-                        try:
-                            await asyncio.get_event_loop().run_in_executor(
-                                None, run_web_flow, log, cache, config
-                            )
-                            self.state_manager.loop_stats['web_stats']['success'] += 1
-                            log.info("[FLOW:WEB:COMPLETION]✅ Raccolta web completata")
-                        except Exception as e:
-                            self.state_manager.loop_stats['web_stats']['failed'] += 1
-                            self.logger.error(f"[GUI] ❌ Errore raccolta web: {e}")
-
-                    # Esegui API flow solo se abilitato (in thread separato per non bloccare GUI)
-                    if api_enabled:
-                        self.state_manager.start_new_run('api')  # Ruota log
-                        self.state_manager.loop_stats['api_stats']['executed'] += 1
-                        try:
-                            await asyncio.get_event_loop().run_in_executor(
-                                None, run_api_flow, log, cache, config
-                            )
-                            self.state_manager.loop_stats['api_stats']['success'] += 1
-                            log.info("[FLOW:API:COMPLETION]✅ Raccolta API completata")
-                        except Exception as e:
-                            self.state_manager.loop_stats['api_stats']['failed'] += 1
-                            self.logger.error(f"[GUI] ❌ Errore raccolta API: {e}")
-
-                    last_api_web_run = current_time
-                    self.state_manager.loop_stats['last_api_web_run'] = current_time
-                    self.state_manager.loop_stats['last_update'] = current_time
-
-                    # Calcola next run per API/Web
-                    next_api_web_run = current_time + api_web_interval
-                    self.state_manager.loop_stats['next_api_web_run'] = next_api_web_run
-
-                    # Ricalcola tempi dopo l'esecuzione
-                    time_until_api_web = api_web_interval.total_seconds()
-                    time_until_realtime = (last_realtime_run + realtime_interval - datetime.now()).total_seconds()
-                elif not api_enabled and not web_enabled:
-                    # Se entrambi disabilitati, non calcolare time_until_api_web
-                    time_until_api_web = 999999
-
-                # Esegui Realtime solo se Modbus è abilitato
-                if modbus_enabled and time_until_realtime <= 0:
-                    self.state_manager.start_new_run('realtime')  # Ruota log
-                    self.state_manager.loop_stats['realtime_stats']['executed'] += 1
-                    try:
-                        # Esegui in thread separato per evitare blocco su timeout Modbus
-                        result = await asyncio.get_event_loop().run_in_executor(
-                            None, run_realtime_flow, log, cache, config
-                        )
-                        # result == 0 significa successo
-                        if result == 0:
-                            self.state_manager.loop_stats['realtime_stats']['success'] += 1
-                            log.info("[FLOW:REALTIME:COMPLETION]✅ Raccolta realtime completata")
-                        else:
-                            self.state_manager.loop_stats['realtime_stats']['failed'] += 1
-                    except Exception as e:
-                        self.state_manager.loop_stats['realtime_stats']['failed'] += 1
-                        self.logger.error(f"[GUI] ❌ Errore raccolta realtime: {e}")
-
-                    last_realtime_run = datetime.now()
-                    self.state_manager.loop_stats['last_update'] = datetime.now()
-
-                    # Ricalcola tempo dopo l'esecuzione
-                    time_until_realtime = realtime_interval.total_seconds()
-                elif not modbus_enabled:
-                    # Se Modbus disabilitato, non calcolare time_until_realtime
-                    # Imposta a un valore alto per non influenzare il next_wake
-                    time_until_realtime = 999999
-
-                # Esegui GME solo se abilitato
-                if gme_enabled and time_until_gme <= 0:
-                    from flows import run_gme_flow
-                    self.logger.info(f"[GUI] 🔋 Esecuzione raccolta GME... (last_run: {last_gme_run}, interval: {gme_interval}, time_until: {time_until_gme:.1f}s)")
-                    self.state_manager.start_new_run('gme')  # Ruota log
-                    self.state_manager.loop_stats['gme_stats']['executed'] += 1
-                    try:
-                        await asyncio.get_event_loop().run_in_executor(
-                            None, run_gme_flow, log, cache, config
-                        )
-                        self.state_manager.loop_stats['gme_stats']['success'] += 1
-                        log.info("[FLOW:GME:COMPLETION]✅ Raccolta GME completata")
-                    except Exception as e:
-                        self.state_manager.loop_stats['gme_stats']['failed'] += 1
-                        self.logger.error(f"[GUI] ❌ Errore raccolta GME: {e}")
-
-                    last_gme_run = current_time
-                    self.state_manager.loop_stats['last_gme_run'] = current_time
-                    self.state_manager.loop_stats['last_update'] = current_time
-
-                    # Calcola next run per GME
-                    next_gme_run = current_time + gme_interval
-                    self.state_manager.loop_stats['next_gme_run'] = next_gme_run
-
-                    # Ricalcola tempi dopo l'esecuzione
-                    time_until_gme = gme_interval.total_seconds()
-                    time_until_api_web = (last_api_web_run + api_web_interval - datetime.now()).total_seconds()
-                    self.logger.debug(f"[GUI] GME completato. Prossima esecuzione tra {time_until_gme/60:.1f} minuti")
-                elif not gme_enabled:
-                    # Se GME disabilitato, imposta a un valore alto
-                    time_until_gme = 999999
-
-                # Sleep intelligente: dormi fino alla prossima operazione (max 5 secondi per responsività)
-                # Questo riduce drasticamente l'utilizzo CPU quando non ci sono operazioni da fare
-                next_wake = min(max(time_until_api_web, 0), max(time_until_realtime, 0), max(time_until_gme, 0), 5.0)
-                if next_wake > 0:
-                    await asyncio.sleep(next_wake)
-                else:
-                    # Pausa minima per evitare busy-wait
-                    await asyncio.sleep(0.1)
-
-        except Exception as e:
-            self.logger.error(f"[GUI] Errore nel loop: {e}")
-            self.state_manager.loop_running = False
-        finally:
-            self.state_manager.loop_stats['status'] = 'stopped'
-            self.state_manager.loop_mode = False  # Disabilita modalità loop
-            self.logger.info("[GUI] Loop terminato")
