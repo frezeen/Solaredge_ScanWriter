@@ -3,7 +3,7 @@ class SolarDashboard {
     constructor() {
         this.state = {
             section: 'loop',
-            category: 'all',
+            category: 'Inverter',  // Default category per Modbus
             devices: {},
             endpoints: {},
             modbus: {},
@@ -475,7 +475,6 @@ class SolarDashboard {
         if (!container) return;
 
         const filtered = Object.entries(this.state.modbus).filter(([_, data]) => {
-            if (this.state.category === 'all') return true;
             return data.category === this.state.category;
         });
 
@@ -503,8 +502,10 @@ class SolarDashboard {
             <div class="device-header">
                 <div class="device-info">
                     <div class="device-title">${categoryIcon} ${data.device_name || id}</div>
-                    <div class="device-type">${deviceType} - ${category}</div>
-                    ${data.device_id ? `<div class="device-id">Unit: ${data.device_id}</div>` : ''}
+                    <div>
+                        <div class="device-type">${deviceType} - ${category}</div>
+                        ${data.device_id ? `<div class="device-id">Unit: ${data.device_id}</div>` : ''}
+                    </div>
                 </div>
                 ${this.createToggle(data.enabled, 'modbus-device', { deviceId: id })}
             </div>
