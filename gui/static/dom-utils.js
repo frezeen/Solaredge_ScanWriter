@@ -139,6 +139,12 @@ function animateElement(element, animationClass, delay = 0) {
         element.style.animationDelay = `${delay}ms`;
     }
     element.classList.add(animationClass);
+    
+    // Rimuovi la classe dopo l'animazione per evitare re-trigger quando il tab diventa visibile
+    element.addEventListener('animationend', () => {
+        element.classList.remove(animationClass);
+        element.style.animationDelay = ''; // Reset delay
+    }, { once: true });
 }
 
 /**
