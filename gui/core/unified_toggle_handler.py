@@ -19,16 +19,9 @@ class UnifiedToggleHandler:
     Reduces codebase by ~430 lines (70% reduction in toggle logic).
     """
 
-    def __init__(self, auto_update_source_callback=None):
-        """
-        Initialize unified toggle handler.
-
-        Args:
-            auto_update_source_callback: Optional callback for auto-updating source.enabled
-                                        Signature: (config, source_key, entities, config_path, source_name) -> (bool, bool)
-        """
+    def __init__(self):
+        """Initialize unified toggle handler."""
         self.logger = get_logger("UnifiedToggleHandler")
-        self.auto_update_source_callback = auto_update_source_callback
 
         # Entity type configuration mapping
         self.entity_config = {
@@ -344,21 +337,8 @@ class UnifiedToggleHandler:
 
     def _auto_update_source(self, config: Dict, source_key: str, entities: Dict,
                            config_path: Path, source_name: str) -> Tuple[bool, bool]:
-        """
-        Auto-update source.enabled based on entity states.
-        Uses callback if provided, otherwise performs default logic.
-        """
-        if self.auto_update_source_callback:
-            update_context = {
-                'config': config,
-                'source_key': source_key,
-                'endpoints_or_devices': entities,
-                'config_path': config_path,
-                'source_name': source_name
-            }
-            return self.auto_update_source_callback(update_context)
-
-        # Default logic: enable source if any entity is enabled
+        """Auto-update source.enabled based on entity states."""
+        # Enable source if any entity is enabled
         any_entity_enabled = any(
             entity.get('enabled', False)
             for entity in entities.values()
@@ -370,7 +350,7 @@ class UnifiedToggleHandler:
         if old_enabled != any_entity_enabled:
             config[source_key]['enabled'] = any_entity_enabled
             enabled_count = sum(1 for e in entities.values() if isinstance(e, dict) and e.get('enabled', False))
-            self.logger.info(f"{source_name} auto-{'abilitato' if any_entity_enabled else 'disabilitato'} (entities attive: {enabled_count})")
+            self.logger.info(f"{source_name} auto-{'abilitato' if any_entity_enabled else 'disabilitato'} (endpoint attivi: {enabled_count})")
             return True, any_entity_enabled
 
         return False, old_enabled
