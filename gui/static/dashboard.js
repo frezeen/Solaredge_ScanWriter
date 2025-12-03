@@ -14,6 +14,17 @@ class SolarDashboard {
         this._optimizersCache = null; // Cache for optimizers list (array)
         this._optimizersSet = null; // Cache for optimizers set (O(1) lookups)
 
+        // Track quali section sono già state renderizzate (evita re-render inutili)
+        this._renderedSections = new Set();
+
+        // Lazy rendering lookup table (evita duplicazione)
+        this._sectionRenders = {
+            devices: () => this.renderDevices(),
+            api: () => this.renderEndpoints(),
+            modbus: () => this.renderModbus(),
+            gme: () => this.loadGMEState()
+        };
+
         // API response cache with TTL
         this._apiCache = new Map();
         this._cacheTTL = {
@@ -35,7 +46,10 @@ class SolarDashboard {
     async init() {
         this.setupEventListeners();
         await this.loadData();
-        this.render();
+        // Renderizza il tab iniziale e marcalo come renderizzato
+        const initialSection = this.state.section;
+        this._sectionRenders[initialSection]?.();
+        this._renderedSections.add(initialSection);
         this.updateConnectionStatus();
         this.startLoopMonitoring();
     }
@@ -226,11 +240,23 @@ class SolarDashboard {
         }
 
         this.state[type] = value;
+
+        // Lazy rendering: renderizza SOLO il tab visibile E solo se non già renderizzato
         if (type === 'category') {
-            this.renderEndpoints();
-            this.renderModbus();
+            // Category change: re-render solo se il tab è visibile (per filtrare)
+            if (this._renderedSections.has(this.state.section)) {
+                this._sectionRenders[this.state.section]?.();
+            }
+        } else if (type === 'section') {
+            // Section change: renderizza SOLO se mai renderizzato prima
+            if (!this._renderedSections.has(value)) {
+                this._sectionRenders[value]?.();
+                this._renderedSections.add(value);
+            }
         }
     }
+
+
 
     async loadData() {
         try {
@@ -260,11 +286,7 @@ class SolarDashboard {
         }
     }
 
-    render() {
-        this.renderDevices();
-        this.renderEndpoints();
-        this.renderModbus();
-    }
+
 
     renderDevices() {
         const container = $('#devicesGrid');
@@ -281,18 +303,13 @@ class SolarDashboard {
 
         // Use DocumentFragment for batch DOM insertions (optimized)
         const fragment = document.createDocumentFragment();
-        let delay = 0;
 
         Object.entries(others).forEach(([id, data]) => {
-            const card = this.createDeviceCard(id, data);
-            animateElement(card, 'slide-in', delay += 100);
-            fragment.appendChild(card);
+            fragment.appendChild(this.createDeviceCard(id, data));
         });
 
         if (Object.keys(optimizers).length) {
-            const card = this.createOptimizersCard(optimizers);
-            animateElement(card, 'slide-in', delay += 100);
-            fragment.appendChild(card);
+            fragment.appendChild(this.createOptimizersCard(optimizers));
         }
 
         container.replaceChildren(fragment);
@@ -411,10 +428,8 @@ class SolarDashboard {
         // Use DocumentFragment for batch DOM insertions (optimized)
         const fragment = document.createDocumentFragment();
 
-        filtered.forEach(([id, data], i) => {
-            const card = this.createEndpointCard(id, data);
-            animateElement(card, 'slide-in', i * 80);
-            fragment.appendChild(card);
+        filtered.forEach(([id, data]) => {
+            fragment.appendChild(this.createEndpointCard(id, data));
         });
 
         container.replaceChildren(fragment);
@@ -467,10 +482,8 @@ class SolarDashboard {
         // Use DocumentFragment for batch DOM insertions (optimized)
         const fragment = document.createDocumentFragment();
 
-        filtered.forEach(([id, data], i) => {
-            const card = this.createModbusCard(id, data);
-            animateElement(card, 'slide-in', i * 80);
-            fragment.appendChild(card);
+        filtered.forEach(([id, data]) => {
+            fragment.appendChild(this.createModbusCard(id, data));
         });
 
         container.replaceChildren(fragment);
