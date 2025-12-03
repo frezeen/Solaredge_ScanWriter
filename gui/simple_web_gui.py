@@ -6,42 +6,57 @@ Dashboard moderno per gestione device e API endpoints
 
 import asyncio
 import json
+import logging
+import os
 import socket
-from pathlib import Path
-from aiohttp import web
 from datetime import datetime
+from pathlib import Path
+from typing import Dict, Any, Optional, Tuple
+
+from aiohttp import web
+
 from app_logging.universal_logger import get_logger
 from utils.yaml_loader import load_yaml, save_yaml
 
-class SimpleWebGUI:
-    # Lookup table for endpoint config file paths (class-level constant)
-    ENDPOINT_CONFIG_FILES = {
-        'api_ufficiali': 'config/sources/api_endpoints.yaml',
-        'web': 'config/sources/web_endpoints.yaml',
-        'modbus': 'config/sources/modbus_endpoints.yaml'
-    }
+# Costanti
+MAX_LOG_BUFFER = 1000
+TCP_BACKLOG = 128
+GIT_TIMEOUT_SECONDS = 10
+DEFAULT_LOG_LIMIT = 2000
+UPDATE_RECONNECT_DELAY_SECONDS = 30
 
-    def __init__(self, config_file="config/main.yaml", port=8092, cache=None, auto_start_loop=False):
+class SimpleWebGUI:
+    """Modern web GUI for SolarEdge ScanWriter dashboard."""
+
+    def __init__(self, config_file: str = "config/main.yaml", port: Optional[int] = 8092,
+                 cache=None, auto_start_loop: bool = False):
+        """Initialize SimpleWebGUI.
+
+        Args:
+            config_file: Path to main configuration file
+            port: Server port (default: 8092)
+            cache: CacheManager instance (optional)
+            auto_start_loop: Auto-start loop on server start
+        """
         self.config_file = Path(config_file)
         self.logger = get_logger("SimpleWebGUI")
         self.real_ip = self._get_real_ip()
-        self.app = None
-        self.config = {}
-        self.cache = cache  # Cache manager condiviso
-        self.auto_start_loop = auto_start_loop  # Flag per avvio automatico
+        self.app: Optional[web.Application] = None
+        self.config: Dict[str, Any] = {}
+        self.cache = cache
+        self.auto_start_loop = auto_start_loop
 
-        # Server configuration (immutable)
+        # Server configuration
         from gui.components.web_server import ServerConfig
-        import os
         self.server_config = ServerConfig(
             host=os.getenv('GUI_HOST', '0.0.0.0'),
             port=port or int(os.getenv('GUI_PORT', 8092)),
             template_dir=Path("gui/templates"),
             static_dir=Path("gui/static")
         )
-        self.port = self.server_config.port  # Backward compatibility
+        self.port = self.server_config.port
 
-        # REFACTORED: Usa componenti separati per Single Responsibility
+        # Components (Single Responsibility)
         from gui.core.config_handler import ConfigHandler
         from gui.core.state_manager import StateManager
         from gui.core.unified_toggle_handler import UnifiedToggleHandler
@@ -49,84 +64,49 @@ class SimpleWebGUI:
         from gui.core.loop_executor import LoopExecutor
 
         self.config_handler = ConfigHandler()
-        self.state_manager = StateManager(max_log_buffer=1000)
-        self.unified_toggle_handler = UnifiedToggleHandler(auto_update_source_callback=self._auto_update_source_enabled)
+        self.state_manager = StateManager(max_log_buffer=MAX_LOG_BUFFER)
+        self.unified_toggle_handler = UnifiedToggleHandler()
         self.error_handler = UnifiedErrorHandler(self.logger)
         self.loop_executor = LoopExecutor(self.state_manager, self.logger, cache)
 
-        # Setup log capture per la GUI
+        # Setup log capture
         self._setup_log_capture()
 
 
 
     async def _auto_start_loop(self):
         """Avvia automaticamente il loop senza richiesta HTTP - Delega a LoopExecutor"""
-        await self.loop_executor.auto_start(self.load_config)
+        await self.loop_executor.auto_start()
 
-    def _get_real_ip(self):
-        """Ottiene l'IP reale della macchina"""
+    def _get_real_ip(self) -> str:
+        """Ottiene l'IP reale della macchina.
+
+        Returns:
+            IP address string (fallback: 127.0.0.1)
+        """
         try:
-            # Crea una connessione socket temporanea per ottenere l'IP locale
             with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
-                # Connessione a un indirizzo esterno (non invia dati)
                 s.connect(("8.8.8.8", 80))
                 return s.getsockname()[0]
         except Exception:
-            # Fallback a localhost se non riesce
             return "127.0.0.1"
 
-    def _auto_update_source_enabled(self, update_context: dict) -> tuple[bool, bool]:
-        """Helper per auto-aggiornare source.enabled basandosi sugli endpoint/device.
-
-        Args:
-            update_context: Dictionary containing:
-                - config: Configurazione completa caricata
-                - source_key: Chiave della sorgente (es: 'api_ufficiali', 'web_scraping', 'modbus')
-                - endpoints_or_devices: Dizionario degli endpoint o device
-                - config_path: Path del file di configurazione
-                - source_name: Nome leggibile della sorgente per i log (es: 'API', 'Web scraping', 'Modbus')
-
-        Returns:
-            Tuple (source_updated, new_enabled_state)
-        """
-        config = update_context['config']
-        source_key = update_context['source_key']
-        entities = update_context['endpoints_or_devices']
-        source_name = update_context['source_name']
-
-        # Controlla se almeno un endpoint/device è abilitato
-        any_enabled = any(
-            ep.get('enabled', False)
-            for ep in entities.values()
-            if isinstance(ep, dict)
-        )
-
-        old_enabled = config[source_key].get('enabled', False)
-
-        if old_enabled != any_enabled:
-            config[source_key]['enabled'] = any_enabled
-            enabled_count = sum(1 for ep in entities.values() if isinstance(ep, dict) and ep.get('enabled', False))
-            self.logger.info(f"{source_name} auto-{'abilitato' if any_enabled else 'disabilitato'} (endpoint attivi: {enabled_count})")
-            return True, any_enabled
-
-        return False, old_enabled
-
-    async def load_config(self):
-        """Carica la configurazione YAML dal main.yaml - REFACTORED"""
+    async def load_config(self) -> Dict[str, Any]:
+        """Carica la configurazione YAML dal main.yaml."""
         self.config = await self.config_handler.load_main_config(self.config_file)
         return self.config
 
-    async def save_config(self):
-        """Salva la configurazione YAML principale - REFACTORED"""
+    async def save_config(self) -> bool:
+        """Salva la configurazione YAML principale."""
         return await self.config_handler.save_main_config(self.config_file, self.config)
 
-    async def _load_source_config(self, source_type: str) -> dict:
-        """Delega a ConfigHandler - REFACTORED"""
+    async def _load_source_config(self, source_type: str) -> Dict[str, Any]:
+        """Carica configurazione sorgente (delega a ConfigHandler)."""
         return await self.config_handler.load_source_config(source_type)
 
 
 
-    async def handle_index(self, request):
+    async def handle_index(self, request: web.Request) -> web.Response:
         """Serve la pagina principale"""
         try:
             template_path = Path("gui/templates/index.html")
@@ -151,7 +131,7 @@ class SimpleWebGUI:
         except Exception as e:
             return self.error_handler.handle_api_error(e, "serving index", "Error loading page")
 
-    async def handle_static(self, request):
+    async def handle_static(self, request: web.Request) -> web.Response:
         """Serve i file statici (testo e binari)"""
         try:
             filename = request.match_info['filename']
@@ -199,8 +179,8 @@ class SimpleWebGUI:
         except Exception as e:
             return self.error_handler.handle_api_error(e, "serving static file", "Error loading static file")
 
-    async def handle_favicon(self, request):
-        """Serve a favicon.ico if present, otherwise return a no‑content response."""
+    async def handle_favicon(self, request: web.Request) -> web.Response:
+        """Serve favicon.ico if present, otherwise return 204 No Content."""
         from pathlib import Path
         favicon_path = Path('gui/static/favicon.png')
         if favicon_path.is_file():
@@ -208,7 +188,7 @@ class SimpleWebGUI:
         # No favicon file – return an empty 204 response to silence the error
         return web.Response(status=204)
 
-    async def handle_ping(self, request):
+    async def handle_ping(self, request: web.Request) -> web.Response:
         """Endpoint di ping per verificare connessione"""
         return web.json_response({
             "status": "ok",
@@ -216,13 +196,13 @@ class SimpleWebGUI:
             "timestamp": asyncio.get_event_loop().time()
         })
 
-    async def handle_get_config(self, request):
+    async def handle_get_config(self, request: web.Request) -> web.Response:
         """Restituisce la configurazione completa"""
         await self.load_config()
         return web.json_response(self.config)
 
-    async def handle_get_yaml_file(self, request):
-        """Restituisce il contenuto di un file di configurazione specifico - REFACTORED"""
+    async def handle_get_yaml_file(self, request: web.Request) -> web.Response:
+        """Restituisce il contenuto di un file di configurazione specifico"""
         try:
             file_type = request.query.get('file', 'main')
 
@@ -246,8 +226,8 @@ class SimpleWebGUI:
         except Exception as e:
             return self.error_handler.handle_api_error(e, "getting YAML file", "Error loading configuration file")
 
-    async def handle_save_yaml_file(self, request):
-        """Salva il contenuto di un file di configurazione specifico - REFACTORED"""
+    async def handle_save_yaml_file(self, request: web.Request) -> web.Response:
+        """Salva il contenuto di un file di configurazione specifico"""
         try:
             data = await request.json()
             file_type = data.get('file', 'main')
@@ -274,8 +254,8 @@ class SimpleWebGUI:
         except Exception as e:
             return self.error_handler.handle_api_error(e, "saving YAML file", "Error saving configuration file")
 
-    async def handle_get_sources(self, request):
-        """Restituisce sorgenti unificate (web devices, api endpoints o modbus endpoints) - OTTIMIZZATO"""
+    async def handle_get_sources(self, request: web.Request) -> web.Response:
+        """Restituisce sorgenti unificate (web devices, api endpoints o modbus endpoints)"""
         try:
             source_type = request.query.get('type', 'web')  # 'web', 'api' o 'modbus'
 
@@ -293,8 +273,8 @@ class SimpleWebGUI:
         except Exception as e:
             return self.error_handler.handle_api_error(e, "getting sources", "Error loading sources")
 
-    async def handle_loop_status(self, request):
-        """Restituisce lo stato del loop mode - REFACTORED"""
+    async def handle_loop_status(self, request: web.Request) -> web.Response:
+        """Restituisce lo stato del loop mode"""
         try:
             # Delega a StateManager (gestisce serializzazione datetime)
             status = self.state_manager.get_loop_status()
@@ -304,11 +284,11 @@ class SimpleWebGUI:
 
         except Exception as e:
             return self.error_handler.handle_api_error(e, "getting loop status", "Error retrieving loop status")
-    async def handle_loop_logs(self, request):
-        """Restituisce i log del loop mode con filtro opzionale per flow - REFACTORED"""
+    async def handle_loop_logs(self, request: web.Request) -> web.Response:
+        """Restituisce i log del loop mode con filtro opzionale per flow"""
         try:
             # Parametri query
-            limit = int(request.query.get('limit', 2000))
+            limit = int(request.query.get('limit', DEFAULT_LOG_LIMIT))
             flow_filter = request.query.get('flow', 'all')
 
             # Delega a StateManager
@@ -324,7 +304,7 @@ class SimpleWebGUI:
 
 
 
-    async def handle_loop_start(self, request):
+    async def handle_loop_start(self, request: web.Request) -> web.Response:
         """Avvia il loop mode con ricaricamento configurazione"""
         try:
             if self.state_manager.loop_running:
@@ -394,7 +374,7 @@ class SimpleWebGUI:
         except Exception as e:
             return self.error_handler.handle_api_error(e, "starting loop", "Error starting loop")
 
-    async def handle_loop_stop(self, request):
+    async def handle_loop_stop(self, request: web.Request) -> web.Response:
         """Ferma il loop mode (senza chiudere la GUI)"""
         try:
             self.logger.info("[GUI] Richiesta stop loop ricevuta")
@@ -413,8 +393,8 @@ class SimpleWebGUI:
         except Exception as e:
             return self.error_handler.handle_api_error(e, "stopping loop", "Error stopping loop")
 
-    async def handle_clear_logs(self, request):
-        """Pulisce i log e le run salvate - REFACTORED"""
+    async def handle_clear_logs(self, request: web.Request) -> web.Response:
+        """Pulisce i log e le run salvate"""
         try:
             self.logger.info("[GUI] Richiesta clear logs ricevuta")
 
@@ -427,7 +407,7 @@ class SimpleWebGUI:
         except Exception as e:
             return self.error_handler.handle_api_error(e, "clearing logs", "Error clearing logs")
 
-    async def handle_log(self, request):
+    async def handle_log(self, request: web.Request) -> web.Response:
         """Endpoint per logging dal frontend"""
         try:
             data = await request.json()
@@ -449,7 +429,7 @@ class SimpleWebGUI:
         except Exception as e:
             return self.error_handler.handle_api_error(e, "logging from frontend", "Error processing log")
 
-    def create_app(self):
+    def create_app(self) -> web.Application:
         """Crea l'applicazione web"""
         self.app = web.Application()
 
@@ -492,7 +472,7 @@ class SimpleWebGUI:
 
         return self.app
 
-    async def start(self, host=None, port=None):
+    async def start(self, host: Optional[str] = None, port: Optional[int] = None) -> Tuple[web.AppRunner, web.TCPSite]:
         """Metodo start per compatibilità con main.py"""
         # Usa configurazione da server_config o parametri forniti
         bind_host = host if host else self.server_config.host
@@ -502,7 +482,7 @@ class SimpleWebGUI:
         # Ritorna subito dopo aver avviato il server, senza loop infinito
         return runner, site
 
-    async def start_server(self, host='0.0.0.0', port=None):
+    async def start_server(self, host: str = '0.0.0.0', port: Optional[int] = None) -> Tuple[web.AppRunner, web.TCPSite]:
         """Avvia il server web"""
         try:
             await self.load_config()
@@ -607,111 +587,25 @@ class SimpleWebGUI:
             self.logger.error(f"[GUI] Errore avvio server: {e}")
             raise
 
-    def _parse_endpoint_id(self, endpoint_id):
-        """Parse endpoint ID to determine source type and endpoint name"""
-        parts = endpoint_id.split('.')
-        if len(parts) >= 2:
-            return parts[0], parts[1]  # source_type, endpoint_name
-        return 'api_ufficiali', endpoint_id  # Default to API for simple names
-
-    def _get_config_file_path(self, source_type):
-        """Map source type to config file path using class-level lookup table"""
-        return self.ENDPOINT_CONFIG_FILES.get(source_type)
-
-    def _load_endpoint_config(self, config_path):
-        """Load endpoint configuration from file"""
-        try:
-            return load_yaml(config_path, substitute_env=True, use_cache=True), None
-        except FileNotFoundError:
-            return None, f'Config file not found: {config_path}'
-        except Exception as e:
-            return None, f'Error loading config: {str(e)}'
-
-    def _toggle_endpoint_state(self, config, source_type, endpoint_name):
-        """Toggle endpoint enabled state and return result"""
-        if source_type not in config or 'endpoints' not in config[source_type]:
-            return None, f'Invalid config structure'
-
-        endpoints = config[source_type]['endpoints']
-        if endpoint_name not in endpoints:
-            return None, f'Endpoint not found: {endpoint_name}'
-
-        current_state = endpoints[endpoint_name].get('enabled', False)
-        new_state = not current_state
-        endpoints[endpoint_name]['enabled'] = new_state
-
-        return (current_state, new_state, endpoints), None
-
-    def _save_endpoint_config(self, config_path, config):
-        """Save endpoint configuration to file"""
-        if not save_yaml(config_path, config, invalidate_cache=True):
-            return False, 'Failed to save configuration'
-        return True, None
-
-    async def handle_toggle_endpoint(self, request):
-        """Toggle endpoint enabled/disabled state"""
+    async def handle_toggle_endpoint(self, request: web.Request) -> web.Response:
+        """Toggle API endpoint enabled/disabled state - Uses UnifiedToggleHandler"""
         try:
             endpoint_id = request.query.get('id')
             if not endpoint_id:
-                return web.json_response({'error': 'Missing endpoint ID'}, status=400)
+                return self.error_handler.handle_validation_error('endpoint ID', 'toggling endpoint')
 
-            source_type, endpoint_name = self._parse_endpoint_id(endpoint_id)
+            success, response_data = await self.unified_toggle_handler.handle_toggle_endpoint(endpoint_id)
 
-            config_file = self._get_config_file_path(source_type)
-            if not config_file:
-                return web.json_response({'error': f'Unknown source type: {source_type}'}, status=400)
-
-            config_path = Path(config_file)
-            config, error = self._load_endpoint_config(config_path)
-            if error:
-                status = 404 if 'not found' in error else 500
-                return web.json_response({'error': error}, status=status)
-
-            toggle_result, error = self._toggle_endpoint_state(config, source_type, endpoint_name)
-            if error:
-                status = 404 if 'not found' in error else 500
-                return web.json_response({'error': error}, status=status)
-
-            current_state, new_state, endpoints = toggle_result
-
-            # Auto-update source.enabled for API endpoints
-            source_updated = False
-            any_enabled = False
-            if source_type == 'api_ufficiali':
-                update_context = {
-                    'config': config,
-                    'source_key': source_type,
-                    'endpoints_or_devices': endpoints,
-                    'config_path': config_path,
-                    'source_name': 'API'
-                }
-                source_updated, any_enabled = self._auto_update_source_enabled(update_context)
-
-            success, error = self._save_endpoint_config(config_path, config)
             if not success:
-                return web.json_response({'error': error}, status=500)
-
-            self.logger.info(f"Toggled endpoint {endpoint_id}: {current_state} -> {new_state}")
-
-            response_data = {
-                'success': True,
-                'endpoint_id': endpoint_id,
-                'enabled': new_state,
-                'message': f'Endpoint {endpoint_id} {"enabled" if new_state else "disabled"}'
-            }
-
-            if source_updated:
-                response_data['source_auto_updated'] = True
-                response_data['source_enabled'] = any_enabled
-                response_data['message'] += f" - API {'abilitato' if any_enabled else 'disabilitato'} automaticamente"
+                status = 404 if 'not found' in response_data.get('error', '').lower() else 400
+                return web.json_response(response_data, status=status)
 
             return web.json_response(response_data)
 
         except Exception as e:
-            self.logger.error(f"Error toggling endpoint: {e}")
-            return web.json_response({'error': f'Internal server error: {str(e)}'}, status=500)
+            return self.error_handler.handle_api_error(e, "toggling endpoint", "Error toggling endpoint")
 
-    async def handle_toggle_device(self, request):
+    async def handle_toggle_device(self, request: web.Request) -> web.Response:
         """Toggle web device enabled/disabled state - Uses UnifiedToggleHandler"""
         try:
             device_id = request.query.get('id')
@@ -729,7 +623,7 @@ class SimpleWebGUI:
         except Exception as e:
             return self.error_handler.handle_api_error(e, "toggling web device", "Error toggling device")
 
-    async def handle_toggle_modbus_device(self, request):
+    async def handle_toggle_modbus_device(self, request: web.Request) -> web.Response:
         """Toggle modbus device enabled/disabled state - Uses UnifiedToggleHandler"""
         try:
             device_id = request.query.get('id')
@@ -747,7 +641,7 @@ class SimpleWebGUI:
         except Exception as e:
             return self.error_handler.handle_api_error(e, "toggling modbus device", "Error toggling modbus device")
 
-    async def handle_toggle_device_metric(self, request):
+    async def handle_toggle_device_metric(self, request: web.Request) -> web.Response:
         """Toggle web device metric enabled/disabled state - Uses UnifiedToggleHandler"""
         try:
             device_id = request.query.get('id')
@@ -766,7 +660,7 @@ class SimpleWebGUI:
         except Exception as e:
             return self.error_handler.handle_api_error(e, "toggling web device metric", "Error toggling device metric")
 
-    async def handle_toggle_modbus_metric(self, request):
+    async def handle_toggle_modbus_metric(self, request: web.Request) -> web.Response:
         """Toggle modbus device metric enabled/disabled state - Uses UnifiedToggleHandler"""
         try:
             device_id = request.query.get('id')
@@ -785,7 +679,7 @@ class SimpleWebGUI:
         except Exception as e:
             return self.error_handler.handle_api_error(e, "toggling modbus device metric", "Error toggling modbus metric")
 
-    async def handle_toggle_gme(self, request):
+    async def handle_toggle_gme(self, request: web.Request) -> web.Response:
         """Toggle GME flow enabled/disabled state"""
         try:
             await self.load_config()
@@ -813,178 +707,70 @@ class SimpleWebGUI:
         except Exception as e:
             return self.error_handler.handle_api_error(e, "toggling GME", "Error toggling GME")
 
-    async def handle_check_updates(self, request):
+    async def handle_check_updates(self, request: web.Request) -> web.Response:
         """Controlla se ci sono nuovi aggiornamenti disponibili"""
         try:
-            import subprocess
-            import os
+            from gui.services.git_service import GitService
+            git_service = GitService()
 
-            # Esegui git fetch per aggiornare le informazioni remote
-            result = subprocess.run(
-                ['git', 'fetch', 'origin'],
-                cwd=os.getcwd(),
-                capture_output=True,
-                text=True,
-                timeout=10
-            )
-
-            if result.returncode != 0:
+            # Fetch updates
+            success, error = await git_service.fetch_updates()
+            if not success:
                 return web.json_response({
                     'status': 'error',
                     'message': 'Errore durante il controllo degli aggiornamenti',
-                    'error': result.stderr
+                    'error': error
                 }, status=500)
 
-            # Controlla se il branch locale è dietro rispetto al remote
-            result = subprocess.run(
-                ['git', 'rev-list', '--left-right', '--count', 'HEAD...origin/main'],
-                cwd=os.getcwd(),
-                capture_output=True,
-                text=True,
-                timeout=10
-            )
-
-            if result.returncode != 0:
-                # Prova con 'master' se 'main' non esiste
-                result = subprocess.run(
-                    ['git', 'rev-list', '--left-right', '--count', 'HEAD...origin/master'],
-                    cwd=os.getcwd(),
-                    capture_output=True,
-                    text=True,
-                    timeout=10
-                )
-
-            if result.returncode == 0:
-                local, remote = map(int, result.stdout.strip().split())
-                updates_available = remote > 0
-
-                # Salva lo stato nel state manager
-                self.state_manager.updates_available = updates_available
-                self.state_manager.last_update_check = datetime.now()
-
-                return web.json_response({
-                    'status': 'success',
-                    'updates_available': updates_available,
-                    'local_commits': local,
-                    'remote_commits': remote,
-                    'message': f'Aggiornamenti disponibili: {remote} commit' if updates_available else 'Sei già aggiornato'
-                })
-            else:
+            # Get commit diff
+            success, local, remote, error = await git_service.get_commit_diff()
+            if not success:
                 return web.json_response({
                     'status': 'error',
                     'message': 'Errore durante il controllo degli aggiornamenti',
-                    'error': result.stderr
+                    'error': error
                 }, status=500)
 
-        except subprocess.TimeoutExpired:
+            updates_available = remote > 0
+
+            # Salva lo stato nel state manager
+            self.state_manager.updates_available = updates_available
+            self.state_manager.last_update_check = datetime.now()
+
             return web.json_response({
-                'status': 'error',
-                'message': 'Timeout durante il controllo degli aggiornamenti'
-            }, status=500)
+                'status': 'success',
+                'updates_available': updates_available,
+                'local_commits': local,
+                'remote_commits': remote,
+                'message': f'Aggiornamenti disponibili: {remote} commit' if updates_available else 'Sei già aggiornato'
+            })
+
         except Exception as e:
             return self.error_handler.handle_api_error(e, "checking updates", "Error checking for updates")
 
-    async def handle_run_update(self, request):
+    async def handle_run_update(self, request: web.Request) -> web.Response:
         """Esegue l'aggiornamento in un processo separato che sopravvive alla chiusura della GUI"""
         try:
-            import subprocess
-            import os
+            from gui.services.update_service import UpdateService
+            update_service = UpdateService()
 
-            update_script = Path('update.sh')
-            if not update_script.exists():
+            success, message = await update_service.run_update()
+
+            if not success:
                 return web.json_response({
                     'status': 'error',
-                    'message': 'Script update.sh non trovato'
-                }, status=404)
+                    'message': message
+                }, status=404 if 'non trovato' in message else 500)
 
-            self.logger.info("[GUI] 🚀 Avvio aggiornamento in processo separato...")
-
-            # Usa 'at now' per eseguire update.sh in un processo completamente separato
-            # che continua anche se la GUI viene chiusa
-            # L'input 'y\n' conferma automaticamente il prompt di update.sh
-
-            try:
-                import platform
-                log_file = os.path.join(os.getcwd(), 'logs', 'update_gui.log')
-
-                if platform.system() == 'Windows':
-                    # Windows: usa Task Scheduler per eseguire update in background
-                    script_content = f"""
-@echo off
-cd /d {os.getcwd()}
-echo === Update avviato da GUI === > {log_file}
-date /t >> {log_file}
-time /t >> {log_file}
-powershell -NoProfile -Command "bash update.sh" >> {log_file} 2>&1
-echo === Update completato === >> {log_file}
-date /t >> {log_file}
-time /t >> {log_file}
-"""
-                    script_path = os.path.join(os.getcwd(), '.update_gui.bat')
-                    with open(script_path, 'w') as f:
-                        f.write(script_content)
-
-                    # Esegui con Task Scheduler
-                    result = subprocess.run(
-                        [
-                            'schtasks', '/Create',
-                            '/TN', 'SolarEdgeUpdate',
-                            '/TR', script_path,
-                            '/SC', 'ONCE',
-                            '/ST', '00:00',
-                            '/F'
-                        ],
-                        capture_output=True,
-                        text=True,
-                        timeout=5
-                    )
-
-                    if result.returncode == 0:
-                        # Esegui subito il task
-                        subprocess.run(['schtasks', '/Run', '/TN', 'SolarEdgeUpdate'], timeout=5)
-                        self.logger.info(f"[GUI] ✅ Update avviato con Task Scheduler - Log: {log_file}")
-                    else:
-                        raise Exception(f"Task Scheduler failed: {result.stderr}")
-
-                else:
-                    # Linux: usa systemd-run
-                    result = subprocess.run(
-                        [
-                            'systemd-run',
-                            '--unit=solaredge-update',
-                            '--description=SolarEdge Update from GUI',
-                            f'--working-directory={os.getcwd()}',
-                            'bash', '-c',
-                            f'./update.sh > {log_file} 2>&1'
-                        ],
-                        capture_output=True,
-                        text=True,
-                        timeout=5
-                    )
-
-                    if result.returncode == 0:
-                        self.logger.info(f"[GUI] ✅ Update avviato come servizio systemd - Log: {log_file}")
-                    else:
-                        self.logger.error(f"[GUI] ❌ Errore systemd-run: {result.stderr}")
-                        raise Exception(f"systemd-run failed: {result.stderr}")
-
-                return web.json_response({
-                    'status': 'success',
-                    'message': 'Aggiornamento avviato! Il servizio si riavvierà automaticamente. La GUI si riconnetterà tra circa 30 secondi.'
-                })
-
-            except Exception as e:
-                self.logger.error(f"[GUI] ❌ Errore avvio update: {e}")
-                return web.json_response({
-                    'status': 'error',
-                    'message': f'Errore durante l\'avvio dell\'aggiornamento: {str(e)}'
-                }, status=500)
+            return web.json_response({
+                'status': 'success',
+                'message': message
+            })
 
         except Exception as e:
-            self.logger.error(f"[GUI] ❌ Errore: {e}", exc_info=True)
             return self.error_handler.handle_api_error(e, "running update", "Error running update")
 
-    async def handle_get_update_status(self, request):
+    async def handle_get_update_status(self, request: web.Request) -> web.Response:
         """Restituisce lo stato attuale degli aggiornamenti"""
         try:
             return web.json_response({
@@ -997,9 +783,9 @@ time /t >> {log_file}
 
     def _setup_log_capture(self):
         """Setup log capture per la GUI con identificazione flow"""
-        import logging
+        from gui.services.log_handler import GUILogHandler
 
-        gui_handler = self._create_gui_log_handler()
+        gui_handler = GUILogHandler(self.state_manager)
         gui_handler.setLevel(logging.INFO)
 
         loggers_to_capture = [
@@ -1009,74 +795,4 @@ time /t >> {log_file}
         for logger_name in loggers_to_capture:
             logger = logging.getLogger(logger_name)
             logger.addHandler(gui_handler)
-
-    def _create_gui_log_handler(self):
-        """Create and configure GUI log handler"""
-        import logging
-        from datetime import datetime
-        import re
-
-        class GUILogHandler(logging.Handler):
-            def __init__(self, gui_instance):
-                super().__init__()
-                self.gui = gui_instance
-                self.ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
-                self.flow_stack = []  # Stack per tracking flow annidati
-
-            def emit(self, record):
-                try:
-                    message = self.ansi_escape.sub('', record.getMessage())
-
-                    # Filtra messaggi di orchestrazione [GUI] - non mostrarli nella GUI
-                    if message.startswith('[GUI]'):
-                        return
-
-                    # Parse SYSTEM markers [SYSTEM]
-                    if '[SYSTEM]' in message:
-                        # Remove [SYSTEM] prefix and route to sistema tab
-                        clean_message = message.replace('[SYSTEM]', '').strip()
-                        self.gui.state_manager.add_log_entry(
-                            level=record.levelname,
-                            message=clean_message,
-                            flow_type='sistema',
-                            timestamp=datetime.now()
-                        )
-                        return
-
-                    # Parse flow markers [FLOW:TYPE:ACTION]
-                    if '[FLOW:' in message:
-                        parts = message.split('[FLOW:')[1].split(']')[0].split(':')
-                        flow_type = parts[0].lower()
-                        action = parts[1]
-
-                        if action == 'START':
-                            self.flow_stack.append(flow_type)
-                            return  # Non mostrare START
-                        elif action == 'STOP' and self.flow_stack:
-                            self.flow_stack.pop()
-                            return  # Non mostrare STOP
-                        elif action == 'COMPLETION':
-                            # Messaggi di completamento: rimuovi marker e mostra nel flow corretto
-                            clean_message = message.split(']', 1)[1] if ']' in message else message
-                            self.gui.state_manager.add_log_entry(
-                                level=record.levelname,
-                                message=clean_message,
-                                flow_type=flow_type,
-                                timestamp=datetime.now()
-                            )
-                            return
-
-                    # Determina flow corrente dallo stack
-                    current_flow = self.flow_stack[-1] if self.flow_stack else 'general'
-
-                    self.gui.state_manager.add_log_entry(
-                        level=record.levelname,
-                        message=message,
-                        flow_type=current_flow,
-                        timestamp=datetime.now()
-                    )
-                except Exception:
-                    pass
-
-        return GUILogHandler(self)
 
