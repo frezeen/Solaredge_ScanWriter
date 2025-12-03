@@ -1154,7 +1154,7 @@ time /t >> {log_file}
 
         # Usa il loop personalizzato che aggiorna le statistiche della GUI
         from datetime import datetime, timedelta
-        from main import run_api_flow, run_web_flow, run_realtime_flow
+        from flows import run_api_flow, run_web_flow, run_realtime_flow
         from app_logging import get_logger
         import asyncio
 
@@ -1344,7 +1344,7 @@ time /t >> {log_file}
 
                 # Esegui GME solo se abilitato
                 if gme_enabled and time_until_gme <= 0:
-                    from main import run_gme_flow
+                    from flows import run_gme_flow
                     self.logger.info(f"[GUI] 🔋 Esecuzione raccolta GME... (last_run: {last_gme_run}, interval: {gme_interval}, time_until: {time_until_gme:.1f}s)")
                     self.state_manager.start_new_run('gme')  # Ruota log
                     self.state_manager.loop_stats['gme_stats']['executed'] += 1
