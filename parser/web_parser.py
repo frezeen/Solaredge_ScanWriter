@@ -162,9 +162,13 @@ def _get_endpoint_info(measurement_type: str, device_id: str, config: Dict[str, 
 def _aggregate_measurements_to_daily(measurements_raw: Dict[str, Any]) -> Dict[str, Any]:
     """Aggrega measurements sub-giornalieri a 1 punto/giorno a mezzanotte.
     
-    Riutilizza logica esistente: raggruppa per (device, metric, giorno), somma valori.
+    SOLO per monthly devices (SITE, INVERTER, METER, STRING) con dati ENERGY cumulativi.
+    Daily devices (OPTIMIZER, WEATHER) con dati istantanei (POWER, TEMPERATURE) restano grezzi.
     """
     from collections import defaultdict
+    
+    # Device types che devono essere aggregati (hanno ENERGY cumulativa)
+    MONTHLY_DEVICE_TYPES = {'SITE', 'INVERTER', 'METER', 'STRING'}
     
     items = measurements_raw.get('list', [])
     aggregated_items = []
@@ -174,7 +178,16 @@ def _aggregate_measurements_to_daily(measurements_raw: Dict[str, Any]) -> Dict[s
         if not measurements:
             continue
         
-        # Verifica se serve aggregazione (più di 1 punto per giorno)
+        # Identifica device type
+        device = item.get('device', {})
+        device_type = device.get('itemType', '').upper()
+        
+        # Daily devices (OPTIMIZER, WEATHER): mantieni dati grezzi (no aggregazione)
+        if device_type not in MONTHLY_DEVICE_TYPES:
+            aggregated_items.append(item)
+            continue
+        
+        # Monthly devices: verifica se serve aggregazione
         daily_groups = defaultdict(list)
         for m in measurements:
             time_str = m.get('time', '')
@@ -188,7 +201,7 @@ def _aggregate_measurements_to_daily(measurements_raw: Dict[str, Any]) -> Dict[s
             aggregated_items.append(item)
             continue
         
-        # Aggrega per giorno
+        # Aggrega per giorno (solo monthly devices con ENERGY)
         aggregated_measurements = []
         for date_part in sorted(daily_groups.keys()):
             day_points = daily_groups[date_part]
