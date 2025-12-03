@@ -34,12 +34,8 @@ class LoopExecutor:
         self.logger = logger
         self.cache = cache
 
-    async def auto_start(self, load_config_callback):
-        """Avvia automaticamente il loop con ricaricamento configurazione.
-
-        Args:
-            load_config_callback: Callback async per caricare config (es. self.load_config)
-        """
+    async def auto_start(self):
+        """Avvia automaticamente il loop con ricaricamento configurazione."""
         try:
             if self.state_manager.loop_running:
                 self.logger.info("[GUI] Loop già in esecuzione")
@@ -55,14 +51,7 @@ class LoopExecutor:
             except Exception as e:
                 self.logger.error(f"[GUI] ❌ Errore ricaricamento .env: {e}")
 
-            # 2. Ricarica configurazione YAML principale
-            try:
-                await load_config_callback()
-                self.logger.info("[GUI] ✅ Configurazione YAML principale ricaricata")
-            except Exception as e:
-                self.logger.error(f"[GUI] ❌ Errore ricaricamento config: {e}")
-
-            # 3. Ricarica config manager globale
+            # 2. Ricarica config manager globale
             try:
                 from config.config_manager import get_config_manager
                 config_manager = get_config_manager()
@@ -70,28 +59,24 @@ class LoopExecutor:
                 self.logger.info("[GUI] ✅ Config manager globale ricaricato")
             except Exception as e:
                 self.logger.error(f"[GUI] ❌ Errore ricaricamento config manager: {e}")
-                config_manager = None
+                raise RuntimeError("Config manager non disponibile") from e
 
-            # 4. Reset flag di stop e avvia il loop
+            # 3. Reset flag di stop e avvia il loop
             self.state_manager.stop_requested = False
             self.state_manager.loop_running = True
             self.state_manager.loop_mode = True
 
-            # 5. Ottieni config completo
-            if config_manager:
-                config = config_manager.get_raw_config()
-                self.logger.info("[GUI] ✅ Config completo caricato con sources da config_manager")
-            else:
-                config = await load_config_callback()
-                self.logger.warning("[GUI] ⚠️ Usando config da load_config_callback (senza sources)")
+            # 4. Ottieni config completo
+            config = config_manager.get_raw_config()
+            self.logger.info("[GUI] ✅ Config completo caricato con sources da config_manager")
 
-            # 6. Verifica cache
+            # 5. Verifica cache
             if not self.cache:
                 from cache.cache_manager import CacheManager
                 self.cache = CacheManager()
                 self.logger.warning("[GUI] Cache non passato, creando nuova istanza")
 
-            # 7. Avvia il loop asincrono
+            # 6. Avvia il loop asincrono
             asyncio.create_task(self.run(self.cache, config))
 
             self.logger.info("[GUI] 🚀 Loop avviato automaticamente con configurazione aggiornata")
