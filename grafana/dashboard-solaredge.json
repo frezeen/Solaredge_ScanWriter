@@ -4166,86 +4166,6 @@
     },
     {
       "datasource": {
-        "type": "influxdb",
-        "uid": "ff27vpmruzxtsc"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "displayName": "Produzione",
-          "mappings": [],
-          "noValue": "Produzione 0kWh",
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "yellow",
-                "value": 0
-              }
-            ]
-          },
-          "unit": "watth"
-        },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": ""
-            },
-            "properties": []
-          }
-        ]
-      },
-      "gridPos": {
-        "h": 2,
-        "w": 1,
-        "x": 23,
-        "y": 54
-      },
-      "hideTimeOverride": true,
-      "id": 185,
-      "options": {
-        "colorMode": "background",
-        "graphMode": "none",
-        "justifyMode": "center",
-        "orientation": "auto",
-        "percentChangeColorMode": "standard",
-        "reduceOptions": {
-          "calcs": [
-            "sum"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "showPercentChange": false,
-        "text": {},
-        "textMode": "auto",
-        "wideLayout": true
-      },
-      "pluginVersion": "12.3.0",
-      "targets": [
-        {
-          "alias": "Produzione",
-          "datasource": {
-            "type": "influxdb",
-            "uid": "ff27vpmruzxtsc"
-          },
-          "query": "import \"timezone\"\r\nimport \"date\"\r\noption location = timezone.location(name: \"Europe/Rome\")\r\nstartOfLastYear = date.add(d: -1y, to: date.truncate(t: now(), unit: 1y))\r\nendOfLastYear = date.truncate(t: now(), unit: 1y)\r\n\r\nfrom(bucket: \"Solaredge\")\r\n  |> range(start: startOfLastYear, stop: endOfLastYear)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"web\" and r[\"_field\"] == \"Site\")\r\n  |> filter(fn: (r) => r[\"endpoint\"] == \"PRODUCTION_ENERGY\")\r\n  |> aggregateWindow(every: 1d, fn: last, createEmpty: false)\r\n  |> sum()\r\n  |> yield(name: \"Produzione_Anno_Precedente\")",
-          "rawQuery": true,
-          "refId": "Produzione",
-          "resultFormat": "time_series"
-        }
-      ],
-      "timeFrom": "0d/d",
-      "timeShift": "1y/y",
-      "title": "",
-      "transparent": true,
-      "type": "stat"
-    },
-    {
-      "datasource": {
         "type": "datasource",
         "uid": "-- Mixed --"
       },
@@ -4278,7 +4198,7 @@
         "h": 2,
         "w": 1,
         "x": 23,
-        "y": 56
+        "y": 54
       },
       "hideTimeOverride": true,
       "id": 190,
@@ -4310,6 +4230,80 @@
           "hide": false,
           "query": "import \"timezone\"\r\nimport \"date\"\r\n\r\noption location = timezone.location(name: \"Europe/Rome\")\r\n\r\nstartOfYear = date.truncate(t: now(), unit: 1y)\r\nendOfYear = date.add(d: 1y, to: startOfYear)\r\n\r\nfrom(bucket: \"Solaredge\")\r\n  |> range(start: startOfYear, stop: endOfYear)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"web\" and r[\"_field\"] == \"Site\")\r\n  |> filter(fn: (r) => \r\n      r[\"endpoint\"] == \"PRODUCTION_ENERGY\" or \r\n      r[\"endpoint\"] == \"IMPORT_ENERGY\" or \r\n      r[\"endpoint\"] == \"EXPORT_ENERGY\"\r\n  )\r\n  // Deduplicazione giornaliera\r\n  |> aggregateWindow(every: 1d, fn: last, createEmpty: false)\r\n  \r\n  // Somma annuale\r\n  |> sum()\r\n  \r\n  |> pivot(rowKey: [\"_start\"], columnKey: [\"endpoint\"], valueColumn: \"_value\")\r\n  \r\n  |> map(fn: (r) => ({ \r\n      Produzione: if exists r.PRODUCTION_ENERGY then r.PRODUCTION_ENERGY else 0.0,\r\n      Prelievo: if exists r.IMPORT_ENERGY then r.IMPORT_ENERGY else 0.0,\r\n      Immissione: if exists r.EXPORT_ENERGY then r.EXPORT_ENERGY else 0.0\r\n  }))\r\n  \r\n  |> map(fn: (r) => ({\r\n      r with\r\n      Autoconsumo: r.Produzione - r.Immissione,\r\n      Consumo: r.Produzione - r.Immissione + r.Prelievo // (Autoconsumo + Prelievo)\r\n  }))\r\n  \r\n  |> map(fn: (r) => ({\r\n      _time: now(),\r\n      _value: if r.Consumo > 0.0 then (r.Autoconsumo / r.Consumo) * 100.0 else 0.0,\r\n      _field: \"Indipendenza_Energetica\"\r\n  }))\r\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])\r\n  |> yield(name: \"Indipendenza_Anno_Corrente\")",
           "refId": "% Autoconsumo"
+        }
+      ],
+      "timeFrom": "0d/d",
+      "timeShift": "0y/y",
+      "title": "",
+      "transparent": true,
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "datasource",
+        "uid": "-- Mixed --"
+      },
+      "description": "",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "fixedColor": "light-yellow",
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "max": 100,
+          "min": 0,
+          "noValue": "Prelievo 100%",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "dark-red",
+                "value": 0
+              }
+            ]
+          },
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 2,
+        "w": 1,
+        "x": 23,
+        "y": 56
+      },
+      "hideTimeOverride": true,
+      "id": 177,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "sum"
+          ],
+          "fields": "",
+          "limit": 1,
+          "values": false
+        },
+        "showPercentChange": false,
+        "text": {},
+        "textMode": "auto",
+        "wideLayout": false
+      },
+      "pluginVersion": "12.3.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "ff27vpmruzxtsc"
+          },
+          "hide": false,
+          "query": "import \"timezone\"\r\nimport \"date\"\r\n\r\noption location = timezone.location(name: \"Europe/Rome\")\r\n\r\nstartOfYear = date.truncate(t: now(), unit: 1y)\r\nendOfYear = date.add(d: 1y, to: startOfYear)\r\n\r\nfrom(bucket: \"Solaredge\")\r\n  |> range(start: startOfYear, stop: endOfYear)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"web\" and r[\"_field\"] == \"Site\")\r\n  |> filter(fn: (r) => \r\n      r[\"endpoint\"] == \"PRODUCTION_ENERGY\" or \r\n      r[\"endpoint\"] == \"IMPORT_ENERGY\" or \r\n      r[\"endpoint\"] == \"EXPORT_ENERGY\"\r\n  )\r\n  |> aggregateWindow(every: 1d, fn: last, createEmpty: false)\r\n  |> sum()\r\n  |> pivot(rowKey: [\"_start\"], columnKey: [\"endpoint\"], valueColumn: \"_value\")\r\n  |> map(fn: (r) => ({ \r\n      Produzione: if exists r.PRODUCTION_ENERGY then r.PRODUCTION_ENERGY else 0.0,\r\n      Prelievo: if exists r.IMPORT_ENERGY then r.IMPORT_ENERGY else 0.0,\r\n      Immissione: if exists r.EXPORT_ENERGY then r.EXPORT_ENERGY else 0.0\r\n  }))\r\n  |> map(fn: (r) => ({\r\n      r with\r\n      Consumo: r.Produzione + r.Prelievo - r.Immissione\r\n  }))\r\n  |> map(fn: (r) => ({\r\n      _time: now(),\r\n      \"% Prelievo\": if r.Consumo > 0.0 then (r.Prelievo / r.Consumo) * 100.0 else 0.0,\r\n      _field: \"Percentuale_Prelievo\"\r\n  }))\r\n  |> keep(columns: [\"_time\", \"% Prelievo\", \"_field\"])\r\n  |> yield(name: \"Percentuale_Prelievo_Anno_Corrente\")",
+          "refId": "% Prelievo"
         }
       ],
       "timeFrom": "0d/d",
@@ -4520,32 +4514,37 @@
     },
     {
       "datasource": {
-        "type": "datasource",
-        "uid": "-- Mixed --"
+        "type": "influxdb",
+        "uid": "ff27vpmruzxtsc"
       },
-      "description": "",
       "fieldConfig": {
         "defaults": {
           "color": {
-            "fixedColor": "light-yellow",
             "mode": "thresholds"
           },
+          "displayName": "Produzione",
           "mappings": [],
-          "max": 100,
-          "min": 0,
-          "noValue": "Prelievo 100%",
+          "noValue": "Produzione 0kWh",
           "thresholds": {
             "mode": "absolute",
             "steps": [
               {
-                "color": "dark-red",
+                "color": "yellow",
                 "value": 0
               }
             ]
           },
-          "unit": "percent"
+          "unit": "watth"
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": ""
+            },
+            "properties": []
+          }
+        ]
       },
       "gridPos": {
         "h": 2,
@@ -4554,7 +4553,7 @@
         "y": 58
       },
       "hideTimeOverride": true,
-      "id": 177,
+      "id": 185,
       "options": {
         "colorMode": "background",
         "graphMode": "none",
@@ -4566,28 +4565,29 @@
             "sum"
           ],
           "fields": "",
-          "limit": 1,
           "values": false
         },
         "showPercentChange": false,
         "text": {},
         "textMode": "auto",
-        "wideLayout": false
+        "wideLayout": true
       },
       "pluginVersion": "12.3.0",
       "targets": [
         {
+          "alias": "Produzione",
           "datasource": {
             "type": "influxdb",
             "uid": "ff27vpmruzxtsc"
           },
-          "hide": false,
-          "query": "import \"timezone\"\r\nimport \"date\"\r\n\r\noption location = timezone.location(name: \"Europe/Rome\")\r\n\r\nstartOfYear = date.truncate(t: now(), unit: 1y)\r\nendOfYear = date.add(d: 1y, to: startOfYear)\r\n\r\nfrom(bucket: \"Solaredge\")\r\n  |> range(start: startOfYear, stop: endOfYear)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"web\" and r[\"_field\"] == \"Site\")\r\n  |> filter(fn: (r) => \r\n      r[\"endpoint\"] == \"PRODUCTION_ENERGY\" or \r\n      r[\"endpoint\"] == \"IMPORT_ENERGY\" or \r\n      r[\"endpoint\"] == \"EXPORT_ENERGY\"\r\n  )\r\n  |> aggregateWindow(every: 1d, fn: last, createEmpty: false)\r\n  |> sum()\r\n  |> pivot(rowKey: [\"_start\"], columnKey: [\"endpoint\"], valueColumn: \"_value\")\r\n  |> map(fn: (r) => ({ \r\n      Produzione: if exists r.PRODUCTION_ENERGY then r.PRODUCTION_ENERGY else 0.0,\r\n      Prelievo: if exists r.IMPORT_ENERGY then r.IMPORT_ENERGY else 0.0,\r\n      Immissione: if exists r.EXPORT_ENERGY then r.EXPORT_ENERGY else 0.0\r\n  }))\r\n  |> map(fn: (r) => ({\r\n      r with\r\n      Consumo: r.Produzione + r.Prelievo - r.Immissione\r\n  }))\r\n  |> map(fn: (r) => ({\r\n      _time: now(),\r\n      \"% Prelievo\": if r.Consumo > 0.0 then (r.Prelievo / r.Consumo) * 100.0 else 0.0,\r\n      _field: \"Percentuale_Prelievo\"\r\n  }))\r\n  |> keep(columns: [\"_time\", \"% Prelievo\", \"_field\"])\r\n  |> yield(name: \"Percentuale_Prelievo_Anno_Corrente\")",
-          "refId": "% Prelievo"
+          "query": "import \"timezone\"\r\nimport \"date\"\r\noption location = timezone.location(name: \"Europe/Rome\")\r\nstartOfLastYear = date.add(d: -1y, to: date.truncate(t: now(), unit: 1y))\r\nendOfLastYear = date.truncate(t: now(), unit: 1y)\r\n\r\nfrom(bucket: \"Solaredge\")\r\n  |> range(start: startOfLastYear, stop: endOfLastYear)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"web\" and r[\"_field\"] == \"Site\")\r\n  |> filter(fn: (r) => r[\"endpoint\"] == \"PRODUCTION_ENERGY\")\r\n  |> aggregateWindow(every: 1d, fn: last, createEmpty: false)\r\n  |> sum()\r\n  |> yield(name: \"Produzione_Anno_Precedente\")",
+          "rawQuery": true,
+          "refId": "Produzione",
+          "resultFormat": "time_series"
         }
       ],
       "timeFrom": "0d/d",
-      "timeShift": "0y/y",
+      "timeShift": "1y/y",
       "title": "",
       "transparent": true,
       "type": "stat"
@@ -5628,7 +5628,7 @@
             "properties": [
               {
                 "id": "unit",
-                "value": ""
+                "value": "percent"
               },
               {
                 "id": "color",
@@ -5651,6 +5651,10 @@
                   "fixedColor": "dark-red",
                   "mode": "fixed"
                 }
+              },
+              {
+                "id": "unit",
+                "value": "percent"
               }
             ]
           }
@@ -5708,11 +5712,11 @@
             "indexByName": {
               "% Autoconsumo": 6,
               "% Prelievo": 7,
-              "Autoconsumo": 2,
-              "Consumo": 1,
-              "Emissioni CO2 Evitate": 5,
-              "Immissione": 4,
-              "Prelievo": 3,
+              "Autoconsumo": 3,
+              "Consumo": 2,
+              "Emissioni CO2 Evitate": 1,
+              "Immissione": 5,
+              "Prelievo": 4,
               "Produzione": 0
             },
             "renameByName": {}
@@ -5768,7 +5772,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "Rimborsi Immissione"
+              "options": "Rimborsi Immissione Netti"
             },
             "properties": [
               {
@@ -5848,7 +5852,7 @@
             "uid": "ff27vpmruzxtsc"
           },
           "hide": false,
-          "query": "import \"date\"\r\nimport \"join\"\r\nimport \"timezone\"\r\n\r\noption location = timezone.location(name: \"Europe/Rome\")\r\n\r\n// 1. Immissione mensile da Site\r\nimmissione = from(bucket: \"Solaredge\")\r\n  |> range(start: 0)\r\n  |> filter(fn: (r) => \r\n      r._measurement == \"web\" and \r\n      r._field == \"Site\" and\r\n      r.endpoint == \"EXPORT_ENERGY\"\r\n  )\r\n  |> aggregateWindow(every: 1mo, fn: sum, location: location, timeSrc: \"_start\")\r\n  |> map(fn: (r) => ({\r\n      _time: r._time,\r\n      year: string(v: date.year(t: r._time)),\r\n      month: string(v: date.month(t: r._time)),\r\n      immissione_wh: r._value\r\n  }))\r\n  |> group()\r\n\r\n// 2. PUN mensile\r\npun = from(bucket: \"GME\")\r\n  |> range(start: 0)\r\n  |> filter(fn: (r) => r._measurement == \"gme_monthly_avg\" and r._field == \"pun_kwh_avg\")\r\n  |> map(fn: (r) => ({\r\n      _time: r._time,\r\n      year: r.year,\r\n      month: string(v: date.month(t: r._time)),\r\n      pun: r._value\r\n  }))\r\n  |> group()\r\n\r\n// 3. Join e calcolo rimborsi totali\r\njoin.inner(\r\n  left: immissione,\r\n  right: pun,\r\n  on: (l, r) => l.year == r.year and l.month == r.month,\r\n  as: (l, r) => ({\r\n    _time: l._time,\r\n    _value: (l.immissione_wh / 1000.0) * r.pun\r\n  })\r\n)\r\n  |> sum()\r\n  |> map(fn: (r) => ({\"Rimborsi Immissione\": r._value}))",
+          "query": "import \"date\"\r\nimport \"join\"\r\nimport \"timezone\"\r\n\r\noption location = timezone.location(name: \"Europe/Rome\")\r\n\r\n// ============================================================================\r\n// PARAMETRI CONFIGURABILI - Modifica questi valori in base alla tua situazione\r\n// ============================================================================\r\n\r\n// Prezzo Scambio come percentuale del PUN (es. 1.00 = 100% del PUN)\r\n// Valore tipico: 0.95 - 1.05\r\n// Default fittizio: 1.00 (uguale al PUN)\r\nprezzo_scambio_percentuale = 1.00\r\n\r\n// Prezzo Eccedenza come percentuale del PUN (es. 0.90 = 90% del PUN)\r\n// Valore tipico: 0.85 - 0.95\r\n// Default fittizio: 0.90 (90% del PUN)\r\nprezzo_eccedenza_percentuale = 0.90\r\n\r\n// Tassazione personale sulle eccedenze (es. 0.40 = 40%)\r\n// Valori comuni:\r\n//   0.00 = nessuna tassazione (detrazioni 100%)\r\n//   0.23 = IRPEF 23% (primo scaglione)\r\n//   0.40 = tassazione standard 40%\r\n// Default fittizio: 0.00 (nessuna tassazione)\r\ntassazione_eccedenza = 0.00\r\n\r\n// ============================================================================\r\n// FINE PARAMETRI CONFIGURABILI\r\n// ============================================================================\r\n\r\nenergia = from(bucket: \"Solaredge\")\r\n  |> range(start: 0)\r\n  |> filter(fn: (r) => \r\n      r._measurement == \"web\" and \r\n      r._field == \"Site\" and\r\n      (r.endpoint == \"EXPORT_ENERGY\" or r.endpoint == \"IMPORT_ENERGY\")\r\n  )\r\n  |> aggregateWindow(every: 1mo, fn: sum, location: location, timeSrc: \"_start\")\r\n  |> pivot(rowKey: [\"_time\"], columnKey: [\"endpoint\"], valueColumn: \"_value\")\r\n  |> map(fn: (r) => ({\r\n      _time: r._time,\r\n      year: string(v: date.year(t: r._time)),\r\n      month: string(v: date.month(t: r._time)),\r\n      immissione_wh: r.EXPORT_ENERGY,\r\n      prelievo_wh: r.IMPORT_ENERGY\r\n  }))\r\n  |> group()\r\n\r\npun = from(bucket: \"GME\")\r\n  |> range(start: 0)\r\n  |> filter(fn: (r) => r._measurement == \"gme_monthly_avg\" and r._field == \"pun_kwh_avg\")\r\n  |> map(fn: (r) => ({\r\n      _time: r._time,\r\n      year: r.year,\r\n      month: string(v: date.month(t: r._time)),\r\n      pun: r._value\r\n  }))\r\n  |> group()\r\n\r\njoin.inner(\r\n  left: energia,\r\n  right: pun,\r\n  on: (l, r) => l.year == r.year and l.month == r.month,\r\n  as: (l, r) => {\r\n    immissione_kwh = l.immissione_wh / 1000.0\r\n    prelievo_kwh = l.prelievo_wh / 1000.0\r\n    scambio_kwh = if immissione_kwh < prelievo_kwh then immissione_kwh else prelievo_kwh\r\n    eccedenza_kwh = if immissione_kwh > prelievo_kwh then immissione_kwh - prelievo_kwh else 0.0\r\n    rimborso_scambio = scambio_kwh * r.pun * prezzo_scambio_percentuale\r\n    rimborso_eccedenza_lordo = eccedenza_kwh * r.pun * prezzo_eccedenza_percentuale\r\n    rimborso_eccedenza_netto = rimborso_eccedenza_lordo * (1.0 - tassazione_eccedenza)\r\n    return {_time: l._time, _value: rimborso_scambio + rimborso_eccedenza_netto}\r\n  }\r\n)\r\n  |> sum()\r\n  |> map(fn: (r) => ({\"Rimborsi Immissione Netti\": r._value}))",
           "refId": "Rimborsi Immissione"
         },
         {
@@ -5863,7 +5867,7 @@
           "type": "math"
         }
       ],
-      "title": "Riepilogo SSP - Vita Impianto",
+      "title": "Riepilogo Costo Materia Energia (SSP) - Vita Impianto",
       "transparent": true,
       "type": "stat"
     }
@@ -5883,6 +5887,6 @@
   "timezone": "",
   "title": "Solaredge 3.0",
   "uid": "afb91a6f-d8f7-43ae-8a98-67eab1bb4baa",
-  "version": 580,
+  "version": 587,
   "weekStart": "monday"
 }
