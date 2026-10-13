@@ -55,6 +55,14 @@ solaredge:
     timeout: ${REALTIME_MODBUS_TIMEOUT}
     retries: ${MODBUS_RETRIES}
     enabled: ${MODBUS_ENABLED}
+gme:
+  enabled: ${GME_ENABLED}
+  username: ${GME_USERNAME}
+  password: ${GME_PASSWORD}
+  download_timeout_seconds: ${GME_DOWNLOAD_TIMEOUT_SECONDS}
+  retry_attempts: ${GME_RETRY_ATTEMPTS}
+  retry_delay_seconds: ${GME_RETRY_DELAY_SECONDS}
+  bucket: ${INFLUXDB_BUCKET_GME}
 workflow:
   name: main
   version: 1.0
