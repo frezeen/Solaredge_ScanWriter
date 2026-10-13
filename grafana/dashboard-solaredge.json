@@ -1,22 +1,21 @@
 {
-  "apiVersion": "dashboard.grafana.app/v2",
   "kind": "Dashboard",
+  "apiVersion": "dashboard.grafana.app/v2",
   "metadata": {
     "name": "afb91a6f-d8f7-43ae-8a98-67eab1bb4baa",
     "namespace": "default",
     "uid": "7BbIQVz9HXL37kIwtfwIILQfbBildEORfdbBmJJZsdMX",
-    "resourceVersion": "1777199074684001",
-    "generation": 588,
+    "resourceVersion": "1791916067938006",
+    "generation": 592,
     "creationTimestamp": "2025-10-26T13:24:47Z",
     "labels": {
       "grafana.app/deprecatedInternalID": "1"
     },
     "annotations": {
       "grafana.app/createdBy": "user:df27vpihsre2oc",
-      "grafana.app/folder": "",
-      "grafana.app/saved-from-ui": "Grafana v13.0.1 (a100054f)",
+      "grafana.app/message": "Fix panels 101/180: robust group()+difference()+sum (device_id split immunity)",
       "grafana.app/updatedBy": "user:df27vpihsre2oc",
-      "grafana.app/updatedTimestamp": "2026-04-26T10:24:34Z"
+      "grafana.app/updatedTimestamp": "2026-10-13T18:27:47Z"
     }
   },
   "spec": {
@@ -26,7 +25,7 @@
         "spec": {
           "query": {
             "kind": "DataQuery",
-            "group": "grafana",
+            "group": "influxdb",
             "version": "v0",
             "datasource": {
               "name": "ff27vpmruzxtsc"
@@ -42,7 +41,10 @@
           "hide": true,
           "iconColor": "rgba(0, 211, 255, 1)",
           "name": "Annotations & Alerts",
-          "builtIn": true
+          "builtIn": true,
+          "legacyOptions": {
+            "type": "dashboard"
+          }
         }
       }
     ],
@@ -54,7 +56,6 @@
         "spec": {
           "id": 10,
           "title": "",
-          "description": "",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -89,17 +90,9 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "gauge",
-            "version": "13.0.1",
+            "version": "12.3.0",
             "spec": {
               "options": {
-                "barShape": "flat",
-                "barWidthFactor": 0.5,
-                "effects": {
-                  "barGlow": false,
-                  "centerGlow": false,
-                  "gradient": false
-                },
-                "endpointMarker": "point",
                 "minVizHeight": 75,
                 "minVizWidth": 75,
                 "orientation": "auto",
@@ -110,15 +103,10 @@
                   "fields": "",
                   "values": false
                 },
-                "segmentCount": 1,
-                "segmentSpacing": 0.3,
-                "shape": "gauge",
                 "showThresholdLabels": false,
                 "showThresholdMarkers": true,
                 "sizing": "auto",
-                "sparkline": false,
-                "text": {},
-                "textMode": "auto"
+                "text": {}
               },
               "fieldConfig": {
                 "defaults": {
@@ -176,7 +164,7 @@
                         "name": "ff27vpmruzxtsc"
                       },
                       "spec": {
-                        "query": "import \"date\"\r\nimport \"array\"\r\nimport \"timezone\"\r\n\r\noption location = timezone.location(name: \"Europe/Rome\")\r\n\r\nstart = date.truncate(t: now(), unit: 1d)\r\nmonth_start = date.truncate(t: now(), unit: 1mo)\r\n\r\n// Recupera prezzo PUN\r\npun_value = (from(bucket: \"GME\")\r\n  |> range(start: month_start)\r\n  |> filter(fn: (r) => \r\n      r._measurement == \"gme_monthly_avg\" and \r\n      r._field == \"pun_kwh_avg\")\r\n  |> last()\r\n  |> findRecord(fn: (key) => true, idx: 0))._value\r\n\r\n// Dati prelievo\r\ndata = from(bucket: \"Solaredge_Realtime\")\r\n  |> range(start: start)\r\n  |> filter(fn: (r) => \r\n      r._measurement == \"realtime\" and \r\n      r._field == \"Meter\" and \r\n      r.endpoint == \"Import Energy Active\" and \r\n      r.unit == \"Wh\" and\r\n      exists r._value)\r\n\r\nprelievo_wh = (data |> last() |> findRecord(fn: (key) => true, idx: 0))._value - \r\n              (data |> first() |> findRecord(fn: (key) => true, idx: 0))._value\r\n\r\n// Output\r\narray.from(rows: [{\r\n  \"PUN (€/kWh)\": pun_value,\r\n  \"Costo Prelievo Oggi (€)\": if prelievo_wh < 0.0 \r\n                              then 0.0 \r\n                              else (prelievo_wh / 1000.0) * pun_value\r\n}])"
+                        "query": "import \"date\"\nimport \"array\"\nimport \"timezone\"\n\noption location = timezone.location(name: \"Europe/Rome\")\n\nstart = date.truncate(t: now(), unit: 1d)\nmonth_start = date.truncate(t: now(), unit: 1mo)\n\n// Recupera prezzo PUN\npun_value = (from(bucket: \"GME\")\n  |> range(start: month_start)\n  |> filter(fn: (r) => \n      r._measurement == \"gme_monthly_avg\" and \n      r._field == \"pun_kwh_avg\")\n  |> last()\n  |> findRecord(fn: (key) => true, idx: 0))._value\n\n// Dati prelievo: group() unisce i device_id, difference() somma solo gli\n// incrementi reali, >= 0 scarta il reset del contatore\ndata = from(bucket: \"Solaredge_Realtime\")\n  |> range(start: start)\n  |> filter(fn: (r) => \n      r._measurement == \"realtime\" and \n      r._field == \"Meter\" and \n      r.endpoint == \"Import Energy Active\" and \n      r.unit == \"Wh\" and\n      exists r._value)\n  |> group()\n  |> difference()\n  |> filter(fn: (r) => r._value >= 0.0)\n  |> sum()\n\nprelievo_wh = (data |> findRecord(fn: (key) => true, idx: 0))._value\n\n// Output\narray.from(rows: [{\n  \"PUN (€/kWh)\": pun_value,\n  \"Costo Prelievo Oggi (€)\": if prelievo_wh < 0.0 \n                              then 0.0 \n                              else (prelievo_wh / 1000.0) * pun_value\n}])\n"
                       }
                     },
                     "refId": "Costo Prelievo",
@@ -194,7 +182,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "stat",
-            "version": "13.0.1",
+            "version": "12.3.0",
             "spec": {
               "options": {
                 "colorMode": "background",
@@ -245,7 +233,6 @@
         "spec": {
           "id": 12,
           "title": "",
-          "description": "",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -356,17 +343,9 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "gauge",
-            "version": "13.0.1",
+            "version": "12.3.0",
             "spec": {
               "options": {
-                "barShape": "flat",
-                "barWidthFactor": 0.5,
-                "effects": {
-                  "barGlow": false,
-                  "centerGlow": false,
-                  "gradient": false
-                },
-                "endpointMarker": "point",
                 "minVizHeight": 75,
                 "minVizWidth": 75,
                 "orientation": "auto",
@@ -377,15 +356,10 @@
                   "fields": "/^Consumo$/",
                   "values": false
                 },
-                "segmentCount": 1,
-                "segmentSpacing": 0.3,
-                "shape": "gauge",
                 "showThresholdLabels": false,
-                "showThresholdMarkers": false,
+                "showThresholdMarkers": true,
                 "sizing": "auto",
-                "sparkline": false,
-                "text": {},
-                "textMode": "auto"
+                "text": {}
               },
               "fieldConfig": {
                 "defaults": {
@@ -427,7 +401,6 @@
         "spec": {
           "id": 121,
           "title": "",
-          "description": "",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -462,7 +435,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "stat",
-            "version": "13.0.1",
+            "version": "12.3.0",
             "spec": {
               "options": {
                 "colorMode": "background",
@@ -520,7 +493,6 @@
         "spec": {
           "id": 122,
           "title": "",
-          "description": "",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -552,7 +524,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "stat",
-            "version": "13.0.1",
+            "version": "12.3.0",
             "spec": {
               "options": {
                 "colorMode": "background",
@@ -603,7 +575,6 @@
         "spec": {
           "id": 123,
           "title": "",
-          "description": "",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -635,7 +606,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "stat",
-            "version": "13.0.1",
+            "version": "12.3.0",
             "spec": {
               "options": {
                 "colorMode": "background",
@@ -687,7 +658,6 @@
         "spec": {
           "id": 124,
           "title": "",
-          "description": "",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -719,7 +689,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "stat",
-            "version": "13.0.1",
+            "version": "12.3.0",
             "spec": {
               "options": {
                 "colorMode": "background",
@@ -770,7 +740,6 @@
         "spec": {
           "id": 125,
           "title": "",
-          "description": "",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -802,7 +771,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "stat",
-            "version": "13.0.1",
+            "version": "12.3.0",
             "spec": {
               "options": {
                 "colorMode": "background",
@@ -853,7 +822,6 @@
         "spec": {
           "id": 14,
           "title": "",
-          "description": "",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -888,17 +856,9 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "gauge",
-            "version": "13.0.1",
+            "version": "12.3.0",
             "spec": {
               "options": {
-                "barShape": "flat",
-                "barWidthFactor": 0.5,
-                "effects": {
-                  "barGlow": true,
-                  "centerGlow": true,
-                  "gradient": false
-                },
-                "endpointMarker": "point",
                 "minVizHeight": 75,
                 "minVizWidth": 75,
                 "orientation": "auto",
@@ -909,15 +869,10 @@
                   "fields": "",
                   "values": false
                 },
-                "segmentCount": 1,
-                "segmentSpacing": 0.3,
-                "shape": "gauge",
                 "showThresholdLabels": false,
                 "showThresholdMarkers": true,
                 "sizing": "auto",
-                "sparkline": false,
-                "text": {},
-                "textMode": "auto"
+                "text": {}
               },
               "fieldConfig": {
                 "defaults": {
@@ -983,7 +938,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "stat",
-            "version": "13.0.1",
+            "version": "12.3.0",
             "spec": {
               "options": {
                 "colorMode": "background",
@@ -1036,7 +991,6 @@
         "spec": {
           "id": 154,
           "title": "Potenza Picco Pannelli (Range Selezionato)",
-          "description": "",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -1185,7 +1139,6 @@
         "spec": {
           "id": 162,
           "title": "Produzione - Consumo - Autoconsumo - Prelievo - Immissione (Anno Precedente)",
-          "description": "",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -1243,7 +1196,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "barchart",
-            "version": "13.0.1",
+            "version": "12.3.0",
             "spec": {
               "options": {
                 "barRadius": 0,
@@ -1403,7 +1356,6 @@
         "spec": {
           "id": 171,
           "title": "",
-          "description": "",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -1519,7 +1471,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "table",
-            "version": "13.0.1",
+            "version": "12.3.0",
             "spec": {
               "options": {
                 "cellHeight": "sm",
@@ -1946,7 +1898,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "stat",
-            "version": "13.0.1",
+            "version": "12.3.0",
             "spec": {
               "options": {
                 "colorMode": "background",
@@ -1999,7 +1951,6 @@
         "spec": {
           "id": 173,
           "title": "",
-          "description": "",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -2038,7 +1989,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "stat",
-            "version": "13.0.1",
+            "version": "12.3.0",
             "spec": {
               "options": {
                 "colorMode": "background",
@@ -2096,7 +2047,6 @@
         "spec": {
           "id": 174,
           "title": "",
-          "description": "",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -2132,7 +2082,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "stat",
-            "version": "13.0.1",
+            "version": "12.3.0",
             "spec": {
               "options": {
                 "colorMode": "background",
@@ -2183,7 +2133,6 @@
         "spec": {
           "id": 175,
           "title": "",
-          "description": "",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -2219,7 +2168,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "stat",
-            "version": "13.0.1",
+            "version": "12.3.0",
             "spec": {
               "options": {
                 "colorMode": "background",
@@ -2271,7 +2220,6 @@
         "spec": {
           "id": 176,
           "title": "",
-          "description": "",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -2307,7 +2255,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "stat",
-            "version": "13.0.1",
+            "version": "12.3.0",
             "spec": {
               "options": {
                 "colorMode": "background",
@@ -2394,7 +2342,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "stat",
-            "version": "13.0.1",
+            "version": "12.3.0",
             "spec": {
               "options": {
                 "colorMode": "background",
@@ -2447,7 +2395,6 @@
         "spec": {
           "id": 178,
           "title": "",
-          "description": "",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -2483,7 +2430,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "stat",
-            "version": "13.0.1",
+            "version": "12.3.0",
             "spec": {
               "options": {
                 "colorMode": "background",
@@ -2640,7 +2587,7 @@
                         "name": "ff27vpmruzxtsc"
                       },
                       "spec": {
-                        "query": "import \"timezone\"\r\nimport \"date\"\r\nimport \"array\"\r\n\r\noption location = timezone.location(name: \"Europe/Rome\")\r\n\r\nstart = date.truncate(t: now(), unit: 1d)\r\nstop = date.add(d: 1d, to: start)\r\nmonth_start = date.truncate(t: now(), unit: 1mo)\r\n\r\n// Recupera prezzo PUN medio mensile (già pre-calcolato)\r\nprezzo_pun = from(bucket: \"GME\")\r\n  |> range(start: month_start)\r\n  |> filter(fn: (r) => r._measurement == \"gme_monthly_avg\" and r._field == \"pun_kwh_avg\")\r\n  |> last()\r\n  |> findRecord(fn: (key) => true, idx: 0)\r\n\r\n// Produzione giornaliera\r\ndata_prod = from(bucket: \"Solaredge_Realtime\")\r\n  |> range(start: start, stop: stop)\r\n  |> filter(fn: (r) => r._measurement == \"realtime\" and r._field == \"Inverter\" and r.endpoint == \"Energy Total\" and r.unit == \"Wh\")\r\n\r\nfirst_prod = data_prod |> first() |> findRecord(fn: (key) => true, idx: 0)\r\nlast_prod = data_prod |> last() |> findRecord(fn: (key) => true, idx: 0)\r\nprod_value = last_prod._value - first_prod._value\r\n\r\n// Export giornaliero\r\ndata_exp = from(bucket: \"Solaredge_Realtime\")\r\n  |> range(start: start, stop: stop)\r\n  |> filter(fn: (r) => r._measurement == \"realtime\" and r._field == \"Meter\" and r.endpoint == \"Export Energy Active\" and r.unit == \"Wh\")\r\n\r\nfirst_exp = data_exp |> first() |> findRecord(fn: (key) => true, idx: 0)\r\nlast_exp = data_exp |> last() |> findRecord(fn: (key) => true, idx: 0)\r\nexp_value = last_exp._value - first_exp._value\r\n\r\n// Autoconsumo e risparmio\r\nautoconsumo = if (prod_value - exp_value) < 0.0 then 0.0 else (prod_value - exp_value)\r\nrisparmio = (autoconsumo / 1000.0) * prezzo_pun._value\r\n\r\narray.from(rows: [{PUN: prezzo_pun._value, Risparmio: risparmio}])\r\n"
+                        "query": "import \"timezone\"\nimport \"date\"\nimport \"array\"\n\noption location = timezone.location(name: \"Europe/Rome\")\n\nstart = date.truncate(t: now(), unit: 1d)\nstop = date.add(d: 1d, to: start)\nmonth_start = date.truncate(t: now(), unit: 1mo)\n\n// Recupera prezzo PUN medio mensile (già pre-calcolato)\nprezzo_pun = from(bucket: \"GME\")\n  |> range(start: month_start)\n  |> filter(fn: (r) => r._measurement == \"gme_monthly_avg\" and r._field == \"pun_kwh_avg\")\n  |> last()\n  |> findRecord(fn: (key) => true, idx: 0)\n\n// Produzione giornaliera: schema robusto (group + difference + sum)\ndata_prod = from(bucket: \"Solaredge_Realtime\")\n  |> range(start: start, stop: stop)\n  |> filter(fn: (r) => r._measurement == \"realtime\" and r._field == \"Inverter\" and r.endpoint == \"Energy Total\" and r.unit == \"Wh\")\n  |> group()\n  |> difference()\n  |> filter(fn: (r) => r._value >= 0.0)\n  |> sum()\n\nprod_value = (data_prod |> findRecord(fn: (key) => true, idx: 0))._value\n\n// Export giornaliero: schema robusto (group + difference + sum)\ndata_exp = from(bucket: \"Solaredge_Realtime\")\n  |> range(start: start, stop: stop)\n  |> filter(fn: (r) => r._measurement == \"realtime\" and r._field == \"Meter\" and r.endpoint == \"Export Energy Active\" and r.unit == \"Wh\")\n  |> group()\n  |> difference()\n  |> filter(fn: (r) => r._value >= 0.0)\n  |> sum()\n\nexp_value = (data_exp |> findRecord(fn: (key) => true, idx: 0))._value\n\n// Autoconsumo e risparmio\nautoconsumo = if (prod_value - exp_value) < 0.0 then 0.0 else (prod_value - exp_value)\nrisparmio = (autoconsumo / 1000.0) * prezzo_pun._value\n\narray.from(rows: [{PUN: prezzo_pun._value, Risparmio: risparmio}])\n"
                       }
                     },
                     "refId": "Risparmio Autoconsumo",
@@ -2658,7 +2605,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "stat",
-            "version": "13.0.1",
+            "version": "12.3.0",
             "spec": {
               "options": {
                 "colorMode": "background",
@@ -2709,7 +2656,6 @@
         "spec": {
           "id": 181,
           "title": "Produzione - Consumo - Autoconsumo - Prelievo - Immissione (Ieri)",
-          "description": "",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -2822,13 +2768,9 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "timeseries",
-            "version": "13.0.1",
+            "version": "12.3.0",
             "spec": {
               "options": {
-                "annotations": {
-                  "clustering": -1,
-                  "multiLane": false
-                },
                 "legend": {
                   "calcs": [
                     "mean"
@@ -3017,7 +2959,6 @@
         "spec": {
           "id": 183,
           "title": "Produzione - Consumo - Autoconsumo - Prelievo - Immissione (Oggi)",
-          "description": "",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -3129,13 +3070,9 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "timeseries",
-            "version": "13.0.1",
+            "version": "12.3.0",
             "spec": {
               "options": {
-                "annotations": {
-                  "clustering": -1,
-                  "multiLane": false
-                },
                 "legend": {
                   "calcs": [
                     "mean"
@@ -3336,7 +3273,6 @@
         "spec": {
           "id": 184,
           "title": "",
-          "description": "",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -3394,18 +3330,10 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "gauge",
-            "version": "13.0.1",
+            "version": "12.3.0",
             "spec": {
               "options": {
-                "barShape": "flat",
-                "barWidthFactor": 0.5,
-                "effects": {
-                  "barGlow": false,
-                  "centerGlow": false,
-                  "gradient": false
-                },
-                "endpointMarker": "point",
-                "minVizHeight": 75,
+                "minVizHeight": 90,
                 "minVizWidth": 75,
                 "orientation": "auto",
                 "reduceOptions": {
@@ -3415,15 +3343,10 @@
                   "fields": "",
                   "values": false
                 },
-                "segmentCount": 1,
-                "segmentSpacing": 0.3,
-                "shape": "gauge",
                 "showThresholdLabels": false,
-                "showThresholdMarkers": false,
-                "sizing": "auto",
-                "sparkline": false,
-                "text": {},
-                "textMode": "auto"
+                "showThresholdMarkers": true,
+                "sizing": "manual",
+                "text": {}
               },
               "fieldConfig": {
                 "defaults": {
@@ -3462,7 +3385,6 @@
         "spec": {
           "id": 185,
           "title": "",
-          "description": "",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -3501,7 +3423,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "stat",
-            "version": "13.0.1",
+            "version": "12.3.0",
             "spec": {
               "options": {
                 "colorMode": "background",
@@ -3559,7 +3481,6 @@
         "spec": {
           "id": 186,
           "title": "",
-          "description": "",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -3595,7 +3516,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "stat",
-            "version": "13.0.1",
+            "version": "12.3.0",
             "spec": {
               "options": {
                 "colorMode": "background",
@@ -3646,7 +3567,6 @@
         "spec": {
           "id": 187,
           "title": "",
-          "description": "",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -3682,7 +3602,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "stat",
-            "version": "13.0.1",
+            "version": "12.3.0",
             "spec": {
               "options": {
                 "colorMode": "background",
@@ -3734,7 +3654,6 @@
         "spec": {
           "id": 188,
           "title": "",
-          "description": "",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -3770,7 +3689,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "stat",
-            "version": "13.0.1",
+            "version": "12.3.0",
             "spec": {
               "options": {
                 "colorMode": "background",
@@ -3821,7 +3740,6 @@
         "spec": {
           "id": 189,
           "title": "",
-          "description": "",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -3857,7 +3775,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "stat",
-            "version": "13.0.1",
+            "version": "12.3.0",
             "spec": {
               "options": {
                 "colorMode": "background",
@@ -3944,7 +3862,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "stat",
-            "version": "13.0.1",
+            "version": "12.3.0",
             "spec": {
               "options": {
                 "colorMode": "background",
@@ -4087,7 +4005,6 @@
         "spec": {
           "id": 192,
           "title": "Riepilogo Costo Materia Energia (SSP) - Vita Impianto",
-          "description": "",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -4273,7 +4190,6 @@
         "spec": {
           "id": 193,
           "title": "Produzione Annuale Storica",
-          "description": "",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -4448,7 +4364,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "stat",
-            "version": "13.0.1",
+            "version": "12.3.0",
             "spec": {
               "options": {
                 "colorMode": "background",
@@ -4549,7 +4465,6 @@
         "spec": {
           "id": 195,
           "title": "Meteo",
-          "description": "",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -4581,7 +4496,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "stat",
-            "version": "13.0.1",
+            "version": "12.3.0",
             "spec": {
               "options": {
                 "colorMode": "background",
@@ -4701,7 +4616,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "stat",
-            "version": "13.0.1",
+            "version": "12.3.0",
             "spec": {
               "options": {
                 "colorMode": "background",
@@ -4844,26 +4759,11 @@
         "spec": {
           "id": 26,
           "title": "",
-          "description": "",
           "links": [],
           "data": {
             "kind": "QueryGroup",
             "spec": {
-              "queries": [
-                {
-                  "kind": "PanelQuery",
-                  "spec": {
-                    "query": {
-                      "kind": "DataQuery",
-                      "group": "",
-                      "version": "v0",
-                      "spec": {}
-                    },
-                    "refId": "A",
-                    "hidden": false
-                  }
-                }
-              ],
+              "queries": [],
               "transformations": [],
               "queryOptions": {}
             }
@@ -4969,7 +4869,7 @@
                         ],
                         "orderByTime": "ASC",
                         "policy": "default",
-                        "query": "import \"timezone\"\nimport \"date\"\noption location = timezone.location(name: \"Europe/Rome\")\n\nstart = date.truncate(t: now(), unit: 1d)\nstop  = date.add(d: 1d, to: start)\n\ndailyDeltaWh = (tables=<-) => {\n  f = tables\n    |> first()\n    |> keep(columns: [\"device_id\", \"_value\"])\n    |> set(key: \"kind\", value: \"start\")\n\n  l = tables\n    |> last()\n    |> keep(columns: [\"device_id\", \"_value\"])\n    |> set(key: \"kind\", value: \"end\")\n\n  return union(tables: [f, l])\n    |> pivot(rowKey: [\"device_id\"], columnKey: [\"kind\"], valueColumn: \"_value\")\n    |> map(fn: (r) => ({ r with _value: float(v: r.end) - float(v: r.start) }))\n    |> map(fn: (r) => ({ r with _value: if r._value < 0.0 then 0.0 else r._value }))\n    |> group(columns: [])\n    |> sum(column: \"_value\")\n}\n\nfrom(bucket: \"Solaredge_Realtime\")\n  |> range(start: start, stop: stop)\n  |> filter(fn: (r) =>\n    r._measurement == \"realtime\" and\n    r._field == \"Inverter\" and\n    r.endpoint == \"Energy Total\" and\n    r.unit == \"Wh\"\n  )\n  |> group(columns: [\"device_id\"])\n  |> dailyDeltaWh()\n  |> map(fn: (r) => ({\n    r with\n    _time: date.truncate(\n      t: if date.millisecond(t: now()) >= 500 then date.add(d: 1s, to: now()) else now(),\n      unit: 1s\n    )\n  }))\n  |> rename(columns: {_value: \"produzione_oggi_wh\"})\n  |> keep(columns: [\"_time\",\"produzione_oggi_wh\"])\n  |> yield(name: \"produzione_fotovoltaica_oggi_wh\")",
+                        "query": "import \"date\"\nimport \"array\"\nimport \"timezone\"\n\noption location = timezone.location(name: \"Europe/Rome\")\n\nstart = date.truncate(t: now(), unit: 1d)\ndata_prod = from(bucket: \"Solaredge_Realtime\")\n  |> range(start: start)\n  |> filter(fn: (r) =>\n      r._measurement == \"realtime\" and\n      r._field == \"Inverter\" and\n      r.endpoint == \"Energy Total\" and\n      r.unit == \"Wh\" and\n      exists r._value)\n  |> group()\n  |> difference()\n  |> filter(fn: (r) => r._value >= 0.0)\n  |> sum()\n\nprod_value = (data_prod |> findRecord(fn: (key) => true, idx: 0))._value\n\narray.from(rows: [{\n  \"produzione_oggi_wh\": prod_value,}])\n",
                         "queryType": "randomWalk",
                         "rawQuery": true,
                         "resultFormat": "time_series",
@@ -5006,7 +4906,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "stat",
-            "version": "13.0.1",
+            "version": "12.3.0",
             "spec": {
               "options": {
                 "colorMode": "background",
@@ -5055,7 +4955,6 @@
         "spec": {
           "id": 48,
           "title": "",
-          "description": "",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -5113,18 +5012,10 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "gauge",
-            "version": "13.0.1",
+            "version": "12.3.0",
             "spec": {
               "options": {
-                "barShape": "flat",
-                "barWidthFactor": 0.5,
-                "effects": {
-                  "barGlow": false,
-                  "centerGlow": false,
-                  "gradient": false
-                },
-                "endpointMarker": "point",
-                "minVizHeight": 75,
+                "minVizHeight": 90,
                 "minVizWidth": 75,
                 "orientation": "horizontal",
                 "reduceOptions": {
@@ -5134,15 +5025,10 @@
                   "fields": "",
                   "values": false
                 },
-                "segmentCount": 1,
-                "segmentSpacing": 0.3,
-                "shape": "gauge",
                 "showThresholdLabels": false,
-                "showThresholdMarkers": false,
-                "sizing": "auto",
-                "sparkline": false,
-                "text": {},
-                "textMode": "auto"
+                "showThresholdMarkers": true,
+                "sizing": "manual",
+                "text": {}
               },
               "fieldConfig": {
                 "defaults": {
@@ -5413,7 +5299,6 @@
         "spec": {
           "id": 6,
           "title": "Produzione - Consumo - Autoconsumo - Prelievo - Immissione (Periodo Selezionato)",
-          "description": "",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -5517,7 +5402,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "barchart",
-            "version": "13.0.1",
+            "version": "12.3.0",
             "spec": {
               "options": {
                 "barRadius": 0,
@@ -5688,7 +5573,7 @@
                         "name": "ff27vpmruzxtsc"
                       },
                       "spec": {
-                        "query": "import \"date\"\r\nimport \"array\"\r\nimport \"timezone\"\r\n\r\noption location = timezone.location(name: \"Europe/Rome\")\r\n\r\ntoday_start = date.truncate(t: now(), unit: 1d)\r\n\r\n// Energia importata (prelievo)\r\ndata_importata = from(bucket: \"Solaredge_Realtime\")\r\n  |> range(start: today_start)\r\n  |> filter(fn: (r) => \r\n      r._measurement == \"realtime\" and\r\n      r._field == \"Meter\" and\r\n      r.endpoint == \"Import Energy Active\" and\r\n      exists r._value)\r\n\r\nimportata_value = (data_importata |> last() |> findRecord(fn: (key) => true, idx: 0))._value - \r\n                  (data_importata |> first() |> findRecord(fn: (key) => true, idx: 0))._value\r\n\r\n// Energia prodotta\r\ndata_prodotta = from(bucket: \"Solaredge_Realtime\")\r\n  |> range(start: today_start)\r\n  |> filter(fn: (r) => \r\n      r._measurement == \"realtime\" and\r\n      r._field == \"Inverter\" and\r\n      r.endpoint == \"Energy Total\" and\r\n      exists r._value)\r\n\r\nprodotta_value = (data_prodotta |> last() |> findRecord(fn: (key) => true, idx: 0))._value - \r\n                 (data_prodotta |> first() |> findRecord(fn: (key) => true, idx: 0))._value\r\n\r\n// Energia esportata\r\ndata_esportata = from(bucket: \"Solaredge_Realtime\")\r\n  |> range(start: today_start)\r\n  |> filter(fn: (r) => \r\n      r._measurement == \"realtime\" and\r\n      r._field == \"Meter\" and\r\n      r.endpoint == \"Export Energy Active\" and\r\n      exists r._value)\r\n\r\nesportata_value = (data_esportata |> last() |> findRecord(fn: (key) => true, idx: 0))._value - \r\n                  (data_esportata |> first() |> findRecord(fn: (key) => true, idx: 0))._value\r\n\r\n// Calcoli finali\r\nautoconsumo = prodotta_value - esportata_value\r\nconsumo_totale = importata_value + autoconsumo\r\n\r\n// Risultato\r\narray.from(rows: [{\r\n  _time: now(),\r\n  \"% Autoconsumo OGGI\": if consumo_totale > 0.0 then (autoconsumo / consumo_totale) * 100.0 else 0.0\r\n}])"
+                        "query": "import \"date\"\nimport \"array\"\nimport \"timezone\"\n\noption location = timezone.location(name: \"Europe/Rome\")\n\nstart = date.truncate(t: now(), unit: 1d)\ndata_imp = from(bucket: \"Solaredge_Realtime\")\n  |> range(start: start)\n  |> filter(fn: (r) =>\n      r._measurement == \"realtime\" and\n      r._field == \"Meter\" and\n      r.endpoint == \"Import Energy Active\" and\n      r.unit == \"Wh\" and\n      exists r._value)\n  |> group()\n  |> difference()\n  |> filter(fn: (r) => r._value >= 0.0)\n  |> sum()\n\nimp_value = (data_imp |> findRecord(fn: (key) => true, idx: 0))._value\ndata_prod = from(bucket: \"Solaredge_Realtime\")\n  |> range(start: start)\n  |> filter(fn: (r) =>\n      r._measurement == \"realtime\" and\n      r._field == \"Inverter\" and\n      r.endpoint == \"Energy Total\" and\n      r.unit == \"Wh\" and\n      exists r._value)\n  |> group()\n  |> difference()\n  |> filter(fn: (r) => r._value >= 0.0)\n  |> sum()\n\nprod_value = (data_prod |> findRecord(fn: (key) => true, idx: 0))._value\ndata_exp = from(bucket: \"Solaredge_Realtime\")\n  |> range(start: start)\n  |> filter(fn: (r) =>\n      r._measurement == \"realtime\" and\n      r._field == \"Meter\" and\n      r.endpoint == \"Export Energy Active\" and\n      r.unit == \"Wh\" and\n      exists r._value)\n  |> group()\n  |> difference()\n  |> filter(fn: (r) => r._value >= 0.0)\n  |> sum()\n\nexp_value = (data_exp |> findRecord(fn: (key) => true, idx: 0))._value\n\narray.from(rows: [{\n  \"% Autoconsumo OGGI\": if (imp_value + prod_value - exp_value) > 0.0 then ((if (prod_value - exp_value) < 0.0 then 0.0 else (prod_value - exp_value)) / (imp_value + prod_value - exp_value)) * 100.0 else 0.0,}])\n"
                       }
                     },
                     "refId": "% Autoconsumo",
@@ -5707,7 +5592,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "stat",
-            "version": "13.0.1",
+            "version": "12.3.0",
             "spec": {
               "options": {
                 "colorMode": "background",
@@ -5759,7 +5644,6 @@
         "spec": {
           "id": 61,
           "title": "Picco di Immissione",
-          "description": "",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -5795,7 +5679,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "stat",
-            "version": "13.0.1",
+            "version": "12.3.0",
             "spec": {
               "options": {
                 "colorMode": "background",
@@ -5842,7 +5726,6 @@
         "spec": {
           "id": 62,
           "title": "Picco di Produzione",
-          "description": "",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -5879,7 +5762,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "stat",
-            "version": "13.0.1",
+            "version": "12.3.0",
             "spec": {
               "options": {
                 "colorMode": "background",
@@ -5925,7 +5808,6 @@
         "spec": {
           "id": 63,
           "title": "",
-          "description": "",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -5983,18 +5865,10 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "gauge",
-            "version": "13.0.1",
+            "version": "12.3.0",
             "spec": {
               "options": {
-                "barShape": "flat",
-                "barWidthFactor": 0.5,
-                "effects": {
-                  "barGlow": false,
-                  "centerGlow": false,
-                  "gradient": false
-                },
-                "endpointMarker": "point",
-                "minVizHeight": 75,
+                "minVizHeight": 90,
                 "minVizWidth": 75,
                 "orientation": "horizontal",
                 "reduceOptions": {
@@ -6004,15 +5878,10 @@
                   "fields": "",
                   "values": false
                 },
-                "segmentCount": 1,
-                "segmentSpacing": 0.3,
-                "shape": "gauge",
                 "showThresholdLabels": false,
-                "showThresholdMarkers": false,
+                "showThresholdMarkers": true,
                 "sizing": "auto",
-                "sparkline": false,
-                "text": {},
-                "textMode": "auto"
+                "text": {}
               },
               "fieldConfig": {
                 "defaults": {
@@ -6065,7 +5934,7 @@
                         "name": "ff27vpmruzxtsc"
                       },
                       "spec": {
-                        "query": "import \"date\"\r\nimport \"array\"\r\nimport \"timezone\"\r\n\r\noption location = timezone.location(name: \"Europe/Rome\")\r\n\r\nstart = date.truncate(t: now(), unit: 1d)\r\n\r\n// Produzione: ultimo - primo\r\ndata_prod = from(bucket: \"Solaredge_Realtime\")\r\n  |> range(start: start)\r\n  |> filter(fn: (r) =>\r\n      r._measurement == \"realtime\" and\r\n      r._field == \"Inverter\" and\r\n      r.endpoint == \"Energy Total\" and\r\n      exists r._value)\r\n\r\nprod_value = (data_prod |> last() |> findRecord(fn: (key) => true, idx: 0))._value - \r\n             (data_prod |> first() |> findRecord(fn: (key) => true, idx: 0))._value\r\n\r\n// Import: ultimo - primo\r\ndata_imp = from(bucket: \"Solaredge_Realtime\")\r\n  |> range(start: start)\r\n  |> filter(fn: (r) =>\r\n      r._measurement == \"realtime\" and\r\n      r._field == \"Meter\" and\r\n      r.endpoint == \"Import Energy Active\" and\r\n      exists r._value)\r\n\r\nimp_value = (data_imp |> last() |> findRecord(fn: (key) => true, idx: 0))._value - \r\n            (data_imp |> first() |> findRecord(fn: (key) => true, idx: 0))._value\r\n\r\n// Export: ultimo - primo\r\ndata_exp = from(bucket: \"Solaredge_Realtime\")\r\n  |> range(start: start)\r\n  |> filter(fn: (r) =>\r\n      r._measurement == \"realtime\" and\r\n      r._field == \"Meter\" and\r\n      r.endpoint == \"Export Energy Active\" and\r\n      exists r._value)\r\n\r\nexp_value = (data_exp |> last() |> findRecord(fn: (key) => true, idx: 0))._value - \r\n            (data_exp |> first() |> findRecord(fn: (key) => true, idx: 0))._value\r\n\r\n// Output\r\narray.from(rows: [{\r\n  _time: now(),\r\n  \"Consumo Oggi (Wh)\": imp_value + prod_value - exp_value\r\n}])"
+                        "query": "import \"date\"\nimport \"array\"\nimport \"timezone\"\n\noption location = timezone.location(name: \"Europe/Rome\")\n\nstart = date.truncate(t: now(), unit: 1d)\ndata_imp = from(bucket: \"Solaredge_Realtime\")\n  |> range(start: start)\n  |> filter(fn: (r) =>\n      r._measurement == \"realtime\" and\n      r._field == \"Meter\" and\n      r.endpoint == \"Import Energy Active\" and\n      r.unit == \"Wh\" and\n      exists r._value)\n  |> group()\n  |> difference()\n  |> filter(fn: (r) => r._value >= 0.0)\n  |> sum()\n\nimp_value = (data_imp |> findRecord(fn: (key) => true, idx: 0))._value\ndata_prod = from(bucket: \"Solaredge_Realtime\")\n  |> range(start: start)\n  |> filter(fn: (r) =>\n      r._measurement == \"realtime\" and\n      r._field == \"Inverter\" and\n      r.endpoint == \"Energy Total\" and\n      r.unit == \"Wh\" and\n      exists r._value)\n  |> group()\n  |> difference()\n  |> filter(fn: (r) => r._value >= 0.0)\n  |> sum()\n\nprod_value = (data_prod |> findRecord(fn: (key) => true, idx: 0))._value\ndata_exp = from(bucket: \"Solaredge_Realtime\")\n  |> range(start: start)\n  |> filter(fn: (r) =>\n      r._measurement == \"realtime\" and\n      r._field == \"Meter\" and\n      r.endpoint == \"Export Energy Active\" and\n      r.unit == \"Wh\" and\n      exists r._value)\n  |> group()\n  |> difference()\n  |> filter(fn: (r) => r._value >= 0.0)\n  |> sum()\n\nexp_value = (data_exp |> findRecord(fn: (key) => true, idx: 0))._value\n\narray.from(rows: [{\n  \"Consumo Oggi (Wh)\": imp_value + prod_value - exp_value,}])\n"
                       }
                     },
                     "refId": "Consumo",
@@ -6083,7 +5952,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "stat",
-            "version": "13.0.1",
+            "version": "12.3.0",
             "spec": {
               "options": {
                 "colorMode": "background",
@@ -6148,7 +6017,7 @@
                         "name": "ff27vpmruzxtsc"
                       },
                       "spec": {
-                        "query": "import \"date\"\r\nimport \"array\"\r\nimport \"timezone\"\r\n\r\noption location = timezone.location(name: \"Europe/Rome\")\r\n\r\nstart = date.truncate(t: now(), unit: 1d)\r\n\r\n// Dati Export Energy\r\ndata = from(bucket: \"Solaredge_Realtime\")\r\n  |> range(start: start)\r\n  |> filter(fn: (r) =>\r\n    r._measurement == \"realtime\" and\r\n    r._field == \"Meter\" and\r\n    r.endpoint == \"Export Energy Active\" and\r\n    r.unit == \"Wh\" and\r\n    exists r._value)\r\n\r\n// Calcolo immissione (ultimo - primo)\r\nimmissione_wh = (data |> last() |> findRecord(fn: (key) => true, idx: 0))._value - \r\n                (data |> first() |> findRecord(fn: (key) => true, idx: 0))._value\r\n\r\n// Output\r\narray.from(rows: [{\r\n  _time: now(),\r\n  \"Immissione Oggi (Wh)\": immissione_wh\r\n}])"
+                        "query": "import \"date\"\nimport \"array\"\nimport \"timezone\"\n\noption location = timezone.location(name: \"Europe/Rome\")\n\nstart = date.truncate(t: now(), unit: 1d)\ndata_exp = from(bucket: \"Solaredge_Realtime\")\n  |> range(start: start)\n  |> filter(fn: (r) =>\n      r._measurement == \"realtime\" and\n      r._field == \"Meter\" and\n      r.endpoint == \"Export Energy Active\" and\n      r.unit == \"Wh\" and\n      exists r._value)\n  |> group()\n  |> difference()\n  |> filter(fn: (r) => r._value >= 0.0)\n  |> sum()\n\nexp_value = (data_exp |> findRecord(fn: (key) => true, idx: 0))._value\n\narray.from(rows: [{\n  \"Immissione Oggi (Wh)\": exp_value,}])\n"
                       }
                     },
                     "refId": "Immissione",
@@ -6166,7 +6035,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "stat",
-            "version": "13.0.1",
+            "version": "12.3.0",
             "spec": {
               "options": {
                 "colorMode": "background",
@@ -6231,7 +6100,7 @@
                         "name": "ff27vpmruzxtsc"
                       },
                       "spec": {
-                        "query": "import \"date\"\r\nimport \"array\"\r\nimport \"timezone\"\r\n\r\noption location = timezone.location(name: \"Europe/Rome\")\r\n\r\nstart = date.truncate(t: now(), unit: 1d)\r\n\r\n// Dati Import Energy\r\ndata = from(bucket: \"Solaredge_Realtime\")\r\n  |> range(start: start)\r\n  |> filter(fn: (r) => \r\n      r._measurement == \"realtime\" and\r\n      r._field == \"Meter\" and\r\n      r.endpoint == \"Import Energy Active\" and\r\n      exists r._value)\r\n\r\n// Output\r\narray.from(rows: [{\r\n  _time: now(),\r\n  \"Prelievo Oggi (Wh)\": (data |> last() |> findRecord(fn: (key) => true, idx: 0))._value - \r\n                        (data |> first() |> findRecord(fn: (key) => true, idx: 0))._value\r\n}])"
+                        "query": "import \"date\"\nimport \"array\"\nimport \"timezone\"\n\noption location = timezone.location(name: \"Europe/Rome\")\n\nstart = date.truncate(t: now(), unit: 1d)\ndata_imp = from(bucket: \"Solaredge_Realtime\")\n  |> range(start: start)\n  |> filter(fn: (r) =>\n      r._measurement == \"realtime\" and\n      r._field == \"Meter\" and\n      r.endpoint == \"Import Energy Active\" and\n      r.unit == \"Wh\" and\n      exists r._value)\n  |> group()\n  |> difference()\n  |> filter(fn: (r) => r._value >= 0.0)\n  |> sum()\n\nimp_value = (data_imp |> findRecord(fn: (key) => true, idx: 0))._value\n\narray.from(rows: [{\n  \"Prelievo Oggi (Wh)\": imp_value,}])\n"
                       }
                     },
                     "refId": "Prelievo",
@@ -6249,7 +6118,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "stat",
-            "version": "13.0.1",
+            "version": "12.3.0",
             "spec": {
               "options": {
                 "colorMode": "background",
@@ -6316,7 +6185,7 @@
                         "name": "ff27vpmruzxtsc"
                       },
                       "spec": {
-                        "query": "import \"timezone\"\r\nimport \"date\"\r\nimport \"array\"\r\n\r\noption location = timezone.location(name: \"Europe/Rome\")\r\n\r\nstart = date.truncate(t: now(), unit: 1d)\r\n\r\n// Produzione: ultimo - primo\r\ndata_prod = from(bucket: \"Solaredge_Realtime\")\r\n  |> range(start: start)\r\n  |> filter(fn: (r) =>\r\n      r._measurement == \"realtime\" and\r\n      r._field == \"Inverter\" and\r\n      r.endpoint == \"Energy Total\" and\r\n      r.unit == \"Wh\" and\r\n      exists r._value)\r\n\r\nprod_value = (data_prod |> last() |> findRecord(fn: (key) => true, idx: 0))._value - \r\n             (data_prod |> first() |> findRecord(fn: (key) => true, idx: 0))._value\r\n\r\n// Export: ultimo - primo\r\ndata_exp = from(bucket: \"Solaredge_Realtime\")\r\n  |> range(start: start)\r\n  |> filter(fn: (r) =>\r\n      r._measurement == \"realtime\" and\r\n      r._field == \"Meter\" and\r\n      r.endpoint == \"Export Energy Active\" and\r\n      r.unit == \"Wh\" and\r\n      exists r._value)\r\n\r\nexp_value = (data_exp |> last() |> findRecord(fn: (key) => true, idx: 0))._value - \r\n            (data_exp |> first() |> findRecord(fn: (key) => true, idx: 0))._value\r\n\r\n// Risultato\r\narray.from(rows: [{\r\n  _time: now(),\r\n  \"Autoconsumo (Wh)\": if (prod_value - exp_value) < 0.0 then 0.0 else (prod_value - exp_value)\r\n}])"
+                        "query": "import \"date\"\nimport \"array\"\nimport \"timezone\"\n\noption location = timezone.location(name: \"Europe/Rome\")\n\nstart = date.truncate(t: now(), unit: 1d)\ndata_prod = from(bucket: \"Solaredge_Realtime\")\n  |> range(start: start)\n  |> filter(fn: (r) =>\n      r._measurement == \"realtime\" and\n      r._field == \"Inverter\" and\n      r.endpoint == \"Energy Total\" and\n      r.unit == \"Wh\" and\n      exists r._value)\n  |> group()\n  |> difference()\n  |> filter(fn: (r) => r._value >= 0.0)\n  |> sum()\n\nprod_value = (data_prod |> findRecord(fn: (key) => true, idx: 0))._value\ndata_exp = from(bucket: \"Solaredge_Realtime\")\n  |> range(start: start)\n  |> filter(fn: (r) =>\n      r._measurement == \"realtime\" and\n      r._field == \"Meter\" and\n      r.endpoint == \"Export Energy Active\" and\n      r.unit == \"Wh\" and\n      exists r._value)\n  |> group()\n  |> difference()\n  |> filter(fn: (r) => r._value >= 0.0)\n  |> sum()\n\nexp_value = (data_exp |> findRecord(fn: (key) => true, idx: 0))._value\n\narray.from(rows: [{\n  \"Autoconsumo (Wh)\": if (prod_value - exp_value) < 0.0 then 0.0 else (prod_value - exp_value),}])\n"
                       }
                     },
                     "refId": "Autoconsumo",
@@ -6334,7 +6203,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "stat",
-            "version": "13.0.1",
+            "version": "12.3.0",
             "spec": {
               "options": {
                 "colorMode": "background",
@@ -6384,7 +6253,6 @@
         "spec": {
           "id": 70,
           "title": "Picco di Consumo",
-          "description": "",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -6419,7 +6287,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "stat",
-            "version": "13.0.1",
+            "version": "12.3.0",
             "spec": {
               "options": {
                 "colorMode": "background",
@@ -6465,7 +6333,6 @@
         "spec": {
           "id": 72,
           "title": "Produzione - Consumo - Autoconsumo - Prelievo - Immissione (Anno Corrente)",
-          "description": "",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -6522,7 +6389,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "barchart",
-            "version": "13.0.1",
+            "version": "12.3.0",
             "spec": {
               "options": {
                 "barRadius": 0,
@@ -6699,7 +6566,7 @@
                         "name": "ff27vpmruzxtsc"
                       },
                       "spec": {
-                        "query": "import \"date\"\r\nimport \"array\"\r\nimport \"timezone\"\r\n\r\noption location = timezone.location(name: \"Europe/Rome\")\r\n\r\nstart = date.truncate(t: now(), unit: 1d)\r\n\r\n// Produzione: ultimo - primo\r\ndata_prod = from(bucket: \"Solaredge_Realtime\")\r\n  |> range(start: start)\r\n  |> filter(fn: (r) =>\r\n      r._measurement == \"realtime\" and\r\n      r._field == \"Inverter\" and\r\n      r.endpoint == \"Energy Total\" and\r\n      exists r._value)\r\n\r\nprod_value = (data_prod |> last() |> findRecord(fn: (key) => true, idx: 0))._value - \r\n             (data_prod |> first() |> findRecord(fn: (key) => true, idx: 0))._value\r\n\r\n// Import: ultimo - primo\r\ndata_imp = from(bucket: \"Solaredge_Realtime\")\r\n  |> range(start: start)\r\n  |> filter(fn: (r) =>\r\n      r._measurement == \"realtime\" and\r\n      r._field == \"Meter\" and\r\n      r.endpoint == \"Import Energy Active\" and\r\n      exists r._value)\r\n\r\nimp_value = (data_imp |> last() |> findRecord(fn: (key) => true, idx: 0))._value - \r\n            (data_imp |> first() |> findRecord(fn: (key) => true, idx: 0))._value\r\n\r\n// Export: ultimo - primo\r\ndata_exp = from(bucket: \"Solaredge_Realtime\")\r\n  |> range(start: start)\r\n  |> filter(fn: (r) =>\r\n      r._measurement == \"realtime\" and\r\n      r._field == \"Meter\" and\r\n      r.endpoint == \"Export Energy Active\" and\r\n      exists r._value)\r\n\r\nexp_value = (data_exp |> last() |> findRecord(fn: (key) => true, idx: 0))._value - \r\n            (data_exp |> first() |> findRecord(fn: (key) => true, idx: 0))._value\r\n\r\n// Calcoli finali e output\r\nconsumo_wh = imp_value + prod_value - exp_value\r\n\r\narray.from(rows: [{\r\n  _time: now(),\r\n  \"% Prelievo OGGI\": if consumo_wh > 0.0 then (imp_value / consumo_wh) * 100.0 else 0.0\r\n}])"
+                        "query": "import \"date\"\nimport \"array\"\nimport \"timezone\"\n\noption location = timezone.location(name: \"Europe/Rome\")\n\nstart = date.truncate(t: now(), unit: 1d)\ndata_imp = from(bucket: \"Solaredge_Realtime\")\n  |> range(start: start)\n  |> filter(fn: (r) =>\n      r._measurement == \"realtime\" and\n      r._field == \"Meter\" and\n      r.endpoint == \"Import Energy Active\" and\n      r.unit == \"Wh\" and\n      exists r._value)\n  |> group()\n  |> difference()\n  |> filter(fn: (r) => r._value >= 0.0)\n  |> sum()\n\nimp_value = (data_imp |> findRecord(fn: (key) => true, idx: 0))._value\ndata_prod = from(bucket: \"Solaredge_Realtime\")\n  |> range(start: start)\n  |> filter(fn: (r) =>\n      r._measurement == \"realtime\" and\n      r._field == \"Inverter\" and\n      r.endpoint == \"Energy Total\" and\n      r.unit == \"Wh\" and\n      exists r._value)\n  |> group()\n  |> difference()\n  |> filter(fn: (r) => r._value >= 0.0)\n  |> sum()\n\nprod_value = (data_prod |> findRecord(fn: (key) => true, idx: 0))._value\ndata_exp = from(bucket: \"Solaredge_Realtime\")\n  |> range(start: start)\n  |> filter(fn: (r) =>\n      r._measurement == \"realtime\" and\n      r._field == \"Meter\" and\n      r.endpoint == \"Export Energy Active\" and\n      r.unit == \"Wh\" and\n      exists r._value)\n  |> group()\n  |> difference()\n  |> filter(fn: (r) => r._value >= 0.0)\n  |> sum()\n\nexp_value = (data_exp |> findRecord(fn: (key) => true, idx: 0))._value\n\narray.from(rows: [{\n  \"% Prelievo OGGI\": if (imp_value + prod_value - exp_value) > 0.0 then (imp_value / (imp_value + prod_value - exp_value)) * 100.0 else 0.0,}])\n"
                       }
                     },
                     "refId": "% Prelievo",
@@ -6717,7 +6584,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "stat",
-            "version": "13.0.1",
+            "version": "12.3.0",
             "spec": {
               "options": {
                 "colorMode": "background",
@@ -6769,7 +6636,6 @@
         "spec": {
           "id": 99,
           "title": "Potenza Pannelli (Range Selezionato)",
-          "description": "",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -7735,7 +7601,6 @@
     "preload": false,
     "tags": [],
     "timeSettings": {
-      "timezone": "browser",
       "from": "now/d",
       "to": "now/d",
       "autoRefresh": "5s",
