@@ -143,7 +143,7 @@ modbus:
       data_type: realtime
       description: Dati realtime dell'inverter tramite protocollo Modbus TCP. Include
         potenza AC/DC, tensione, corrente, frequenza, temperatura e stato operativo.
-      device_id: ${REALTIME_MODBUS_UNIT}
+      device_id: ${MODBUS_UNIT}
       device_name: Inverter Modbus
       device_type: Inverter
       enabled: true
@@ -352,7 +352,7 @@ modbus:
           field_name: c_serialnumber
         status:
           description: Stato operativo inverter
-          enabled: false
+          enabled: true
           field_name: status
         sunspec_did:
           description: SunSpec Device ID (alias)

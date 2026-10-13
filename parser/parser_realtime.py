@@ -10,6 +10,18 @@ from app_logging import get_logger
 from config.config_manager import get_config_manager
 
 
+# Cache dei device_id condivisa da tutte le istanze del parser.
+# flows/realtime_flow.py costruisce un RealtimeParser() nuovo a ogni ciclo
+# (~6 s): senza questa cache condivisa, una sola lettura Modbus riuscita male
+# cambia il device_id e lo stesso meter viene scritto sotto due tag diversi,
+# con i pannelli Grafana che ne leggono uno solo e si freezano su dati morti.
+_DEVICE_ID_CACHE = {
+    'inverter': None,
+    'meters': {},
+    'batteries': {}
+}
+
+
 class RealtimeParser:
     """Parser per output formattato realtime."""
 
@@ -24,12 +36,8 @@ class RealtimeParser:
             self._log.error(f"Errore caricamento configurazione modbus: {e}")
             raise
 
-        # Cache per device_id dinamici
-        self._cached_device_ids = {
-            'inverter': None,
-            'meters': {},
-            'batteries': {}
-        }
+        # Cache per device_id dinamici (condivisa tra istanze: vedi sopra)
+        self._cached_device_ids = _DEVICE_ID_CACHE
 
         # Mappa di normalizzazione unità (abbreviazioni → forma completa)
         self._unit_normalization = {
@@ -177,12 +185,23 @@ class RealtimeParser:
                 serial = data.get('c_serialnumber')
                 c_model = data.get('c_model')
 
-                if cached_id:
-                    device_id = cached_id
-                elif serial:
+                # c_serialnumber e' una stringa: se il registro Modbus legge
+                # male restituisce '0', che e' truthy e produrrebbe un
+                # device_id 'meter_0' da mettere in cache.
+                serial_valid = serial is not None and str(serial).strip() not in ('', '0')
+
+                # Il seriale e' l'identita' autoritativa e vince sempre: la
+                # cache serve solo a sopravvivere ai cicli in cui il registro
+                # non si legge, non a vincolare un ID letto male. Senza questo
+                # ordine un ID fasullo (c_model o meter_0) resterebbe in cache
+                # per sempre e continuerebbe a inquinare i pannelli.
+                if serial_valid:
                     device_id = f"meter_{serial}"
-                    self._cached_device_ids['meters'][meter_name] = device_id
-                    self._log.info(f"Meter {meter_name} device_id cached: {device_id}")
+                    if self._cached_device_ids['meters'].get(meter_name) != device_id:
+                        self._cached_device_ids['meters'][meter_name] = device_id
+                        self._log.info(f"Meter {meter_name} device_id cached: {device_id}")
+                elif cached_id:
+                    device_id = cached_id
                 elif c_model:
                     device_id = c_model
                     self._cached_device_ids['meters'][meter_name] = device_id

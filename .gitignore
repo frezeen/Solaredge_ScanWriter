@@ -5,6 +5,13 @@
 .trae/
 .temp_config_backup/
 .env
+# .env e'.env.*' coprono anche i backup datati (.env.bak-20260926-...),
+# che `*.bak` non prende perche' non finisce con .bak; .env.example resta tracciato.
+.env.*
+!.env.example
+# Report di installazione: contiene chiavi API e password SolarEdge
+install_report.md
+.last_backup/
 
 # Python
 __pycache__/
@@ -101,6 +108,9 @@ coverage.xml
 .ipynb_checkpoints
 .python-version
 *.bak
+*.bak-*
+*.backup-*
+*restore-backup-*/
 *.backup
 prompts/
 TODO.md

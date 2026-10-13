@@ -749,7 +749,7 @@ except Exception as e:
                         dashboard_json = json.load(f)
 
                     # 3. Aggiorna UIDs nel dashboard (walk through nested structure)
-                    def update_datasource_uids(obj, influx_uid, sunmoon_uid):
+                    def update_datasource_uids(obj, influx_uid, sunmoon_uid, path=()):
                         """Recursively update data source UIDs in dashboard JSON"""
                         if isinstance(obj, dict):
                             # Update InfluxDB datasources (with type field)
@@ -759,25 +759,52 @@ except Exception as e:
                             elif obj.get('type') == 'fetzerch-sunandmoon-datasource' and sunmoon_uid:
                                 obj['uid'] = sunmoon_uid
                             # Update datasource objects without type (panel-level datasources)
-                            # These are typically InfluxDB datasources in panels
-                            elif 'uid' in obj and 'type' not in obj and influx_uid:
+                            # These are typically InfluxDB datasources in panels.
+                            # metadata.uid is the DASHBOARD's own uid, not a
+                            # datasource: rewriting it corrupts the identity
+                            # the v2 PUT is addressed by, so skip it.
+                            elif ('uid' in obj and 'type' not in obj and influx_uid
+                                  and path[-1] != 'metadata'):
                                 # This is a datasource reference object like {"uid": "xxx"}
                                 obj['uid'] = influx_uid
                             # Recurse into nested objects
-                            for value in obj.values():
-                                update_datasource_uids(value, influx_uid, sunmoon_uid)
+                            for key, value in obj.items():
+                                update_datasource_uids(value, influx_uid, sunmoon_uid, path + (key,))
                         elif isinstance(obj, list):
                             # Recurse into list items
-                            for item in obj:
-                                update_datasource_uids(item, influx_uid, sunmoon_uid)
+                            for idx, item in enumerate(obj):
+                                update_datasource_uids(item, influx_uid, sunmoon_uid, path + (idx,))
 
                     if influx_uid or sunmoon_uid:
-                        update_datasource_uids(dashboard_json, influx_uid, sunmoon_uid)
+                        update_datasource_uids(dashboard_json, influx_uid, sunmoon_uid, ())
                         self.log("✅ Dashboard UIDs updated", "SUCCESS")
                     else:
                         self.log("⚠️ No data source UIDs found, importing dashboard as-is", "WARNING")
 
                     # 4. Importa dashboard con UIDs corretti
+                    # Dashboard v2 (Grafana 13+): usa l'API v2, l'endpoint legacy perde i pannelli (elements)
+                    if dashboard_json.get('apiVersion') == 'dashboard.grafana.app/v2':
+                        md = dashboard_json.get('metadata', {}) or {}
+                        name = md.get('name')
+                        ns = md.get('namespace', 'default')
+                        if name:
+                            api_url = f"{grafana_url}/apis/dashboard.grafana.app/v2/namespaces/{ns}/dashboards/{name}"
+                            try:
+                                get_resp = requests.get(api_url, auth=(grafana_user, grafana_pass), timeout=10)
+                                if get_resp.status_code == 200:
+                                    dashboard_json['metadata']['resourceVersion'] = get_resp.json()['metadata']['resourceVersion']
+                            except Exception as e:
+                                self.log(f"Warning: could not read current resourceVersion: {e}", "WARNING")
+                            put_resp = requests.put(api_url, auth=(grafana_user, grafana_pass), json=dashboard_json, timeout=10)
+                            if put_resp.status_code == 200:
+                                self.log("✅ Dashboard v2 imported successfully with correct UIDs", "SUCCESS")
+                                return True
+                            self.log(f"Failed to import v2 dashboard: HTTP {put_resp.status_code}", "WARNING")
+                            self.log(f"Response: {put_resp.text[:500]}", "WARNING")
+                            return True
+                        self.log("v2 dashboard without metadata.name, skipping import", "WARNING")
+                        return True
+
                     # Rimuovi id e uid dalla dashboard per permettere l'import
                     if 'id' in dashboard_json:
                         del dashboard_json['id']
