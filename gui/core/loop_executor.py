@@ -138,6 +138,18 @@ class LoopExecutor:
                 gme_enabled = os.getenv('GME_ENABLED', 'false').lower() == 'true'
                 bolletta_enabled = os.getenv('BOLLETTA_ENABLED', 'false').lower() == 'true'
 
+                # Le cadenze si rileggono qui: la GUI le scrive in .env senza
+                # riavviare il servizio.
+                api_mins = int(os.getenv('LOOP_API_INTERVAL_MINUTES', '15'))
+                web_mins = int(os.getenv('LOOP_WEB_INTERVAL_MINUTES', '15'))
+                realtime_secs = int(os.getenv('LOOP_REALTIME_INTERVAL_SECONDS', '5'))
+                gme_mins = int(os.getenv('LOOP_GME_INTERVAL_MINUTES', '1440'))
+                bolletta_mins = int(os.getenv('LOOP_BOLLETTA_INTERVAL_MINUTES', '1440'))
+                api_web_interval = timedelta(minutes=max(api_mins, web_mins))
+                realtime_interval = timedelta(seconds=realtime_secs)
+                gme_interval = timedelta(minutes=gme_mins)
+                bolletta_interval = timedelta(minutes=bolletta_mins)
+
                 # Calcola tempo fino alla prossima operazione
                 time_until_api_web = (last_api_web_run + api_web_interval - current_time).total_seconds()
                 time_until_realtime = (last_realtime_run + realtime_interval - current_time).total_seconds()

@@ -323,6 +323,51 @@ class SimpleWebGUI:
             'errors_bytes': size(archive),
         }
 
+    async def handle_set_intervals(self, request: web.Request) -> web.Response:
+        """Cambia le cadenze dei flussi, scrivendole in .env."""
+        spec = {
+            'api': ('LOOP_API_INTERVAL_MINUTES', 1, 1440),
+            'web': ('LOOP_WEB_INTERVAL_MINUTES', 1, 1440),
+            'realtime': ('LOOP_REALTIME_INTERVAL_SECONDS', 1, 3600),
+            'gme': ('LOOP_GME_INTERVAL_MINUTES', 1, 10080),
+            'bolletta': ('LOOP_BOLLETTA_INTERVAL_MINUTES', 1, 10080),
+        }
+        try:
+            payload = await request.json() if request.can_read_body else {}
+        except Exception:
+            payload = {}
+
+        changes = {}
+        for key, (env_key, lo, hi) in spec.items():
+            if key not in payload:
+                continue
+            try:
+                value = int(payload[key])
+            except (TypeError, ValueError):
+                return web.json_response({'status': 'error', 'message': f'{key}: valore non numerico'}, status=400)
+            if not lo <= value <= hi:
+                return web.json_response({'status': 'error', 'message': f'{key}: fuori range {lo}-{hi}'}, status=400)
+            changes[env_key] = value
+
+        if not changes:
+            return web.json_response({'status': 'error', 'message': 'nessuna cadenza indicata'}, status=400)
+
+        try:
+            env_path = Path(self.config_handler.CONFIG_FILE_PATHS['env'])
+            lines = env_path.read_text(encoding='utf-8').splitlines()
+            for env_key, value in changes.items():
+                for i, line in enumerate(lines):
+                    if line.split('=', 1)[0].strip() == env_key:
+                        lines[i] = f'{env_key}={value}'
+                        break
+                else:
+                    lines.append(f'{env_key}={value}')
+                os.environ[env_key] = str(value)
+            env_path.write_text('\n'.join(lines) + '\n', encoding='utf-8')
+            return web.json_response({'status': 'success', 'values': changes})
+        except Exception as e:
+            return self.error_handler.handle_api_error(e, "setting intervals", "Error setting intervals")
+
     async def handle_logs_retention(self, request: web.Request) -> web.Response:
         """Cambia la durata del log in giorni, scrivendo .env."""
         try:
@@ -526,6 +571,7 @@ class SimpleWebGUI:
         self.app.router.add_post('/api/loop/logs/clear', self.handle_clear_logs)
         self.app.router.add_get('/api/loop/errors', self.handle_loop_errors)
         self.app.router.add_post('/api/loop/logs/retention', self.handle_logs_retention)
+        self.app.router.add_post('/api/loop/intervals', self.handle_set_intervals)
 
         # Endpoint configuration routes
         self.app.router.add_post('/api/endpoints/toggle', self.handle_toggle_endpoint)

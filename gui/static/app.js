@@ -29,7 +29,7 @@ function shell(active) {
     <div class="logo">◈</div>
     ${NAV.map(([p, i, l]) => `<a class="ric ${p === active ? 'on' : ''}" href="#${p}" title="${l}">${i}</a>`).join('')}
     <div class="grow"></div>
-    <div class="foot">v26.17<br>solaredge</div>
+    <div class="foot">v26.19<br>solaredge</div>
   </aside>
   <main class="main">
     <div class="top">
@@ -660,8 +660,26 @@ async function viewLoop() {
       </div>
 
       <div class="c">
+        <div class="h"><span class="t">Cadenze</span><span class="m">valgono dal giro successivo, senza riavviare</span><button class="btn" id="saveInt" style="margin-left:auto">Salva cadenze</button></div>
+        <div class="tblwrap"><table class="tbl">
+          <thead><tr><th>Flusso</th><th>Ogni</th><th>Unita</th><th>Nota</th></tr></thead>
+          <tbody>${FLOWS.map(f => `<tr>
+            <td>${esc(f.label)}</td>
+            <td><input class="search" id="int-${f.key}" type="number" min="1" style="width:6rem"
+              value="${f.key === 'realtime' ? ((iv.realtime) || 5) : Math.round(((iv[f.key] || 900) / 60))}"></td>
+            <td>${f.key === 'realtime' ? 'secondi' : 'minuti'}</td>
+            <td class="mt">${f.key === 'api' ? 'il tick non e il numero di chiamate: il collector V2 legge i contatori ogni ora e la produzione una volta all ora' : ''}</td>
+          </tr>`).join('')}</tbody>
+        </table></div>
+      </div>
+
+      <div class="c">
         <div class="h"><span class="t">Run falliti</span><span class="m">${fails.length} su ${runs.length} run nel buffer</span></div>
-        <div class="filters">${['all','realtime','web','api','gme','bolletta'].map(k => `<button class="chip ${LOOP_STATE.runFlow === k ? 'on' : ''}" data-runflow="${k}">${k}</button>`).join('')}</div>
+        <div class="filters">
+          <select id="runflow" class="search">
+            ${['all','realtime','web','api','gme','bolletta'].map(k => `<option value="${k}" ${LOOP_STATE.runFlow === k ? 'selected' : ''}>sorgente: ${k}</option>`).join('')}
+          </select>
+        </div>
         <div class="tblwrap"><table class="tbl">
           <thead><tr><th>Flusso</th><th>Inizio</th><th>Fine</th><th class="num">Durata</th><th>Motivo</th></tr></thead>
           <tbody>${fails.slice(0, 50).map(r => `<tr>
@@ -680,10 +698,24 @@ async function viewLoop() {
       toast(status.loop_mode ? 'Loop fermato' : 'Loop avviato');
       viewLoop();
     });
-    v.querySelectorAll('[data-runflow]').forEach(el => el.addEventListener('click', () => {
-      LOOP_STATE.runFlow = el.dataset.runflow;
+    $('#runflow').addEventListener('change', (e) => {
+      LOOP_STATE.runFlow = e.target.value;
       viewLoop();
-    }));
+    });
+    $('#saveInt').addEventListener('click', async () => {
+      const body = {
+        api: Number(($('#int-api') || {}).value),
+        web: Number(($('#int-web') || {}).value),
+        realtime: Number(($('#int-realtime') || {}).value),
+        gme: Number(($('#int-gme') || {}).value),
+        bolletta: Number(($('#int-bolletta') || {}).value),
+      };
+      try {
+        await api('/api/loop/intervals', { method: 'POST', body: JSON.stringify(body) });
+        toast('Cadenze salvate');
+        viewLoop();
+      } catch (err) { toast('Cadenze non salvate: ' + err.message); }
+    });
     window.scrollTo(0, keepY);
   } catch (e) {
     v.innerHTML = `<div class="empty">errore: ${esc(e.message)}</div>`;
