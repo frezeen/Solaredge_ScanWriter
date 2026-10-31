@@ -29,7 +29,7 @@ function shell(active) {
     <div class="logo">◈</div>
     ${NAV.map(([p, i, l]) => `<a class="ric ${p === active ? 'on' : ''}" href="#${p}" title="${l}">${i}</a>`).join('')}
     <div class="grow"></div>
-    <div class="foot">v26.11<br>solaredge</div>
+    <div class="foot">v26.13<br>solaredge</div>
   </aside>
   <main class="main">
     <div class="top">
@@ -280,7 +280,7 @@ async function viewOverview() {
           const on = f.key === 'gme' ? gmeOn : f.key === 'bolletta' ? bollettaOn : true;
           const off = (f.key === 'gme' || f.key === 'bolletta') && !on;
           return `<tr>
-            <td><span class="name"><span class="hd ${off ? 'off' : 'ok'}"></span>${esc(f.label)}${off ? ' <span class="tag t-off">off</span>' : ''}${f.key === 'gme' || f.key === 'bolletta' ? toggleHtml('flow', f.key, on) : ''}</span></td>
+            <td><span class="name"><span class="hd ${off ? 'off' : 'ok'}"></span>${esc(f.label)}${off ? ' <span class="tag t-off">off</span>' : ''}</span></td>
             <td class="mono">${every((status.intervals_seconds || {})[f.key])}</td>
             <td>${esc(lastTime)}${lastRel ? ` <span class="sub">${lastRel}</span>` : ''}</td>
             <td>${esc(st[f.key + '_next_run'] || '—')}${nextRel ? ` <span class="sub">${nextRel}</span>` : ''}</td>
@@ -318,7 +318,6 @@ async function viewOverview() {
 
   const term = $('#overr');
   if (term) term.scrollTop = term.scrollHeight;
-  bindToggles(v);
   window.scrollTo(0, keepY);
 }
 
@@ -499,16 +498,14 @@ async function viewFlowInfo(kind) {
       ['Prossimo', esc(st[kind + '_next_run'] || '-') + (nextRel ? ' - ' + nextRel : '')],
       ['Eseguiti / falliti', `${stats.executed || 0} / ${stats.failed || 0}`],
     ],
-    extra: kind === 'gme'
-      ? `<div class="row"><span class="tm">Attivo</span><span class="nm">${toggleHtml('gme', 'gme', on)}</span></div>`
-      : '<div class="note">Si abilita in .env con BOLLETTA_ENABLED.</div>',
+    extra: `<div class="row"><span class="tm">Attivo</span>${toggleHtml('flow', kind, on)}</div>`,
   }) + `
     <div class="c">
       <div class="h"><span class="t">Log recenti</span><span class="m">flow ${esc(kind)}</span></div>
       <div class="term" id="flowlog" style="height:14rem">${rows.slice(-60).map(logLine).join('') || '<div class="empty">nessuna riga nel buffer</div>'}</div>
     </div>`;
 
-  if (kind === 'gme') bindToggles(body);
+  bindToggles(body);
   const el = $('#flowlog');
   if (el) el.scrollTop = el.scrollHeight;
 }
