@@ -783,8 +783,29 @@ except Exception as e:
                     # Dashboard v2 (Grafana 13+): usa l'API v2, l'endpoint legacy perde i pannelli (elements)
                     if dashboard_json.get('apiVersion') == 'dashboard.grafana.app/v2':
                         md = dashboard_json.get('metadata', {}) or {}
-                        name = md.get('name')
                         ns = md.get('namespace', 'default')
+                        title = (dashboard_json.get('spec', {}) or {}).get('title')
+
+                        # L'uid nel file e' quello dell'installazione che l'ha
+                        # esportato: altrove la stessa dashboard ha un uid diverso,
+                        # quindi si cerca per titolo nel Grafana di destinazione.
+                        if title:
+                            try:
+                                sr = requests.get(
+                                    f"{grafana_url}/api/search",
+                                    params={'type': 'dash-db', 'query': title},
+                                    auth=(grafana_user, grafana_pass), timeout=10)
+                                if sr.status_code == 200:
+                                    for hit in sr.json():
+                                        if (hit.get('title') or '').strip() == title.strip():
+                                            md['name'] = hit.get('uid')
+                                            dashboard_json['metadata'] = md
+                                            self.log(f"Dashboard trovata per titolo: uid {md['name']}", "INFO")
+                                            break
+                            except Exception as e:
+                                self.log(f"Warning: ricerca della dashboard fallita: {e}", "WARNING")
+
+                        name = md.get('name')
                         if name:
                             api_url = f"{grafana_url}/apis/dashboard.grafana.app/v2/namespaces/{ns}/dashboards/{name}"
                             try:
@@ -797,9 +818,21 @@ except Exception as e:
                             if put_resp.status_code == 200:
                                 self.log("✅ Dashboard v2 imported successfully with correct UIDs", "SUCCESS")
                                 return True
-                            self.log(f"Failed to import v2 dashboard: HTTP {put_resp.status_code}", "WARNING")
-                            self.log(f"Response: {put_resp.text[:500]}", "WARNING")
-                            return True
+                            self.log(f"Failed to import v2 dashboard: HTTP {put_resp.status_code}", "ERROR")
+                            self.log(f"Response: {put_resp.text[:500]}", "ERROR")
+
+                            if put_resp.status_code == 404 and title:
+                                body = dict(dashboard_json)
+                                body['metadata'] = {k: v for k, v in (body.get('metadata') or {}).items()
+                                                    if k != 'resourceVersion'}
+                                cr = requests.post(
+                                    f"{grafana_url}/apis/dashboard.grafana.app/v2/namespaces/{ns}/dashboards",
+                                    auth=(grafana_user, grafana_pass), json=body, timeout=10)
+                                if cr.status_code in (200, 201):
+                                    self.log("✅ Dashboard creata su questo Grafana", "SUCCESS")
+                                    return True
+                                self.log(f"Creazione dashboard fallita: HTTP {cr.status_code}", "ERROR")
+                            return False
                         self.log("v2 dashboard without metadata.name, skipping import", "WARNING")
                         return True
 
@@ -913,6 +946,7 @@ async def main_async() -> int:
     parser = argparse.ArgumentParser(description="Smart Update System for SolarEdge Data Collector")
     parser.add_argument("--force", action="store_true", help="Force update even if no changes detected")
     parser.add_argument("--check-only", action="store_true", help="Only check for updates, don't apply")
+    parser.add_argument("--dashboard-only", action="store_true", help="Import the Grafana dashboard and stop")
 
     args = parser.parse_args()
 
@@ -926,6 +960,9 @@ async def main_async() -> int:
                 pass  # Silent fallback
 
         updater = SmartUpdater(config_manager=config_manager)
+
+        if args.dashboard_only:
+            return 0 if updater.import_grafana_dashboard() else 1
 
         if args.check_only:
             has_updates, count = updater.check_for_updates()
@@ -960,10 +997,14 @@ def main() -> None:
         parser = argparse.ArgumentParser(description="Smart Update System for SolarEdge Data Collector")
         parser.add_argument("--force", action="store_true", help="Force update even if no changes detected")
         parser.add_argument("--check-only", action="store_true", help="Only check for updates, don't apply")
+        parser.add_argument("--dashboard-only", action="store_true", help="Import the Grafana dashboard and stop")
 
         args = parser.parse_args()
 
         updater = SmartUpdater()
+
+        if args.dashboard_only:
+            sys.exit(0 if updater.import_grafana_dashboard() else 1)
 
         if args.check_only:
             has_updates, count = updater.check_for_updates()

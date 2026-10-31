@@ -64,6 +64,8 @@ if python3 scripts/smart_update.py --check-only; then
     log_info "Aggiornamenti disponibili, procedendo..."
 else
     log_success "Nessun aggiornamento disponibile"
+    log_info "Aggiorno comunque la dashboard Grafana..."
+    python3 scripts/smart_update.py --dashboard-only || log_warning "Dashboard non aggiornata"
     exit 0
 fi
 
