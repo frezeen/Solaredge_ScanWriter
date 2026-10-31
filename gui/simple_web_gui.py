@@ -125,7 +125,8 @@ class SimpleWebGUI:
                 intervals_text = f"⏰ Intervalli: API/Web ogni {max(api_interval, web_interval)} min, Realtime ogni {realtime_interval} sec"
                 html_content = html_content.replace('⏰ Intervalli: API/Web ogni 15 min, Realtime ogni 5 sec', intervals_text)
 
-                return web.Response(text=html_content, content_type='text/html')
+                return web.Response(text=html_content, content_type='text/html',
+                                    headers={'Cache-Control': 'no-store'})
             else:
                 return web.Response(text="Template non trovato", status=404)
         except Exception as e:
@@ -167,10 +168,12 @@ class SimpleWebGUI:
                 # Leggi file in base al tipo
                 if is_binary:
                     content = static_path.read_bytes()
-                    return web.Response(body=content, content_type=content_type)
+                    return web.Response(body=content, content_type=content_type,
+                                        headers={'Cache-Control': 'no-store'})
                 else:
                     content = static_path.read_text(encoding='utf-8')
-                    return web.Response(text=content, content_type=content_type)
+                    return web.Response(text=content, content_type=content_type,
+                                        headers={'Cache-Control': 'no-store'})
             else:
                 return self.error_handler.handle_not_found_error("file", filename, "serving static")
         except UnicodeDecodeError as e:
