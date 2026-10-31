@@ -1,0 +1,8 @@
+[Unit]
+Description=SolarEdge dashboard file <-> Grafana sync
+After=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/Solaredge_ScanWriter
+ExecStart=/usr/bin/python3 tools/sync_dashboard.py
