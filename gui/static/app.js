@@ -29,7 +29,7 @@ function shell(active) {
     <div class="logo">◈</div>
     ${NAV.map(([p, i, l]) => `<a class="ric ${p === active ? 'on' : ''}" href="#${p}" title="${l}">${i}</a>`).join('')}
     <div class="grow"></div>
-    <div class="foot">v26.19<br>solaredge</div>
+    <div class="foot">v26.23<br>solaredge</div>
   </aside>
   <main class="main">
     <div class="top">
@@ -604,7 +604,15 @@ function loopFlowCard(f, st, fe, iv) {
   const next = f.key === 'realtime' ? 'continuo' : (st[f.key + '_next_run'] || '-');
   const nextRel = st[f.next] ? rel(st[f.next]) : '';
   return `<div class="fcard ${off ? 'off' : ''}">
-    <div class="fh"><span class="hd ${off ? 'off' : 'ok'}"></span><b>${esc(f.label)}</b><span class="tag ${flowTag(f.key)}">${every(iv[f.key])}</span></div>
+    <div class="fh"><span class="hd ${off ? 'off' : 'ok'}"></span><b>${esc(f.label)}</b>
+      <span style="margin-left:auto;display:inline-flex;align-items:center;gap:.3rem">
+        <input class="search" data-int="${f.key}" type="number" min="1" style="width:4rem;padding:.15rem .35rem;font-size:.78rem"
+          title="${f.key === 'api' ? 'tick del loop: il collector V2 legge i contatori ogni ora' : 'intervallo del flusso'}"
+          value="${f.key === 'realtime' ? ((iv.realtime) || 5)
+            : (f.key === 'gme' || f.key === 'bolletta') ? Math.max(1, Math.round((iv[f.key] || 86400) / 86400))
+            : Math.round(((iv[f.key] || 900) / 60))}">
+        <i style="font-style:normal;font-size:.72rem;color:var(--dim)">${f.key === 'realtime' ? 's' : (f.key === 'gme' || f.key === 'bolletta') ? 'giorni' : 'min'}</i>
+      </span></div>
     <div class="fsub">${esc(f.note)}</div>
     <div class="fgrid">
       <div><span>Ultimo</span><b>${esc(last)}</b></div>
@@ -659,37 +667,24 @@ async function viewLoop() {
         <div class="note">Il loop e' sequenziale: ogni flusso parte quando scade il suo intervallo. Un fallimento non ferma gli altri; Stop ferma tutto fino al prossimo Start.</div>
       </div>
 
-      <div class="c">
-        <div class="h"><span class="t">Cadenze</span><span class="m">valgono dal giro successivo, senza riavviare</span><button class="btn" id="saveInt" style="margin-left:auto">Salva cadenze</button></div>
-        <div class="tblwrap"><table class="tbl">
-          <thead><tr><th>Flusso</th><th>Ogni</th><th>Unita</th><th>Nota</th></tr></thead>
-          <tbody>${FLOWS.map(f => `<tr>
-            <td>${esc(f.label)}</td>
-            <td><input class="search" id="int-${f.key}" type="number" min="1" style="width:6rem"
-              value="${f.key === 'realtime' ? ((iv.realtime) || 5) : Math.round(((iv[f.key] || 900) / 60))}"></td>
-            <td>${f.key === 'realtime' ? 'secondi' : 'minuti'}</td>
-            <td class="mt">${f.key === 'api' ? 'il tick non e il numero di chiamate: il collector V2 legge i contatori ogni ora e la produzione una volta all ora' : ''}</td>
-          </tr>`).join('')}</tbody>
-        </table></div>
-      </div>
 
       <div class="c">
         <div class="h"><span class="t">Run falliti</span><span class="m">${fails.length} su ${runs.length} run nel buffer</span></div>
-        <div class="filters">
-          <select id="runflow" class="search">
+        <div class="filters" style="justify-content:flex-start">
+          <select id="runflow" class="search" style="max-width:16rem;margin-left:0">
             ${['all','realtime','web','api','gme','bolletta'].map(k => `<option value="${k}" ${LOOP_STATE.runFlow === k ? 'selected' : ''}>sorgente: ${k}</option>`).join('')}
           </select>
         </div>
-        <div class="tblwrap"><table class="tbl">
+        ${fails.length ? `<div class="tblwrap"><table class="tbl">
           <thead><tr><th>Flusso</th><th>Inizio</th><th>Fine</th><th class="num">Durata</th><th>Motivo</th></tr></thead>
           <tbody>${fails.slice(0, 50).map(r => `<tr>
             <td><span class="tag ${flowTag(r.flow)}">${esc(r.flow.slice(0, 8).toUpperCase())}</span></td>
             <td class="mono">${esc(r.start)}</td>
             <td class="mono">${esc(r.end)}</td>
             <td class="num">${fmtDur(r.start, r.end)}</td>
-            <td>${esc(reasonOf(r))}</td>
-          </tr>`).join('') || `<tr><td colspan="5"><span class="empty">nessun run fallito${LOOP_STATE.runFlow === 'all' ? '' : ' per ' + esc(LOOP_STATE.runFlow)}</span></td></tr>`}</tbody>
-        </table></div>
+            <td style="white-space:normal">${esc(reasonOf(r))}</td>
+          </tr>`).join('')}</tbody>
+        </table></div>` : `<div class="empty" style="padding:1.1rem">nessun run fallito${LOOP_STATE.runFlow === 'all' ? '' : ' per ' + esc(LOOP_STATE.runFlow)}</div>`}
         <div class="note">Solo i falliti. La storia completa sta in Logs, con i filtri per sorgente e tipo.</div>
       </div>`;
 
@@ -702,20 +697,18 @@ async function viewLoop() {
       LOOP_STATE.runFlow = e.target.value;
       viewLoop();
     });
-    $('#saveInt').addEventListener('click', async () => {
-      const body = {
-        api: Number(($('#int-api') || {}).value),
-        web: Number(($('#int-web') || {}).value),
-        realtime: Number(($('#int-realtime') || {}).value),
-        gme: Number(($('#int-gme') || {}).value),
-        bolletta: Number(($('#int-bolletta') || {}).value),
-      };
+    v.querySelectorAll('[data-int]').forEach(el => el.addEventListener('change', async () => {
+      const key = el.dataset.int;
+      const value = Number(el.value);
+      const payload = (key === 'gme' || key === 'bolletta') ? value * 1440 : value;
       try {
-        await api('/api/loop/intervals', { method: 'POST', body: JSON.stringify(body) });
-        toast('Cadenze salvate');
+        await api('/api/loop/intervals', { method: 'POST', body: JSON.stringify({ [key]: payload }) });
+        toast(`${key}: ${value}${key === 'realtime' ? ' s' : (key === 'gme' || key === 'bolletta') ? ' giorni' : ' min'}`);
+      } catch (err) {
+        toast('Cadenza non salvata: ' + err.message);
         viewLoop();
-      } catch (err) { toast('Cadenze non salvate: ' + err.message); }
-    });
+      }
+    }));
     window.scrollTo(0, keepY);
   } catch (e) {
     v.innerHTML = `<div class="empty">errore: ${esc(e.message)}</div>`;

@@ -237,17 +237,16 @@ class StateManager:
             stats['last_update_formatted'] = stats['last_update'].strftime('%H:%M:%S')
             del stats['last_update']
 
-        if stats.get('last_api_web_run') and hasattr(stats['last_api_web_run'], 'strftime'):
-            stats['api_last_run'] = stats['last_api_web_run'].strftime('%H:%M:%S')
-            stats['web_last_run'] = stats['last_api_web_run'].strftime('%H:%M:%S')
-            stats['api_last_at'] = stats['web_last_at'] = stats['last_api_web_run'].isoformat()
-            del stats['last_api_web_run']
-
-        if stats.get('next_api_web_run') and hasattr(stats['next_api_web_run'], 'strftime'):
-            stats['api_next_run'] = stats['next_api_web_run'].strftime('%H:%M:%S')
-            stats['web_next_run'] = stats['next_api_web_run'].strftime('%H:%M:%S')
-            stats['api_next_at'] = stats['web_next_at'] = stats['next_api_web_run'].isoformat()
-            del stats['next_api_web_run']
+        for flow in ('api', 'web'):
+            last_key, next_key = f'last_{flow}_run', f'next_{flow}_run'
+            if stats.get(last_key) and hasattr(stats[last_key], 'strftime'):
+                stats[f'{flow}_last_run'] = stats[last_key].strftime('%H:%M:%S')
+                stats[f'{flow}_last_at'] = stats[last_key].isoformat()
+                del stats[last_key]
+            if stats.get(next_key) and hasattr(stats[next_key], 'strftime'):
+                stats[f'{flow}_next_run'] = stats[next_key].strftime('%H:%M:%S')
+                stats[f'{flow}_next_at'] = stats[next_key].isoformat()
+                del stats[next_key]
 
         if stats.get('last_gme_run') and hasattr(stats['last_gme_run'], 'strftime'):
             stats['gme_last_run'] = stats['last_gme_run'].strftime('%H:%M:%S')

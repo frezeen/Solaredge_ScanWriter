@@ -102,6 +102,8 @@ class LoopExecutor:
 
         # Timestamp per tracking esecuzioni
         last_api_web_run = datetime.min
+        last_api_run = datetime.min
+        last_web_run = datetime.min
         last_realtime_run = datetime.min
         last_gme_run = datetime.min
         last_bolletta_run = datetime.min
@@ -113,7 +115,9 @@ class LoopExecutor:
         gme_mins = int(os.getenv('LOOP_GME_INTERVAL_MINUTES', '1440'))
         bolletta_mins = int(os.getenv('LOOP_BOLLETTA_INTERVAL_MINUTES', '1440'))
 
-        api_web_interval = timedelta(minutes=max(api_mins, web_mins))
+        api_interval = timedelta(minutes=api_mins)
+        web_interval = timedelta(minutes=web_mins)
+        api_web_interval = min(api_interval, web_interval)
         realtime_interval = timedelta(seconds=realtime_secs)
         gme_interval = timedelta(minutes=gme_mins)
         bolletta_interval = timedelta(minutes=bolletta_mins)
@@ -145,7 +149,9 @@ class LoopExecutor:
                 realtime_secs = int(os.getenv('LOOP_REALTIME_INTERVAL_SECONDS', '5'))
                 gme_mins = int(os.getenv('LOOP_GME_INTERVAL_MINUTES', '1440'))
                 bolletta_mins = int(os.getenv('LOOP_BOLLETTA_INTERVAL_MINUTES', '1440'))
-                api_web_interval = timedelta(minutes=max(api_mins, web_mins))
+                api_interval = timedelta(minutes=api_mins)
+                web_interval = timedelta(minutes=web_mins)
+                api_web_interval = min(api_interval, web_interval)
                 realtime_interval = timedelta(seconds=realtime_secs)
                 gme_interval = timedelta(minutes=gme_mins)
                 bolletta_interval = timedelta(minutes=bolletta_mins)
@@ -160,13 +166,24 @@ class LoopExecutor:
                 if gme_enabled and time_until_gme < 60:
                     self.logger.debug(f"[GME DEBUG] time_until_gme={time_until_gme:.1f}s, last_run={last_gme_run}, interval={gme_interval}")
 
-                # Esegui API e Web
+                # Esegui API e Web: tick comune, ma ogni flusso parte alla sua
+                # cadenza (api puo' stare a 60 minuti e web a 15).
                 if (api_enabled or web_enabled) and time_until_api_web <= 0:
-                    await self._execute_api_web_flows(api_enabled, web_enabled, log, cache, config)
+                    now_ts = datetime.now()
+                    run_api = api_enabled and (now_ts - last_api_run) >= api_interval
+                    run_web = web_enabled and (now_ts - last_web_run) >= web_interval
+                    if run_api or run_web:
+                        await self._execute_api_web_flows(run_api, run_web, log, cache, config)
+                        if run_api:
+                            last_api_run = now_ts
+                            self.state_manager.loop_stats['last_api_run'] = now_ts
+                            self.state_manager.loop_stats['next_api_run'] = now_ts + api_interval
+                        if run_web:
+                            last_web_run = now_ts
+                            self.state_manager.loop_stats['last_web_run'] = now_ts
+                            self.state_manager.loop_stats['next_web_run'] = now_ts + web_interval
                     last_api_web_run = current_time
-                    self.state_manager.loop_stats['last_api_web_run'] = current_time
                     self.state_manager.loop_stats['last_update'] = current_time
-                    self.state_manager.loop_stats['next_api_web_run'] = current_time + api_web_interval
                     time_until_api_web = api_web_interval.total_seconds()
                     time_until_realtime = (last_realtime_run + realtime_interval - datetime.now()).total_seconds()
                 elif not api_enabled and not web_enabled:
