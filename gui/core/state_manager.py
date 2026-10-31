@@ -87,17 +87,6 @@ class StateManager:
         self.loop_stats['status'] = 'stopped'
         self.logger.info("Loop mode fermato")
 
-    def start_new_run(self, flow_type: str):
-        """
-        Inizia una nuova run per un flow specifico (ruota i log)
-        
-        Args:
-            flow_type: Tipo flow ('api', 'web', 'realtime', 'gme')
-        """
-        if flow_type in self.flow_runs and flow_type != 'sistema':
-            # Aggiunge nuova lista vuota, la deque gestisce automaticamente l'eviction della più vecchia
-            self.flow_runs[flow_type].append([])
-
     def add_log_entry(self, level: str, message: str, flow_type: str = 'general', timestamp: Optional[datetime] = None):
         """
         Aggiunge entry al buffer log con retention policy (24h)

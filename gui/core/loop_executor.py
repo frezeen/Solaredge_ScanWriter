@@ -285,7 +285,6 @@ class LoopExecutor:
         self.logger.info("[GUI] 🌐 Esecuzione raccolta API/Web...")
 
         if web_enabled:
-            self.state_manager.start_new_run('web')
             self.state_manager.loop_stats['web_stats']['executed'] += 1
             try:
                 await asyncio.get_event_loop().run_in_executor(
@@ -298,7 +297,6 @@ class LoopExecutor:
                 self.logger.error(f"[GUI] ❌ Errore raccolta web: {e}")
 
         if api_enabled:
-            self.state_manager.start_new_run('api')
             self.state_manager.loop_stats['api_stats']['executed'] += 1
             try:
                 await asyncio.get_event_loop().run_in_executor(
@@ -312,7 +310,6 @@ class LoopExecutor:
 
     async def _execute_realtime_flow(self, log, cache, config):
         """Esegue Realtime flow."""
-        self.state_manager.start_new_run('realtime')
         self.state_manager.loop_stats['realtime_stats']['executed'] += 1
         try:
             result = await asyncio.get_event_loop().run_in_executor(
@@ -330,7 +327,6 @@ class LoopExecutor:
     async def _execute_gme_flow(self, log, cache, config, last_gme_run, gme_interval, time_until_gme):
         """Esegue GME flow."""
         self.logger.info(f"[GUI] 🔋 Esecuzione raccolta GME... (last_run: {last_gme_run}, interval: {gme_interval}, time_until: {time_until_gme:.1f}s)")
-        self.state_manager.start_new_run('gme')
         self.state_manager.loop_stats['gme_stats']['executed'] += 1
         try:
             await asyncio.get_event_loop().run_in_executor(
@@ -345,7 +341,6 @@ class LoopExecutor:
     async def _execute_bolletta_flow(self, log, cache, config):
         """Esegue il flow bolletta (valori ARERA)."""
         self.logger.info('[GUI] 🧾 Esecuzione aggiornamento bolletta...')
-        self.state_manager.start_new_run('bolletta')
         self.state_manager.loop_stats['bolletta_stats']['executed'] += 1
         try:
             await asyncio.get_event_loop().run_in_executor(
