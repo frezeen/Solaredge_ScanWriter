@@ -85,6 +85,7 @@ Thumbs.db
 # Config & Data
 local_config.yaml
 config/local/
+config/ssp_official.yaml
 config/sources/web_endpoints.yaml
 *.db
 *.sqlite

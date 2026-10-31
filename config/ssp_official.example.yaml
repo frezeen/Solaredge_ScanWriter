@@ -1,0 +1,13 @@
+# Conguagli GSE ufficiali per anno solare, dal Dettaglio Benestare.
+# Copia questo file in config/ssp_official.yaml (non versionato) e metti i tuoi.
+# Chiave assente = anno non ancora liquidato; cs+ecc e le componenti del
+# conguaglio (oe, cei, es, immessa, prelevata) sono quelle stampate dal GSE.
+#
+# 2023:
+#   cs: 0.0
+#   ecc: 0.0
+#   oe: 0.0
+#   cei: 0.0
+#   es: 0.0
+#   immessa: 0.0
+#   prelevata: 0.0

@@ -24,6 +24,8 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Dict, List, Optional, Tuple
 
 import pytz
+import yaml
+from pathlib import Path
 from influxdb_client import InfluxDBClient, Point, WritePrecision
 
 BUCKET_ENERGY = 'Solaredge'
@@ -45,19 +47,19 @@ HOLIDAYS = {(1, 1), (1, 6), (4, 25), (5, 1), (6, 2), (8, 15), (11, 1), (12, 8), 
 # L'eccedenza di un anno e' liquidata l'anno dopo (colonna "Credito anno
 # precedente liquidato"), quindi la cassa dell'anno Y e' CS(Y) + eccedenza(Y-1).
 # Chiave assente = anno non ancora liquidato.
-UFFICIALE = {
-    2021: dict(cs=0.0),
-    # 2022: solo l'esito (CS ed eccedenza).  Le sue componenti non chiudono con
-    # l'eccedenza dichiarata (CEI - OE darebbe 3,92 euro in meno), quindi non si
-    # scrivono finche' non arriva il benestare di quell'anno.
-    2022: dict(cs=0.0, ecc=0.0),
-    2023: dict(cs=0.0, ecc=0.0, oe=0.0, cei=0.0, es=0.0,
-               immessa=0.0, prelevata=0.0),
-    2024: dict(cs=0.0, ecc=0.0, oe=0.0, cei=0.0, es=0.0,
-               immessa=0.0, prelevata=0.0),
-    2025: dict(cs=0.0, ecc=0.0, oe=0.0, cei=0.0, es=0.0,
-               immessa=0.0, prelevata=0.0),
-}
+# I valori stanno in config/ssp_official.yaml, che non e' versionato: sono dati
+# del proprietario dell'impianto, non del software.
+OFFICIAL_FILE = Path(__file__).resolve().parent.parent / 'config' / 'ssp_official.yaml'
+
+
+def _load_official() -> Dict[int, dict]:
+    if not OFFICIAL_FILE.exists():
+        return {}
+    data = yaml.safe_load(OFFICIAL_FILE.read_text(encoding='utf-8')) or {}
+    return {int(year): (values or {}) for year, values in data.items()}
+
+
+UFFICIALE = _load_official()
 
 
 def _ufficiale(year: int, key: str) -> float:
