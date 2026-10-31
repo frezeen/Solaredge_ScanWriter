@@ -45,13 +45,7 @@ class SchedulerConfig:
 @dataclass(frozen=True)
 class SolarEdgeAPIConfig:
     """Configurazione API SolarEdge."""
-    api_key: str
-    base_url: str = "https://monitoringapi.solaredge.com"
-    rate_limit_seconds: float = 1.0
-    retry_attempts: int = 3
-    retry_delay_seconds: float = 1.0
     site_id: str = ""
-    timeout_seconds: int = 30
 
 
 @dataclass(frozen=True)
@@ -205,13 +199,7 @@ class ConfigManager:
         """Ottieni configurazione API SolarEdge."""
         api_data = self._config_data.get('solaredge', {}).get('api', {})
         return SolarEdgeAPIConfig(
-            api_key=api_data.get('api_key', ''),
-            base_url=api_data.get('base_url', 'https://monitoringapi.solaredge.com'),
-            rate_limit_seconds=float(api_data.get('rate_limit_seconds', 1.0)),
-            retry_attempts=int(api_data.get('retry_attempts', 3)),
-            retry_delay_seconds=float(api_data.get('retry_delay_seconds', 1.0)),
-            site_id=api_data.get('site_id', ''),
-            timeout_seconds=int(api_data.get('timeout_seconds', 30))
+            site_id=api_data.get('site_id', '')
         )
 
     def get_solaredge_web_config(self) -> SolarEdgeWebConfig:

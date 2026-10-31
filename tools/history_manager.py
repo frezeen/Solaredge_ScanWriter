@@ -1,352 +1,100 @@
-import calendar
-from datetime import datetime, timedelta
+"""Backfill storico: SolarEdge e GME dal giorno dell'impianto a oggi.
+
+Ogni sorgente ha il suo ritmo: l'api una settimana per due chiamate (limite del
+fornitore su QUARTER_HOUR), GME un mese per chiamata. La data di partenza e'
+l'installazione, letta da `/sites/{id}`; `--history <anno>` limita a un anno.
+La bolletta non ha una sorgente storica: il collector legge i valori correnti.
+"""
+
+from datetime import date, datetime, timedelta
+import time
+
 from collector.collector_api import CollectorAPI
+from collector.solaredge_v2 import SolarEdgeV2, SolarEdgeV2Error, MAX_RANGE_DAYS
+from flows.gme_flow import run_gme_month_flow
+from parser.api_parser import create_parser
+from storage.writer_influx import InfluxWriter
 from utils.color_logger import color
-from scheduler.scheduler_loop import SchedulerLoop, SchedulerConfig
+
 
 class HistoryManager:
-    """Gestisce il download dello storico completo con suddivisione mensile"""
+    """Rilegge dal fornitore le giornate e i mesi mancanti e li riscrive in InfluxDB."""
 
     def __init__(self, log, cache, config, year=None):
-        """Inizializza HistoryManager
-
-        Args:
-            log: Logger instance
-            cache: Cache manager instance
-            config: Configuration dictionary
-            year: Optional year (int or str) to download only that year's data
-        """
         self.log = log
         self.cache = cache
         self.config = config
-        self.collector = None
         self.year = int(year) if year else None
-        self.current_year = datetime.now().year
+
+    def _installation_date(self) -> date:
+        """Il giorno in cui l'impianto e' partito, da /sites/{id}."""
+        meta = SolarEdgeV2(self._site_id()).site_meta()
+        for key in ("installationDate", "firstTelemetryTime"):
+            stamp = meta.get(key)
+            if stamp:
+                return date.fromisoformat(str(stamp)[:10])
+        return date.today() - timedelta(days=365)
+
+    def _site_id(self) -> str:
+        with CollectorAPI(cache=self.cache, scheduler=None) as collector:
+            return collector.site_id
 
     def run(self) -> int:
-        """Esegue modalità history: scarica storico completo con suddivisione mensile"""
-        self.log.info(color.bold("📜 Avvio modalità History - Scaricamento storico completo"))
-        self.log.info(color.success("✅ ABILITANDO CACHE per history mode - skip mesi già scaricati"))
-
-        # Inizializza collector CON cache per evitare chiamate API duplicate
-        self.collector = CollectorAPI(cache=self.cache, scheduler=None)
-
-        # Inizializza Scheduler persistente per GME (per mantenere il delay tra i mesi)
-        scheduler_config = SchedulerConfig.from_config(self.config)
-        self.gme_scheduler = SchedulerLoop(scheduler_config)
-
-        # Inizializza variabili per gestione return
-        interrupted = False
-        failed_count = 0
-
-        try:
-            # 1. Recupera range temporale dall'API
-            date_range_result = self._get_date_range_from_api()
-            if not date_range_result:
-                return 1
-            start_date, end_date = date_range_result
-            
-            # Se specificato un anno, limita il range a quell'anno
-            if self.year:
-                year_start = f"{self.year}-01-01"
-                year_end = f"{self.year}-12-31"
-                
-                # Usa il range più restrittivo tra API e anno richiesto
-                if start_date < year_start:
-                    start_date = year_start
-                if end_date > year_end:
-                    end_date = year_end
-                    
-                self.log.info(color.highlight(f"📅 Range filtrato per anno {self.year}: {start_date} → {end_date}"))
-
-            # 2. Genera lista di mesi da processare
-            months = self._generate_months_list(start_date, end_date)
-
-            # 3. Processa tutti i mesi
-            # Se anno specificato e NON è l'anno corrente: solo monthly
-            # Se anno corrente o non specificato: monthly + daily per ultimi 7 giorni
-            allow_daily_devices = self._is_current_year()
-            success_count, failed_count, web_success, web_failed, interrupted, web_executed, gme_success, gme_failed, web_monthly_success, web_monthly_failed = \
-                self._process_months(months, end_date, allow_daily_devices)
-
-            # 4. Stampa statistiche finali
-            self._print_final_statistics(success_count, failed_count, web_success, web_failed,
-                                       interrupted, web_executed, len(months), gme_success, gme_failed,
-                                       web_monthly_success, web_monthly_failed)
-
-        finally:
-            # Chiudi sessione HTTP per liberare risorse
-            if self.collector:
-                self.collector.close()
-
-        # Ritorna 0 se interrotto pulitamente o completato con successo
-        if interrupted:
-            return 0  # Uscita pulita per interruzione
+        if self.year:
+            start = date(self.year, 1, 1)
+            end = min(date(self.year, 12, 31) + timedelta(days=1), date.today() + timedelta(days=1))
         else:
-            return 0 if failed_count == 0 else 1
+            start = self._installation_date()
+            end = date.today() + timedelta(days=1)
 
-    def _is_current_year(self) -> bool:
-        """Verifica se l'anno richiesto è l'anno corrente"""
-        if not self.year:
-            return True  # Se non specificato, è sempre "corrente"
-        return self.year == self.current_year
+        self.log.info(color.bold(f"📜 Storico dal {start} al {end - timedelta(days=1)}"))
+        self._api(start, end)
+        self._gme(start, end)
+        self.log.info(color.warning("   Bolletta: nessuna sorgente storica da rileggere, i suoi dati sono correnti"))
+        return 0
 
-    def _get_date_range_from_api(self):
-        """Recupera range temporale dall'API dataPeriod"""
-        self.log.info(color.info("🔍 Recupero range temporale da API dataPeriod..."))
-        date_range = self.collector.get_production_date_range()
-
-        if not date_range:
-            self.log.error(color.error("❌ Impossibile recuperare range temporale"))
-            return None
-
-        start_date = date_range['start']
-        end_date = date_range['end']
-        self.log.info(color.highlight(f"📅 Range temporale: {start_date} → {end_date}"))
-
-        return start_date, end_date
-
-    def _generate_months_list(self, start_date: str, end_date: str):
-        """Genera lista di mesi da processare"""
-        months = []
-        current = datetime.strptime(start_date, '%Y-%m-%d')
-        end = datetime.strptime(end_date, '%Y-%m-%d')
-
-        while current <= end:
-            year = current.year
-            month = current.month
-
-            # Primo giorno del mese
-            first_day = datetime(year, month, 1)
-
-            # Ultimo giorno del mese
-            last_day_num = calendar.monthrange(year, month)[1]
-            last_day = datetime(year, month, last_day_num)
-
-            # Non superare end_date
-            if last_day > end:
-                last_day = end
-
-            months.append({
-                'start': first_day.strftime('%Y-%m-%d'),
-                'end': last_day.strftime('%Y-%m-%d'),
-                'label': first_day.strftime('%Y-%m')
-            })
-
-            # Passa al mese successivo
-            if month == 12:
-                current = datetime(year + 1, 1, 1)
-            else:
-                current = datetime(year, month + 1, 1)
-
-        self.log.info(color.highlight(f"📊 Totale mesi da processare: {len(months)}"))
-        return months
-
-    def _process_months(self, months, end_date: str, allow_daily_devices: bool = True):
-        """Processa tutti i mesi con gestione interruzioni
-        
-        Args:
-            months: Lista di mesi da processare
-            end_date: Data fine del range
-            allow_daily_devices: Se True, processa anche device daily (ultimi 7 giorni)
-                                Se False, solo monthly devices
-        """
-        from flows.api_flow import run_api_flow
-        from flows.web_flow import run_web_flow
-
-        success_count = 0
-        failed_count = 0
-        web_success = False
-        web_failed = False
-        interrupted = False
-        web_executed = False
-        gme_success_count = 0
-        gme_failed_count = 0
-        web_monthly_success_count = 0
-        web_monthly_failed_count = 0
-        
-        # Flag per disabilitare GME in caso di errori critici (Circuit Breaker)
-        gme_enabled = True
-
-        try:
-            # Processa tutti i mesi
-            for idx, month_data in enumerate(months, 1):
-                self.log.info(color.info(f"🔄 [{idx}/{len(months)}] Processando {month_data['label']}: {month_data['start']} → {month_data['end']}"))
-
-                month_web_executed = False
-                month_web_success = False
-
+    def _api(self, start: date, end: date) -> None:
+        """Una settimana per due chiamate: e' il massimo che la V2 concede."""
+        with CollectorAPI(cache=self.cache, scheduler=None) as collector:
+            site_id = collector.site_id
+            v2 = SolarEdgeV2(site_id)
+            day = start
+            done = 0
+            while day < end:
+                stop = min(day + timedelta(days=MAX_RANGE_DAYS), end)
                 try:
-                    # 1. API Flow con date personalizzate (sempre) - CON CACHE
-                    self.log.info(color.dim(f"   🔄 API flow per {month_data['label']} (CON CACHE)"))
-                    api_result = run_api_flow(self.log, self.cache, self.config,
-                                             start_date=month_data['start'],
-                                             end_date=month_data['end'])
+                    payload = v2.range_payload(day, stop)
+                    points = create_parser().parse({'site_energy_details': payload}, site_id)
+                    with InfluxWriter() as writer:
+                        writer.write_points(points, measurement_type="api")
+                    collector.archive_payload('site_energy_details', payload)
+                    done += 1
+                    self.log.info(color.dim(f"   api  {day} .. {stop - timedelta(days=1)} -> {len(points)} punti"))
+                except SolarEdgeV2Error as e:
+                    self.log.error(color.error(f"   api  {day}: {e}"))
+                    self.log.warning(color.warning("   ciclo api fermato"))
+                    return
+                day = stop
 
-                    # 1b. GME Flow (Nuovo) - Eseguito in parallelo logico
-                    if gme_enabled:
-                        try:
-                            year_str, month_str = month_data['label'].split('-')
-                            year, month = int(year_str), int(month_str)
+    def _gme(self, start: date, end: date) -> None:
+        """Un mese per chiamata, con una pausa: GME limita le raffiche."""
+        year, month = start.year, start.month
+        last = (end.year, end.month)
+        while (year, month) <= last:
+            try:
+                run_gme_month_flow(self.log, self.cache, self.config, year, month)
+            except Exception as e:                  # il flusso logga e prosegue
+                self.log.error(color.error(f"   gme {year}-{month:02d}: {e}"))
+            month += 1
+            if month > 12:
+                year, month = year + 1, 1
+            time.sleep(4)
 
-                            # Import locale per evitare cicli
-                            from flows.gme_flow import run_gme_month_flow
-
-                            # Esegui flow GME (gestisce internamente cache check)
-                            gme_result = run_gme_month_flow(self.log, self.cache, self.config, year, month, scheduler=self.gme_scheduler)
-
-                            if gme_result == 0:
-                                gme_success_count += 1
-                            else:
-                                gme_failed_count += 1
-
-                        except Exception as e:
-                            self.log.error(color.error(f"   ❌ GME {month_data['label']} errore: {e}"))
-                            gme_failed_count += 1
-                            
-                            # Circuit Breaker per errori critici server/quota
-                            error_str = str(e)
-                            if any(x in error_str for x in ["500 Server Error", "502 Bad Gateway", "503 Service Unavailable", "quota"]):
-                                self.log.warning(color.warning("   🛑 GME Critical Error rilevato (Server/Quota). Disabilitazione GME per i mesi successivi."))
-                                gme_enabled = False
-
-                    # 1c. Web Flow (Monthly Devices) - SITE (e altri monthly)
-                    # Esegui per ogni mese per garantire storico completo dei device mensili
-                    try:
-                        self.log.info(color.dim(f"   🔄 Web flow (Monthly) per {month_data['label']}"))
-                        web_monthly_result = run_web_flow(
-                            self.log, self.cache, self.config,
-                            start_date=month_data['start'],
-                            end_date=month_data['end'],
-                            allowed_date_ranges=['monthly']
-                        )
-                        month_web_executed = True
-                        if web_monthly_result == 0:
-                            web_monthly_success_count += 1
-                            month_web_success = True
-                        else:
-                            web_monthly_failed_count += 1
-                    except Exception as e:
-                        self.log.warning(color.warning(f"   ⚠️ Web Monthly {month_data['label']} errore: {e}"))
-                        web_monthly_failed_count += 1
-
-
-                    # 2. Web Flow per device daily (Optimizer, Weather) - SOLO se anno corrente
-                    # ESCLUDI monthly devices per evitare duplicati (già processati sopra)
-                    web_result = 0
-                    if allow_daily_devices and idx == len(months) and not web_executed:
-                        # Calcola gli ultimi 7 giorni dalla data di fine
-                        end_dt = datetime.strptime(end_date, '%Y-%m-%d')
-                        start_dt = end_dt - timedelta(days=6)  # 7 giorni totali (incluso end_date)
-
-                        web_start = start_dt.strftime('%Y-%m-%d')
-                        web_end = end_dt.strftime('%Y-%m-%d')
-
-                        self.log.info(color.dim(f"   🔄 Web flow per ultimi 7 giorni (Daily devices): {web_start} → {web_end}"))
-                        try:
-                            # Filtra solo device daily/7days per evitare duplicati con monthly
-                            web_result = run_web_flow(
-                                self.log, self.cache, self.config,
-                                start_date=web_start,
-                                end_date=web_end,
-                                allowed_date_ranges=['daily', '7days']
-                            )
-                            web_executed = True
-                            if web_result == 0:
-                                web_success = True
-                            else:
-                                web_failed = True
-                        except Exception as web_error:
-                            self.log.error(color.error(f"   ❌ Web flow (daily devices) fallito: {web_error}"))
-                            web_executed = True
-                            web_failed = True
-                            web_result = 1
-                    elif not allow_daily_devices and idx == len(months):
-                        self.log.info(color.dim(f"   ⏭️ Skip Web flow daily devices (anno {self.year} non corrente)"))
-                        web_executed = True
-
-                    # Considera successo se API è ok (web è opzionale)
-                    if api_result == 0:
-                        success_count += 1
-                        if month_web_executed and month_web_success:
-                            self.log.info(color.success(f"   ✅ {month_data['label']} completato (API + Web Site)"))
-                        elif month_web_executed:
-                            self.log.info(color.warning(f"   ✅ {month_data['label']} completato (API ok, Web Site warning)"))
-                        else:
-                            self.log.info(color.success(f"   ✅ {month_data['label']} completato (API)"))
-                    else:
-                        failed_count += 1
-                        self.log.error(color.error(f"   ❌ {month_data['label']} fallito (API: {api_result})"))
-
-                except KeyboardInterrupt:
-                    # Propaga l'interruzione al livello superiore
-                    raise
-                except Exception as e:
-                    failed_count += 1
-                    self.log.error(color.error(f"   ❌ Errore processando {month_data['label']}: {e}"))
-
-        except KeyboardInterrupt:
-            interrupted = True
-            self.log.info(color.warning("🛑 Interruzione richiesta dall'utente (Ctrl+C)"))
-            self.log.info(color.dim(f"📊 Processati {success_count + failed_count}/{len(months)} mesi prima dell'interruzione"))
-
-        return success_count, failed_count, web_success, web_failed, interrupted, web_executed, gme_success_count, gme_failed_count, web_monthly_success_count, web_monthly_failed_count
-
-    def _print_final_statistics(self, success_count, failed_count, web_success, web_failed,
-                               interrupted, web_executed, total_months, gme_success=0, gme_failed=0,
-                               web_monthly_success=0, web_monthly_failed=0):
-        """Stampa statistiche finali del history mode"""
-        self.log.info(color.bold("=" * 60))
-        if interrupted:
-            self.log.info(color.warning("📈 History Mode Interrotto"))
-        else:
-            self.log.info(color.success("📈 History Mode Completato"))
-
-        # API Stats
-        self.log.info(color.success(f"✅ API: {success_count}/{total_months} mesi"))
-        if failed_count > 0:
-            self.log.info(color.error(f"❌ Fallimenti API: {failed_count}/{total_months}"))
-
-        # GME Stats
-        self.log.info(color.success(f"✅ GME: {gme_success}/{total_months} mesi"))
-        if gme_failed > 0:
-            self.log.info(color.error(f"❌ Fallimenti GME: {gme_failed}/{total_months}"))
-
-        # Web Monthly Stats (Site)
-        self.log.info(color.success(f"✅ Web Site (Monthly): {web_monthly_success}/{total_months} mesi"))
-        if web_monthly_failed > 0:
-            self.log.info(color.error(f"❌ Fallimenti Web Site: {web_monthly_failed}/{total_months}"))
-
-        # Web Recent Stats (Optimizers)
-        if web_executed:
-            if web_success:
-                self.log.info(color.success(f"✅ Web Recent (Optimizers): 7/7 giorni"))
-            elif web_failed:
-                self.log.info(color.error(f"❌ Web Recent (Optimizers): 0/7 giorni (fallito)"))
-
-        # Cache Statistics
-        if self.cache:
-            cache_stats = self.cache.get_statistics()
-            total_requests = cache_stats['cache_hits'] + cache_stats['cache_misses']
-            if total_requests > 0:
-                hit_rate = (cache_stats['cache_hits'] / total_requests) * 100
-                self.log.info(color.bold("─" * 60))
-                self.log.info(color.highlight("📊 Cache Statistics:"))
-                self.log.info(color.success(f"  ✅ Cache Hits: {cache_stats['cache_hits']}/{total_requests} ({hit_rate:.1f}%)"))
-                self.log.info(color.dim(f"  🌐 Cache Misses: {cache_stats['cache_misses']}/{total_requests}"))
-                self.log.info(color.success(f"  🔒 Sealed: {cache_stats['sealed_saves']}"))
-                self.log.info(color.dim(f"  📝 Partial: {cache_stats['partial_saves']}"))
-
-        if interrupted:
-            self.log.info(color.dim(f"⏸️ Rimanenti: {total_months - success_count - failed_count}/{total_months}"))
-            self.log.info(color.highlight("💡 Riavvia con --history per continuare dal punto di interruzione"))
-
-        self.log.info(color.bold("=" * 60))
 
 def run_history_flow(log, cache, config, year=None) -> int:
     """Wrapper per eseguire HistoryManager come flow standard
-    
+
     Args:
-        year: Optional year to download (e.g., 2024, 2025)
+        year: limita a un anno (default: dal giorno dell'impianto)
     """
     return HistoryManager(log, cache, config, year=year).run()

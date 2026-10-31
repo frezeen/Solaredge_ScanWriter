@@ -153,7 +153,7 @@ class InfluxWriter:
         """
         if measurement == "realtime":
             return self._influx_config.bucket_realtime
-        elif measurement in ("gme_prices", "gme_monthly_avg"):
+        elif measurement in ("gme_prices", "gme_monthly_avg", "gme_zonal"):
             return self._influx_config.bucket_gme
         else:
             # API e Web vanno nel bucket principale

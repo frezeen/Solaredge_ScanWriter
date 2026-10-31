@@ -254,9 +254,7 @@ class CollectorGME:
                     logger.debug(f"First item sample: {item}")
 
                 try:
-                    zone = item.get('Zone') or item.get('zone')
-                    if zone != 'PUN':
-                        continue
+                    zone = item.get('Zone') or item.get('zone') or 'PUN'
 
                     hour = item.get('Hour') or item.get('hour')
                     price_mwh = item.get('Price') or item.get('price') or item.get('PunPrice')
@@ -278,6 +276,7 @@ class CollectorGME:
                             continue
 
                         prices.append({
+                            'zone': zone,
                             'hour': hour,
                             'pun_mwh': price_mwh,
                             'pun_kwh': price_kwh,

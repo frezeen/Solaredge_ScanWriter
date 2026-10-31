@@ -104,22 +104,26 @@ class LoopExecutor:
         last_api_web_run = datetime.min
         last_realtime_run = datetime.min
         last_gme_run = datetime.min
+        last_bolletta_run = datetime.min
 
         # Leggi intervalli dal file .env
         api_mins = int(os.getenv('LOOP_API_INTERVAL_MINUTES', '15'))
         web_mins = int(os.getenv('LOOP_WEB_INTERVAL_MINUTES', '15'))
         realtime_secs = int(os.getenv('LOOP_REALTIME_INTERVAL_SECONDS', '5'))
         gme_mins = int(os.getenv('LOOP_GME_INTERVAL_MINUTES', '1440'))
+        bolletta_mins = int(os.getenv('LOOP_BOLLETTA_INTERVAL_MINUTES', '1440'))
 
         api_web_interval = timedelta(minutes=max(api_mins, web_mins))
         realtime_interval = timedelta(seconds=realtime_secs)
         gme_interval = timedelta(minutes=gme_mins)
+        bolletta_interval = timedelta(minutes=bolletta_mins)
 
         # Verifica quali flow sono abilitati
         api_enabled = self._load_source_enabled_with_check('config/sources/api_endpoints.yaml', 'api_ufficiali')
         web_enabled = self._load_source_enabled_with_check('config/sources/web_endpoints.yaml', 'web_scraping')
         modbus_enabled = self._load_source_enabled_with_check('config/sources/modbus_endpoints.yaml', 'modbus')
         gme_enabled = os.getenv('GME_ENABLED', 'false').lower() == 'true'
+        bolletta_enabled = os.getenv('BOLLETTA_ENABLED', 'false').lower() == 'true'
 
         # Log configurazione
         self._log_flow_configuration(api_enabled, web_enabled, modbus_enabled, gme_enabled,
@@ -133,6 +137,7 @@ class LoopExecutor:
                 time_until_api_web = (last_api_web_run + api_web_interval - current_time).total_seconds()
                 time_until_realtime = (last_realtime_run + realtime_interval - current_time).total_seconds()
                 time_until_gme = (last_gme_run + gme_interval - current_time).total_seconds()
+                time_until_bolletta = (last_bolletta_run + bolletta_interval - current_time).total_seconds()
 
                 # Debug logging per GME
                 if gme_enabled and time_until_gme < 60:
@@ -172,8 +177,19 @@ class LoopExecutor:
                 elif not gme_enabled:
                     time_until_gme = 999999
 
+                # Esegui Bolletta
+                if bolletta_enabled and time_until_bolletta <= 0:
+                    await self._execute_bolletta_flow(log, cache, config)
+                    last_bolletta_run = current_time
+                    self.state_manager.loop_stats['last_bolletta_run'] = current_time
+                    self.state_manager.loop_stats['last_update'] = current_time
+                    self.state_manager.loop_stats['next_bolletta_run'] = current_time + bolletta_interval
+                    time_until_bolletta = bolletta_interval.total_seconds()
+                elif not bolletta_enabled:
+                    time_until_bolletta = 999999
+
                 # Sleep intelligente
-                next_wake = min(max(time_until_api_web, 0), max(time_until_realtime, 0), max(time_until_gme, 0), 5.0)
+                next_wake = min(max(time_until_api_web, 0), max(time_until_realtime, 0), max(time_until_gme, 0), max(time_until_bolletta, 0), 5.0)
                 if next_wake > 0:
                     await asyncio.sleep(next_wake)
                 else:
@@ -320,6 +336,21 @@ class LoopExecutor:
         except Exception as e:
             self.state_manager.loop_stats['gme_stats']['failed'] += 1
             self.logger.error(f"[GUI] ❌ Errore raccolta GME: {e}")
+
+    async def _execute_bolletta_flow(self, log, cache, config):
+        """Esegue il flow bolletta (valori ARERA)."""
+        self.logger.info('[GUI] 🧾 Esecuzione aggiornamento bolletta...')
+        self.state_manager.start_new_run('bolletta')
+        self.state_manager.loop_stats['bolletta_stats']['executed'] += 1
+        try:
+            await asyncio.get_event_loop().run_in_executor(
+                None, execute_flow, 'bolletta', log, cache, config
+            )
+            self.state_manager.loop_stats['bolletta_stats']['success'] += 1
+            log.info('[FLOW:BOLLETTA:COMPLETION]✅ Bolletta aggiornata')
+        except Exception as e:
+            self.state_manager.loop_stats['bolletta_stats']['failed'] += 1
+            self.logger.error(f'[GUI] Errore raccolta bolletta: {e}')
 
 
 __all__ = ['LoopExecutor']

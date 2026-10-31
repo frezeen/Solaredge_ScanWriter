@@ -119,8 +119,15 @@ class GMEParser:
             logger.error(f"Errore parsing timestamp {timestamp_str}: {e}")
             return None
 
-        # Crea Point InfluxDB
-        point = Point("gme_prices")
+        zone = str(price_data.get('zone') or 'PUN')
+
+        # PUN -> gme_prices (invariato); solo le zone italiane -> gme_zonal (SSP)
+        # Le zone estere (AUST, FRAN, GREC, SLOV, SVIZ, XFRA...) non servono.
+        ITALIAN_ZONES = ('NORD', 'CNOR', 'CSUD', 'SUD', 'SICI', 'SARD', 'CALA')
+        if zone != 'PUN' and zone not in ITALIAN_ZONES:
+            return None
+        zonal = zone != 'PUN'
+        point = Point("gme_zonal" if zonal else "gme_prices")
 
         # Tags (aggiunti year e month per query efficienti in history mode)
         point.tag("source", source)
@@ -129,10 +136,13 @@ class GMEParser:
         point.tag("year", str(ts_local.year))
         point.tag("month", ts_local.strftime('%B'))
         point.tag("day", str(ts_local.day))
+        if zonal:
+            point.tag("zone", zone)
 
-        # Fields (manteniamo i nomi standard PUN del mercato elettrico)
-        # Salviamo solo MWh come richiesto (valore originale)
-        point.field("pun_mwh", float(pun_mwh))
+        if zonal:
+            point.field("price_mwh", float(pun_mwh))
+        else:
+            point.field("pun_mwh", float(pun_mwh))
 
         # Timestamp
         point.time(ts_ns, WritePrecision.NS)

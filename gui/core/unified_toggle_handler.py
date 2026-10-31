@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Tuple, Dict, Optional
 from app_logging.universal_logger import get_logger
 from utils.yaml_loader import load_yaml, save_yaml
+from config.config_manager import get_config_manager
 
 
 class UnifiedToggleHandler:
@@ -133,6 +134,9 @@ class UnifiedToggleHandler:
             # Step 6: Save configuration (using unified YAML saver)
             if not save_yaml(config_path, config, invalidate_cache=True):
                 return False, {'error': 'Failed to save configuration'}
+            # il collector tiene un ConfigManager singleton: senza reload il loop
+            # continua a vedere il catalogo di prima, e l'endpoint acceso resta spento
+            get_config_manager().reload()
 
             # Step 7: Return response
             return True, response_data

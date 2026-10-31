@@ -11,16 +11,9 @@ from utils.color_logger import color
 def run_api_flow(
     log: Logger,
     cache: CacheManager,
-    config: Dict[str, Any],
-    start_date: Optional[str] = None,
-    end_date: Optional[str] = None
+    config: Dict[str, Any]
 ) -> int:
-    """Pipeline API semplificata
-
-    Args:
-        start_date: Data inizio per history mode (formato YYYY-MM-DD)
-        end_date: Data fine per history mode (formato YYYY-MM-DD)
-    """
+    """Pipeline API semplificata"""
     log.info("[FLOW:API:START]")
     log.info(color.bold("🚀 Avvio flusso API"))
 
@@ -33,12 +26,7 @@ def run_api_flow(
 
         # Raccolta dati (scheduler gestito internamente dal collector)
         try:
-            if start_date and end_date:
-                # Modalità history con date specifiche
-                raw_data = collector.collect_with_dates(start_date, end_date)
-            else:
-                # Modalità normale (oggi)
-                raw_data = collector.collect()
+            raw_data = collector.collect()
         except KeyboardInterrupt:
             log.info("🛑 Interruzione utente durante raccolta dati API")
             log.info("[FLOW:API:STOP]")

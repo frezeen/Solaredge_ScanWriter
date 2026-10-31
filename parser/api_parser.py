@@ -20,7 +20,6 @@ logger = logging.getLogger(__name__)
 
 # Costanti
 ENERGY_DETAILS = 'site_energy_details'
-POWER_DETAILS = 'site_power_details'
 RAW_JSON_FORMAT = 'raw_json'
 STRUCTURED_FORMAT = 'structured'
 
@@ -261,7 +260,7 @@ class SolarEdgeAPIParser:
         """Processa dati meter per energy/power details -> dizionari per filtro"""
         structured_dicts = []
 
-        root_field = 'energyDetails' if endpoint_name == ENERGY_DETAILS else 'powerDetails'
+        root_field = 'energyDetails'
         root = data.get(root_field, {})
 
         if not root or not isinstance(root.get('meters'), list):
@@ -417,7 +416,7 @@ class SolarEdgeAPIParser:
         category = endpoint_cfg['category']
 
         # Gestione speciale per energy/power details
-        if endpoint_name in [ENERGY_DETAILS, POWER_DETAILS]:
+        if endpoint_name == ENERGY_DETAILS:
             return self._process_meter_data(endpoint_name, data, extraction, category)
 
         # Gestione speciale per timeframe energy

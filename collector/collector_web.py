@@ -4,7 +4,9 @@ Mantiene tutte le funzionalità ma con codice più pulito e intelligente.
 """
 from __future__ import annotations
 from typing import Any, Dict, List, Protocol, runtime_checkable, Optional, Tuple
+import base64, hashlib
 import os, re, time, json
+import urllib.parse
 import urllib.request, urllib.error
 from pathlib import Path
 import requests
@@ -19,6 +21,19 @@ from config.config_manager import get_config_manager
 SESSION_MIN_VALIDITY = 300
 SESSION_MAX_AGE = 3600 * 6
 OPTIMIZER_BATCH_SIZE = 5
+
+# Cognito Hosted UI del nuovo portale (parametri letti dal bundle SPA sign-in)
+COGNITO_CLIENT_ID = "ugfnsujd3384sshcjehaphlh3"
+COGNITO_BASE = "https://login.solaredge.com"
+COGNITO_REDIRECT = "https://monitoring.solaredge.com/mfe/auth/callback"
+
+def _html_field(html: str, pattern: str) -> str:
+    """Primo gruppo della regex; la pagina di login attesa lo contiene."""
+    match = re.search(pattern, html)
+    if not match:
+        raise RuntimeError(f"Pagina login inattesa: campo {pattern[:24]} assente")
+    return match.group(1)
+
 
 @runtime_checkable
 class CollectorWebInterface(Protocol):
@@ -224,56 +239,159 @@ class CollectorWeb(CollectorWebInterface):
         return False
 
     def _perform_login(self) -> None:
-        """Esegue login SolarEdge."""
-        self._log.info("Esecuzione login SolarEdge...")
+        """Esegue login SolarEdge via Cognito PKCE sul nuovo portale.
+
+        Preferisce il rinnovo con refresh_token (senza password); al primo
+        avvio o a refresh scaduto rifata la catena completa con credenziali.
+        """
+        self._log.info("Esecuzione login SolarEdge (Cognito PKCE)...")
 
         session = requests.Session()
         session.headers.update({
-            "User-Agent": "se-collector/1.0",
+            "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+                          "(KHTML, like Gecko) Chrome/140.0 Safari/537.36",
             "Accept": "*/*"
         })
+        timeout = self._global_config.api_request_timeout
 
-        resp = session.post(
-            self._login_url,
-            data={"j_username": self._username, "j_password": self._password},
-            headers={"Content-Type": "application/x-www-form-urlencoded"},
-            timeout=self._global_config.api_request_timeout,
-            allow_redirects=True
-        )
+        refresh = self._read_refresh_token()
+        if refresh:
+            try:
+                tokens = self._cognito_token(session, {
+                    "grant_type": "refresh_token",
+                    "client_id": COGNITO_CLIENT_ID,
+                    "refresh_token": refresh,
+                }, timeout)
+                self._cognito_handover(session, tokens, timeout, refresh)
+                self._persist_cookie()
+                self._log.info("Login via refresh_token completato")
+                return
+            except (RuntimeError, requests.exceptions.RequestException) as e:
+                self._log.warning(f"refresh_token respinto, fallback login completo: {e}")
 
-        if resp.status_code != 200:
-            raise RuntimeError(f"Login fallito: HTTP {resp.status_code}")
-
-        self._extract_session_data(session, resp)
+        tokens = self._cognito_full_login(session, timeout)
+        self._cognito_handover(session, tokens, timeout, self._read_refresh_token())
+        self._persist_refresh_token(tokens)
         self._persist_cookie()
-        self._log.info("Login completato%s", " (con CSRF)" if self._csrf_token else "")
+        self._log.info("Login Cognito completato")
 
-    def _extract_session_data(self, session: requests.Session, response: requests.Response) -> None:
-        """Estrae cookie e CSRF dalla sessione."""
+    def _request_retry(self, fn, attempts: int = 3):
+        """Il DNS del guest perde pacchetti a raffica: ritenta i ConnectionError."""
+        for attempt in range(attempts):
+            try:
+                return fn()
+            except requests.exceptions.ConnectionError:
+                if attempt == attempts - 1:
+                    raise
+                time.sleep(2 * (attempt + 1))
+
+    def _read_refresh_token(self) -> Optional[str]:
+        """Legge il refresh_token accanto al cookie file, se presente."""
+        path = Path(self._cookie_path).parent / "cognito_refresh_token.json"
+        try:
+            return json.loads(path.read_text(encoding="utf-8")).get("refresh_token")
+        except Exception:
+            return None
+
+    def _persist_refresh_token(self, tokens: Dict[str, Any]) -> None:
+        """Salva il refresh_token per i rinnovi futuri senza password."""
+        path = Path(self._cookie_path).parent / "cognito_refresh_token.json"
+        if not tokens.get("refresh_token"):
+            return
+        body = {
+            "refresh_token": tokens["refresh_token"],
+            "expires_in": tokens.get("expires_in"),
+            "ts": int(time.time()),
+        }
+        path.write_text(json.dumps(body, indent=2), encoding="utf-8")
+        os.chmod(path, 0o600)
+
+    def _cognito_token(self, session: requests.Session, data: Dict[str, str], timeout: int) -> Dict[str, Any]:
+        """Token endpoint Cognito (OAuth2, form-urlencoded)."""
+        resp = self._request_retry(lambda: session.post(
+            f"{COGNITO_BASE}/oauth2/token", data=data, timeout=timeout))
+        if resp.status_code != 200:
+            raise RuntimeError(f"Token Cognito rifiutato: HTTP {resp.status_code}")
+        tokens = resp.json()
+        if not tokens.get("id_token"):
+            raise RuntimeError(f"Token Cognito incompleto: error={tokens.get('error')}")
+        return tokens
+
+    def _cognito_handover(self, session: requests.Session, tokens: Dict[str, Any],
+                          timeout: int, fallback_refresh_token: Optional[str] = None) -> None:
+        """Converte i token Cognito in sessione legacy (cookie) via handover."""
+        resp = self._request_retry(lambda: session.post(
+            f"{self._base_url}/services/auth/token?legacy=false",
+            json={
+                "id_token": tokens["id_token"],
+                "access_token": tokens.get("access_token"),
+                "refresh_token": tokens.get("refresh_token") or fallback_refresh_token,
+                "expires_in": tokens.get("expires_in"),
+                "token_type": tokens.get("token_type"),
+            },
+            timeout=timeout))
+        if resp.status_code != 200:
+            raise RuntimeError(f"Handover rifiutato: HTTP {resp.status_code}")
+
         cookies = []
         for cookie in session.cookies:
-            if cookie.name and cookie.value:
+            domain = cookie.domain or ""
+            if "monitoring" in domain or domain in (".solaredge.com", "solaredge.com"):
                 cookies.append(f"{cookie.name}={cookie.value}")
-                if cookie.name in ("CSRF-TOKEN", "XSRF-TOKEN"):
-                    self._csrf_token = cookie.value
-
+        if not cookies:
+            raise RuntimeError("Handover senza cookie di sessione")
         self._cookie = "; ".join(cookies)
         self._last_login_ts = time.time()
+        self._csrf_token = None
 
-        if not self._csrf_token:
-            self._extract_csrf_from_html(response.text)
+    def _cognito_full_login(self, session: requests.Session, timeout: int) -> Dict[str, Any]:
+        """Login completo: credenziali sul Cognito Hosted UI con PKCE S256."""
+        verifier = base64.urlsafe_b64encode(os.urandom(48)).rstrip(b"=").decode("ascii")
+        challenge = base64.urlsafe_b64encode(
+            hashlib.sha256(verifier.encode()).digest()).rstrip(b"=").decode("ascii")
+        auth_url = (f"{COGNITO_BASE}/login?lang=en_US&response_type=code"
+                    f"&client_id={COGNITO_CLIENT_ID}&scope=email+openid"
+                    f"&redirect_uri={urllib.parse.quote(COGNITO_REDIRECT, safe='')}"
+                    f"&code_challenge_method=S256&code_challenge={challenge}")
 
-    def _extract_csrf_from_html(self, html: str) -> None:
-        """Estrae CSRF token da HTML."""
-        patterns = [
-            r'name=["\']csrf-token["\']\s+content=["\']([^"\']+)',
-            r'csrfToken\s*=\s*"([^"]+)'
-        ]
+        page = self._request_retry(lambda: session.get(auth_url, timeout=timeout))
+        if page.status_code != 200:
+            raise RuntimeError(f"Pagina login Cognito: HTTP {page.status_code}")
 
-        for pattern in patterns:
-            if match := re.search(pattern, html, re.IGNORECASE):
-                self._csrf_token = match.group(1)
+        csrf = _html_field(page.text, r'name="csrf"[^>]*?value="([^"]+)"')
+        # L action del form e HTML-escaped: i &amp; vanno decodificati prima del POST
+        action = _html_field(page.text, r'<form[^>]*?action="([^"]*)"').replace("&amp;", "&")
+        post_url = urllib.parse.urljoin(f"{COGNITO_BASE}/", action)
+
+        resp = self._request_retry(lambda: session.post(
+            post_url,
+            data={"csrf": csrf, "username": self._username, "password": self._password,
+                  "cognitoAsfData": ""},
+            allow_redirects=False, timeout=timeout))
+
+        code = None
+        location = resp.headers.get("Location", "")
+        for _ in range(6):
+            if not location:
                 break
+            parts = urllib.parse.urlparse(location)
+            if "monitoring.solaredge.com" in (parts.hostname or "") and parts.path.startswith("/mfe/auth/callback"):
+                code = urllib.parse.parse_qs(parts.query).get("code", [None])[0]
+                break
+            nxt = location if location.startswith("http") else urllib.parse.urljoin(f"{COGNITO_BASE}/", location)
+            location = self._request_retry(
+                lambda: session.get(nxt, allow_redirects=False, timeout=timeout)).headers.get("Location", "")
+
+        if not code:
+            raise RuntimeError("Login Cognito senza authorization code")
+
+        return self._cognito_token(session, {
+            "grant_type": "authorization_code",
+            "client_id": COGNITO_CLIENT_ID,
+            "redirect_uri": COGNITO_REDIRECT,
+            "code": code,
+            "code_verifier": verifier,
+        }, timeout)
 
     # ========== Cookie Management ==========
 

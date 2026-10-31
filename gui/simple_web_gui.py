@@ -273,6 +273,15 @@ class SimpleWebGUI:
         except Exception as e:
             return self.error_handler.handle_api_error(e, "getting sources", "Error loading sources")
 
+    async def handle_freshness(self, request: web.Request) -> web.Response:
+        """Ultimo punto scritto per bucket: salute del collector, non i valori."""
+        try:
+            await self.load_config()
+            from gui.services.freshness_service import get_freshness
+            return web.json_response(await get_freshness(self.config))
+        except Exception as e:
+            return self.error_handler.handle_api_error(e, "getting freshness", "Error getting freshness")
+
     async def handle_loop_status(self, request: web.Request) -> web.Response:
         """Restituisce lo stato del loop mode"""
         try:
@@ -280,6 +289,19 @@ class SimpleWebGUI:
             status = self.state_manager.get_loop_status()
             # Add retention config for dynamic UI
             status['retention_config'] = self.state_manager.retention_config
+            # Cadenza dei flow, per la Overview (secondi)
+            status['intervals_seconds'] = {
+                'realtime': int(float(os.environ.get('LOOP_REALTIME_INTERVAL_SECONDS', '5'))),
+                'web': int(float(os.environ.get('LOOP_WEB_INTERVAL_MINUTES', '15'))) * 60,
+                'api': int(float(os.environ.get('LOOP_API_INTERVAL_MINUTES', '15'))) * 60,
+                'gme': int(float(os.environ.get('LOOP_GME_INTERVAL_MINUTES', '1440'))) * 60,
+                'bolletta': int(float(os.environ.get('LOOP_BOLLETTA_INTERVAL_MINUTES', '1440'))) * 60,
+            }
+            # Quali flussi a dataset fisso sono abilitati
+            status['flows_enabled'] = {
+                'gme': bool(self.config.get('gme', {}).get('enabled', False)),
+                'bolletta': str(os.environ.get('BOLLETTA_ENABLED', 'false')).lower() == 'true',
+            }
             return web.json_response(status)
 
         except Exception as e:
@@ -450,6 +472,7 @@ class SimpleWebGUI:
 
         # Loop mode routes
         self.app.router.add_get('/api/loop/status', self.handle_loop_status)
+        self.app.router.add_get('/api/freshness', self.handle_freshness)
         self.app.router.add_get('/api/loop/logs', self.handle_loop_logs)
         self.app.router.add_post('/api/loop/start', self.handle_loop_start)
         self.app.router.add_post('/api/loop/stop', self.handle_loop_stop)
@@ -600,6 +623,7 @@ class SimpleWebGUI:
                 status = 404 if 'not found' in response_data.get('error', '').lower() else 400
                 return web.json_response(response_data, status=status)
 
+            self.config_handler.invalidate_cache('api')
             return web.json_response(response_data)
 
         except Exception as e:
@@ -618,6 +642,7 @@ class SimpleWebGUI:
                 status = 404 if 'not found' in response_data.get('error', '').lower() else 400
                 return web.json_response(response_data, status=status)
 
+            self.config_handler.invalidate_cache('web')
             return web.json_response(response_data)
 
         except Exception as e:
@@ -636,6 +661,7 @@ class SimpleWebGUI:
                 status = 404 if 'not found' in response_data.get('error', '').lower() else 400
                 return web.json_response(response_data, status=status)
 
+            self.config_handler.invalidate_cache('modbus')
             return web.json_response(response_data)
 
         except Exception as e:
@@ -655,6 +681,7 @@ class SimpleWebGUI:
                 status = 404 if 'not found' in response_data.get('error', '').lower() else 400
                 return web.json_response(response_data, status=status)
 
+            self.config_handler.invalidate_cache('web')
             return web.json_response(response_data)
 
         except Exception as e:
@@ -674,6 +701,7 @@ class SimpleWebGUI:
                 status = 404 if 'not found' in response_data.get('error', '').lower() else 400
                 return web.json_response(response_data, status=status)
 
+            self.config_handler.invalidate_cache('modbus')
             return web.json_response(response_data)
 
         except Exception as e:
@@ -773,10 +801,11 @@ class SimpleWebGUI:
     async def handle_get_update_status(self, request: web.Request) -> web.Response:
         """Restituisce lo stato attuale degli aggiornamenti"""
         try:
+            last_check = getattr(self.state_manager, 'last_update_check', None)
             return web.json_response({
                 'updates_available': getattr(self.state_manager, 'updates_available', False),
-                'last_check': getattr(self.state_manager, 'last_update_check', None),
-                'last_check_str': self.state_manager.last_update_check.strftime('%H:%M:%S') if getattr(self.state_manager, 'last_update_check', None) else 'Mai'
+                'last_check': last_check.isoformat() if last_check else None,
+                'last_check_str': last_check.strftime('%H:%M:%S') if last_check else 'Mai'
             })
         except Exception as e:
             return self.error_handler.handle_api_error(e, "getting update status", "Error getting update status")

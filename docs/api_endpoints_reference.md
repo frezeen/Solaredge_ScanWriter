@@ -1,3 +1,8 @@
+> **Nota (2026-10-30).** Documento scritto ai tempi della Monitoring API v1. Restano validi la
+> struttura InfluxDB, il sistema `category`, il parsing e i timestamp; sono superati i passaggi
+> di costruzione URL, i parametri, la chiave API e il catalogo degli endpoint, che oggi non
+> esistono più: il client v2 è descritto in `docs/api_v2.md`.
+
 # Sistema Storage API SolarEdge - Riferimento Tecnico
 
 ## Scopo

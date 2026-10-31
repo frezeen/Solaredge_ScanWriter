@@ -38,6 +38,7 @@ class StateManager:
             'web': deque(maxlen=self.retention_config['flow_runs']),
             'realtime': deque(maxlen=self.retention_config['flow_runs']),
             'gme': deque(maxlen=self.retention_config['flow_runs']),
+            'bolletta': deque(maxlen=self.retention_config['flow_runs']),
             'sistema': deque(maxlen=1)  # Sistema ha solo una "run" continua
         }
         
@@ -56,12 +57,15 @@ class StateManager:
             'web_stats': {'executed': 0, 'success': 0, 'failed': 0},
             'realtime_stats': {'executed': 0, 'success': 0, 'failed': 0},
             'gme_stats': {'executed': 0, 'success': 0, 'failed': 0},
+            'bolletta_stats': {'executed': 0, 'success': 0, 'failed': 0},
             'start_time': None,
             'last_update': None,
             'last_api_web_run': None,
             'next_api_web_run': None,
             'last_gme_run': None,
             'next_gme_run': None,
+            'last_bolletta_run': None,
+            'next_bolletta_run': None,
             'status': 'stopped'
         }
 
@@ -231,20 +235,34 @@ class StateManager:
         if stats.get('last_api_web_run') and hasattr(stats['last_api_web_run'], 'strftime'):
             stats['api_last_run'] = stats['last_api_web_run'].strftime('%H:%M:%S')
             stats['web_last_run'] = stats['last_api_web_run'].strftime('%H:%M:%S')
+            stats['api_last_at'] = stats['web_last_at'] = stats['last_api_web_run'].isoformat()
             del stats['last_api_web_run']
 
         if stats.get('next_api_web_run') and hasattr(stats['next_api_web_run'], 'strftime'):
             stats['api_next_run'] = stats['next_api_web_run'].strftime('%H:%M:%S')
             stats['web_next_run'] = stats['next_api_web_run'].strftime('%H:%M:%S')
+            stats['api_next_at'] = stats['web_next_at'] = stats['next_api_web_run'].isoformat()
             del stats['next_api_web_run']
 
         if stats.get('last_gme_run') and hasattr(stats['last_gme_run'], 'strftime'):
             stats['gme_last_run'] = stats['last_gme_run'].strftime('%H:%M:%S')
+            stats['gme_last_at'] = stats['last_gme_run'].isoformat()
             del stats['last_gme_run']
 
         if stats.get('next_gme_run') and hasattr(stats['next_gme_run'], 'strftime'):
             stats['gme_next_run'] = stats['next_gme_run'].strftime('%H:%M:%S')
+            stats['gme_next_at'] = stats['next_gme_run'].isoformat()
             del stats['next_gme_run']
+
+        if stats.get('last_bolletta_run') and hasattr(stats['last_bolletta_run'], 'strftime'):
+            stats['bolletta_last_run'] = stats['last_bolletta_run'].strftime('%H:%M:%S')
+            stats['bolletta_last_at'] = stats['last_bolletta_run'].isoformat()
+            del stats['last_bolletta_run']
+
+        if stats.get('next_bolletta_run') and hasattr(stats['next_bolletta_run'], 'strftime'):
+            stats['bolletta_next_run'] = stats['next_bolletta_run'].strftime('%H:%M:%S')
+            stats['bolletta_next_at'] = stats['next_bolletta_run'].isoformat()
+            del stats['next_bolletta_run']
 
         # Rimuovi oggetti datetime/timedelta rimanenti
         for key in list(stats.keys()):

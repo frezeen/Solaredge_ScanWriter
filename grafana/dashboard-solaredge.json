@@ -5,17 +5,17 @@
     "name": "afb91a6f-d8f7-43ae-8a98-67eab1bb4baa",
     "namespace": "default",
     "uid": "7BbIQVz9HXL37kIwtfwIILQfbBildEORfdbBmJJZsdMX",
-    "resourceVersion": "1791916067938006",
-    "generation": 592,
+    "resourceVersion": "1793400444457018",
+    "generation": 699,
     "creationTimestamp": "2025-10-26T13:24:47Z",
     "labels": {
       "grafana.app/deprecatedInternalID": "1"
     },
     "annotations": {
       "grafana.app/createdBy": "user:df27vpihsre2oc",
-      "grafana.app/message": "Fix panels 101/180: robust group()+difference()+sum (device_id split immunity)",
+      "grafana.app/message": "pannello 192: spese al prezzo pieno (non al PUN)",
       "grafana.app/updatedBy": "user:df27vpihsre2oc",
-      "grafana.app/updatedTimestamp": "2026-10-13T18:27:47Z"
+      "grafana.app/updatedTimestamp": "2026-10-30T22:47:24Z"
     }
   },
   "spec": {
@@ -25,7 +25,7 @@
         "spec": {
           "query": {
             "kind": "DataQuery",
-            "group": "influxdb",
+            "group": "grafana",
             "version": "v0",
             "datasource": {
               "name": "ff27vpmruzxtsc"
@@ -90,9 +90,17 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "gauge",
-            "version": "12.3.0",
+            "version": "13.2.4",
             "spec": {
               "options": {
+                "barShape": "flat",
+                "barWidthFactor": 0.54,
+                "effects": {
+                  "barGlow": false,
+                  "centerGlow": false,
+                  "gradient": true
+                },
+                "endpointMarker": "point",
                 "minVizHeight": 75,
                 "minVizWidth": 75,
                 "orientation": "auto",
@@ -103,10 +111,17 @@
                   "fields": "",
                   "values": false
                 },
+                "segmentCount": 1,
+                "segmentSpacing": 0.3,
+                "shape": "gauge",
                 "showThresholdLabels": false,
                 "showThresholdMarkers": true,
                 "sizing": "auto",
-                "text": {}
+                "sparkline": true,
+                "text": {
+                  "color": "value"
+                },
+                "textMode": "auto"
               },
               "fieldConfig": {
                 "defaults": {
@@ -119,14 +134,46 @@
                     "steps": [
                       {
                         "value": 0,
+                        "color": "super-light-yellow"
+                      },
+                      {
+                        "value": 10,
+                        "color": "light-yellow"
+                      },
+                      {
+                        "value": 20,
                         "color": "yellow"
                       },
                       {
+                        "value": 30,
+                        "color": "semi-dark-yellow"
+                      },
+                      {
+                        "value": 40,
+                        "color": "dark-yellow"
+                      },
+                      {
                         "value": 50,
+                        "color": "super-light-orange"
+                      },
+                      {
+                        "value": 60,
                         "color": "orange"
                       },
                       {
-                        "value": 75,
+                        "value": 70,
+                        "color": "dark-orange"
+                      },
+                      {
+                        "value": 80,
+                        "color": "light-red"
+                      },
+                      {
+                        "value": 90,
+                        "color": "red"
+                      },
+                      {
+                        "value": 100,
                         "color": "dark-red"
                       }
                     ]
@@ -147,7 +194,6 @@
         "spec": {
           "id": 101,
           "title": "Costo Prelievo",
-          "description": "",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -164,7 +210,7 @@
                         "name": "ff27vpmruzxtsc"
                       },
                       "spec": {
-                        "query": "import \"date\"\nimport \"array\"\nimport \"timezone\"\n\noption location = timezone.location(name: \"Europe/Rome\")\n\nstart = date.truncate(t: now(), unit: 1d)\nmonth_start = date.truncate(t: now(), unit: 1mo)\n\n// Recupera prezzo PUN\npun_value = (from(bucket: \"GME\")\n  |> range(start: month_start)\n  |> filter(fn: (r) => \n      r._measurement == \"gme_monthly_avg\" and \n      r._field == \"pun_kwh_avg\")\n  |> last()\n  |> findRecord(fn: (key) => true, idx: 0))._value\n\n// Dati prelievo: group() unisce i device_id, difference() somma solo gli\n// incrementi reali, >= 0 scarta il reset del contatore\ndata = from(bucket: \"Solaredge_Realtime\")\n  |> range(start: start)\n  |> filter(fn: (r) => \n      r._measurement == \"realtime\" and \n      r._field == \"Meter\" and \n      r.endpoint == \"Import Energy Active\" and \n      r.unit == \"Wh\" and\n      exists r._value)\n  |> group()\n  |> difference()\n  |> filter(fn: (r) => r._value >= 0.0)\n  |> sum()\n\nprelievo_wh = (data |> findRecord(fn: (key) => true, idx: 0))._value\n\n// Output\narray.from(rows: [{\n  \"PUN (€/kWh)\": pun_value,\n  \"Costo Prelievo Oggi (€)\": if prelievo_wh < 0.0 \n                              then 0.0 \n                              else (prelievo_wh / 1000.0) * pun_value\n}])\n"
+                        "query": "import \"date\"\nimport \"array\"\nimport \"timezone\"\n\noption location = timezone.location(name: \"Europe/Rome\")\n\nstart = date.truncate(t: now(), unit: 1d)\nmonth_start = date.truncate(t: now(), unit: 1mo)\n\n// Recupera prezzo PUN\npun_value = (from(bucket: \"GME\")\n  |> range(start: month_start)\n  |> filter(fn: (r) => \n      r._measurement == \"gme_monthly_avg\" and \n      r._field == \"pun_kwh_avg\")\n  |> last()\n  |> findRecord(fn: (key) => true, idx: 0))._value\n\n// Dati prelievo: group() unisce i device_id, difference() somma solo gli\n// incrementi reali, >= 0 scarta il reset del contatore\ndata = from(bucket: \"Solaredge_Realtime\")\n  |> range(start: start)\n  |> filter(fn: (r) => \n      r._measurement == \"realtime\" and \n      r._field == \"Meter\" and \n      r.endpoint == \"Import Energy Active\" and \n      r.unit == \"Wh\" and\n      exists r._value and r._value > 0.0)\n  |> group()\n  |> sort(columns: [\"_time\"])\n\nprelievo_wh = ((data |> last() |> findRecord(fn: (key) => true, idx: 0))._value - (data |> first() |> findRecord(fn: (key) => true, idx: 0))._value)\n\n// Output\narray.from(rows: [{\n  \"Costo Prelievo Oggi (€)\": if prelievo_wh < 0.0 \n                              then 0.0 \n                              else (prelievo_wh / 1000.0) * pun_value\n}])\n"
                       }
                     },
                     "refId": "Costo Prelievo",
@@ -182,7 +228,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "stat",
-            "version": "12.3.0",
+            "version": "13.2.4",
             "spec": {
               "options": {
                 "colorMode": "background",
@@ -343,9 +389,17 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "gauge",
-            "version": "12.3.0",
+            "version": "13.2.4",
             "spec": {
               "options": {
+                "barShape": "flat",
+                "barWidthFactor": 0.5,
+                "effects": {
+                  "barGlow": false,
+                  "centerGlow": false,
+                  "gradient": true
+                },
+                "endpointMarker": "point",
                 "minVizHeight": 75,
                 "minVizWidth": 75,
                 "orientation": "auto",
@@ -356,10 +410,17 @@
                   "fields": "/^Consumo$/",
                   "values": false
                 },
+                "segmentCount": 1,
+                "segmentSpacing": 0.3,
+                "shape": "gauge",
                 "showThresholdLabels": false,
                 "showThresholdMarkers": true,
                 "sizing": "auto",
-                "text": {}
+                "sparkline": false,
+                "text": {
+                  "color": "value"
+                },
+                "textMode": "auto"
               },
               "fieldConfig": {
                 "defaults": {
@@ -372,21 +433,28 @@
                     "steps": [
                       {
                         "value": 0,
-                        "color": "green"
+                        "color": "#FFB3B3"
                       },
                       {
                         "value": 1000,
-                        "color": "orange"
+                        "color": "#FF7A7A"
                       },
                       {
                         "value": 2000,
-                        "color": "red"
+                        "color": "#FF3B3B"
                       },
                       {
                         "value": 3000,
-                        "color": "dark-red"
+                        "color": "#D32020"
+                      },
+                      {
+                        "value": 4300,
+                        "color": "#8B0000"
                       }
                     ]
+                  },
+                  "color": {
+                    "mode": "thresholds"
                   }
                 },
                 "overrides": []
@@ -435,7 +503,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "stat",
-            "version": "12.3.0",
+            "version": "13.2.4",
             "spec": {
               "options": {
                 "colorMode": "background",
@@ -524,7 +592,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "stat",
-            "version": "12.3.0",
+            "version": "13.2.4",
             "spec": {
               "options": {
                 "colorMode": "background",
@@ -606,7 +674,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "stat",
-            "version": "12.3.0",
+            "version": "13.2.4",
             "spec": {
               "options": {
                 "colorMode": "background",
@@ -689,7 +757,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "stat",
-            "version": "12.3.0",
+            "version": "13.2.4",
             "spec": {
               "options": {
                 "colorMode": "background",
@@ -771,7 +839,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "stat",
-            "version": "12.3.0",
+            "version": "13.2.4",
             "spec": {
               "options": {
                 "colorMode": "background",
@@ -856,9 +924,17 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "gauge",
-            "version": "12.3.0",
+            "version": "13.2.4",
             "spec": {
               "options": {
+                "barShape": "flat",
+                "barWidthFactor": 0.5,
+                "effects": {
+                  "barGlow": false,
+                  "centerGlow": false,
+                  "gradient": false
+                },
+                "endpointMarker": "point",
                 "minVizHeight": 75,
                 "minVizWidth": 75,
                 "orientation": "auto",
@@ -869,10 +945,17 @@
                   "fields": "",
                   "values": false
                 },
+                "segmentCount": 1,
+                "segmentSpacing": 0.3,
+                "shape": "gauge",
                 "showThresholdLabels": false,
-                "showThresholdMarkers": true,
+                "showThresholdMarkers": false,
                 "sizing": "auto",
-                "text": {}
+                "sparkline": false,
+                "text": {
+                  "color": "value"
+                },
+                "textMode": "auto"
               },
               "fieldConfig": {
                 "defaults": {
@@ -885,13 +968,16 @@
                     "steps": [
                       {
                         "value": 0,
-                        "color": "dark-red"
+                        "color": "#C4162A"
                       },
                       {
                         "value": 0,
-                        "color": "dark-green"
+                        "color": "#33B5E5"
                       }
                     ]
+                  },
+                  "color": {
+                    "mode": "thresholds"
                   }
                 },
                 "overrides": []
@@ -906,7 +992,6 @@
         "spec": {
           "id": 144,
           "title": "",
-          "description": "",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -938,7 +1023,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "stat",
-            "version": "12.3.0",
+            "version": "13.2.4",
             "spec": {
               "options": {
                 "colorMode": "background",
@@ -1072,7 +1157,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "bargauge",
-            "version": "12.3.0",
+            "version": "13.2.4",
             "spec": {
               "options": {
                 "displayMode": "gradient",
@@ -1155,7 +1240,7 @@
                         "name": "ff27vpmruzxtsc"
                       },
                       "spec": {
-                        "query": "import \"timezone\"\r\nimport \"date\"\r\n\r\noption location = timezone.location(name: \"Europe/Rome\")\r\n\r\n// Usa il time range selezionato in Grafana\r\n// Puoi usare \"Last 1 year\" oppure selezionare un range custom\r\nstartOfPeriod = date.truncate(t: v.timeRangeStart, unit: 1y)\r\nendOfPeriod = date.add(d: 1y, to: startOfPeriod)\r\n\r\nfrom(bucket: \"Solaredge\")\r\n  |> range(start: startOfPeriod, stop: endOfPeriod)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"web\" and r[\"_field\"] == \"Site\")\r\n  |> filter(fn: (r) => \r\n      r[\"endpoint\"] == \"PRODUCTION_ENERGY\" or \r\n      r[\"endpoint\"] == \"IMPORT_ENERGY\" or \r\n      r[\"endpoint\"] == \"EXPORT_ENERGY\"\r\n  )\r\n  \r\n  // Aggreghiamo per mese usando il fuso orario configurato\r\n  |> aggregateWindow(\r\n      every: 1mo, \r\n      fn: sum, \r\n      createEmpty: true,\r\n      timeSrc: \"_start\",\r\n      location: location\r\n  )\r\n  \r\n  // Riempiamo eventuali valori mancanti con zero\r\n  |> fill(value: 0.0)\r\n  \r\n  // Trasformiamo da formato lungo a formato largo\r\n  |> pivot(rowKey: [\"_time\"], columnKey: [\"endpoint\"], valueColumn: \"_value\")\r\n  \r\n  // Gestiamo eventuali valori null dopo il pivot\r\n  |> map(fn: (r) => ({ r with \r\n      prod: if exists r.PRODUCTION_ENERGY then r.PRODUCTION_ENERGY else 0.0,\r\n      imp: if exists r.IMPORT_ENERGY then r.IMPORT_ENERGY else 0.0,\r\n      exp: if exists r.EXPORT_ENERGY then r.EXPORT_ENERGY else 0.0\r\n  }))\r\n  \r\n  // Calcoliamo le metriche derivate\r\n  |> map(fn: (r) => ({ \r\n      _time: r._time,\r\n      Produzione: r.prod,\r\n      Prelievo: r.imp,\r\n      Immissione: r.exp,\r\n      Consumo: r.prod + r.imp - r.exp,\r\n      Autoconsumo: r.prod - r.exp\r\n  }))\r\n  \r\n  // Filtriamo solo i dati entro il periodo selezionato\r\n  |> filter(fn: (r) => r._time < endOfPeriod)"
+                        "query": "import \"timezone\"\nimport \"date\"\noption location = timezone.location(name: \"Europe/Rome\")\n\nstartOfPeriod = date.truncate(t: v.timeRangeStart, unit: 1y)\nendOfPeriod = date.add(d: 1y, to: startOfPeriod)\n\nfrom(bucket: \"Solaredge\")\n  |> range(start: startOfPeriod, stop: endOfPeriod)\n  |> filter(fn: (r) => r._measurement == \"api\" and r.endpoint == \"site_energy_details\")\n  |> filter(fn: (r) =>\n      r.metric == \"Production\" or r.metric == \"Purchased\" or\n      r.metric == \"FeedIn\" or r.metric == \"Consumption\")\n  |> aggregateWindow(every: 1mo, fn: sum, createEmpty: true, timeSrc: \"_start\", location: location)\n  |> group(columns: [\"metric\"])\n  |> fill(value: 0.0)\n  |> pivot(rowKey: [\"_time\"], columnKey: [\"metric\"], valueColumn: \"_value\")\n  |> map(fn: (r) => ({\n      _time: r._time,\n      Produzione: r.Production,\n      Prelievo: r.Purchased,\n      Immissione: r.FeedIn,\n      Consumo: r.Consumption,\n      Autoconsumo: r.Production - r.FeedIn,\n  }))\n  |> filter(fn: (r) => r._time < endOfPeriod)\n"
                       }
                     },
                     "refId": "Anno Precedente",
@@ -1196,7 +1281,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "barchart",
-            "version": "12.3.0",
+            "version": "13.2.4",
             "spec": {
               "options": {
                 "barRadius": 0,
@@ -1471,7 +1556,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "table",
-            "version": "12.3.0",
+            "version": "13.2.4",
             "spec": {
               "options": {
                 "cellHeight": "sm",
@@ -1514,8 +1599,7 @@
                     "inspect": false,
                     "wrapHeaderText": false,
                     "wrapText": false
-                  },
-                  "fieldMinMax": false
+                  }
                 },
                 "overrides": [
                   {
@@ -1866,7 +1950,6 @@
         "spec": {
           "id": 172,
           "title": "",
-          "description": "",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -1898,7 +1981,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "stat",
-            "version": "12.3.0",
+            "version": "13.2.4",
             "spec": {
               "options": {
                 "colorMode": "background",
@@ -1968,7 +2051,7 @@
                       },
                       "spec": {
                         "alias": "Produzione",
-                        "query": "import \"timezone\"\r\nimport \"date\"\r\noption location = timezone.location(name: \"Europe/Rome\")\r\nstartOfYear = date.truncate(t: now(), unit: 1y)\r\nendOfYear = date.add(d: 1y, to: startOfYear)\r\n\r\nfrom(bucket: \"Solaredge\")\r\n  |> range(start: startOfYear, stop: endOfYear)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"web\" and r[\"_field\"] == \"Site\")\r\n  |> filter(fn: (r) => r[\"endpoint\"] == \"PRODUCTION_ENERGY\")\r\n  |> aggregateWindow(every: 1d, fn: last, createEmpty: false)\r\n  |> sum()\r\n  |> yield(name: \"Produzione_Anno_Corrente\")",
+                        "query": "import \"timezone\"\r\nimport \"date\"\r\noption location = timezone.location(name: \"Europe/Rome\")\r\nstartOfYear = date.truncate(t: now(), unit: 1y)\r\nendOfYear = date.add(d: 1y, to: startOfYear)\r\n\r\nfrom(bucket: \"Solaredge\")\r\n  |> range(start: startOfYear, stop: endOfYear)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"api\" and r[\"endpoint\"] == \"site_energy_details\")\r\n  |> filter(fn: (r) => r[\"metric\"] == \"Production\")\r\n  |> aggregateWindow(every: 1d, fn: sum, createEmpty: false)\r\n  |> sum()\r\n  |> yield(name: \"Produzione_Anno_Corrente\")",
                         "rawQuery": true,
                         "resultFormat": "time_series"
                       }
@@ -1989,7 +2072,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "stat",
-            "version": "12.3.0",
+            "version": "13.2.4",
             "spec": {
               "options": {
                 "colorMode": "background",
@@ -2063,7 +2146,7 @@
                         "name": "ff27vpmruzxtsc"
                       },
                       "spec": {
-                        "query": "import \"timezone\"\r\nimport \"date\"\r\noption location = timezone.location(name: \"Europe/Rome\")\r\nstartOfYear = date.truncate(t: now(), unit: 1y)\r\nendOfYear = date.add(d: 1y, to: startOfYear)\r\n\r\nfrom(bucket: \"Solaredge\")\r\n  |> range(start: startOfYear, stop: endOfYear)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"web\" and r[\"_field\"] == \"Site\")\r\n  |> filter(fn: (r) => r[\"endpoint\"] == \"PRODUCTION_ENERGY\" or r[\"endpoint\"] == \"IMPORT_ENERGY\" or r[\"endpoint\"] == \"EXPORT_ENERGY\")\r\n  |> aggregateWindow(every: 1d, fn: last, createEmpty: false)\r\n  |> sum()\r\n  |> pivot(rowKey: [\"_start\"], columnKey: [\"endpoint\"], valueColumn: \"_value\")\r\n  |> map(fn: (r) => ({ \r\n      _value: (if exists r.PRODUCTION_ENERGY then r.PRODUCTION_ENERGY else 0.0) + \r\n              (if exists r.IMPORT_ENERGY then r.IMPORT_ENERGY else 0.0) - \r\n              (if exists r.EXPORT_ENERGY then r.EXPORT_ENERGY else 0.0)\r\n  }))\r\n  |> yield(name: \"Consumo_Anno_Corrente\")"
+                        "query": "import \"timezone\"\r\nimport \"date\"\r\noption location = timezone.location(name: \"Europe/Rome\")\r\nstartOfYear = date.truncate(t: now(), unit: 1y)\r\nendOfYear = date.add(d: 1y, to: startOfYear)\r\n\r\nfrom(bucket: \"Solaredge\")\r\n  |> range(start: startOfYear, stop: endOfYear)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"api\" and r[\"endpoint\"] == \"site_energy_details\")\r\n  |> filter(fn: (r) => r[\"metric\"] == \"Production\" or r[\"metric\"] == \"Purchased\" or r[\"metric\"] == \"FeedIn\")\r\n  |> aggregateWindow(every: 1d, fn: sum, createEmpty: false)\r\n  |> sum()\r\n  |> pivot(rowKey: [\"_start\"], columnKey: [\"metric\"], valueColumn: \"_value\")\r\n  |> map(fn: (r) => ({ \r\n      _value: (if exists r.Production then r.Production else 0.0) + \r\n              (if exists r.Purchased then r.Purchased else 0.0) - \r\n              (if exists r.FeedIn then r.FeedIn else 0.0)\r\n  }))\r\n  |> yield(name: \"Consumo_Anno_Corrente\")"
                       }
                     },
                     "refId": "Consumo",
@@ -2082,7 +2165,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "stat",
-            "version": "12.3.0",
+            "version": "13.2.4",
             "spec": {
               "options": {
                 "colorMode": "background",
@@ -2149,7 +2232,7 @@
                         "name": "ff27vpmruzxtsc"
                       },
                       "spec": {
-                        "query": "import \"timezone\"\r\nimport \"date\"\r\noption location = timezone.location(name: \"Europe/Rome\")\r\nstartOfYear = date.truncate(t: now(), unit: 1y)\r\nendOfYear = date.add(d: 1y, to: startOfYear)\r\n\r\nfrom(bucket: \"Solaredge\")\r\n  |> range(start: startOfYear, stop: endOfYear)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"web\" and r[\"_field\"] == \"Site\")\r\n  |> filter(fn: (r) => r[\"endpoint\"] == \"PRODUCTION_ENERGY\" or r[\"endpoint\"] == \"EXPORT_ENERGY\")\r\n  |> aggregateWindow(every: 1d, fn: last, createEmpty: false)\r\n  |> sum()\r\n  |> pivot(rowKey: [\"_start\"], columnKey: [\"endpoint\"], valueColumn: \"_value\")\r\n  |> map(fn: (r) => ({ \r\n      _value: (if exists r.PRODUCTION_ENERGY then r.PRODUCTION_ENERGY else 0.0) - \r\n              (if exists r.EXPORT_ENERGY then r.EXPORT_ENERGY else 0.0)\r\n  }))\r\n  |> yield(name: \"Autoconsumo_Anno_Corrente\")"
+                        "query": "import \"timezone\"\r\nimport \"date\"\r\noption location = timezone.location(name: \"Europe/Rome\")\r\nstartOfYear = date.truncate(t: now(), unit: 1y)\r\nendOfYear = date.add(d: 1y, to: startOfYear)\r\n\r\nfrom(bucket: \"Solaredge\")\r\n  |> range(start: startOfYear, stop: endOfYear)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"api\" and r[\"endpoint\"] == \"site_energy_details\")\r\n  |> filter(fn: (r) => r[\"metric\"] == \"Production\" or r[\"metric\"] == \"FeedIn\")\r\n  |> aggregateWindow(every: 1d, fn: sum, createEmpty: false)\r\n  |> sum()\r\n  |> pivot(rowKey: [\"_start\"], columnKey: [\"metric\"], valueColumn: \"_value\")\r\n  |> map(fn: (r) => ({ \r\n      _value: (if exists r.Production then r.Production else 0.0) - \r\n              (if exists r.FeedIn then r.FeedIn else 0.0)\r\n  }))\r\n  |> yield(name: \"Autoconsumo_Anno_Corrente\")"
                       }
                     },
                     "refId": "Autoconsumo",
@@ -2168,7 +2251,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "stat",
-            "version": "12.3.0",
+            "version": "13.2.4",
             "spec": {
               "options": {
                 "colorMode": "background",
@@ -2236,7 +2319,7 @@
                         "name": "ff27vpmruzxtsc"
                       },
                       "spec": {
-                        "query": "import \"timezone\"\r\nimport \"date\"\r\noption location = timezone.location(name: \"Europe/Rome\")\r\nstartOfYear = date.truncate(t: now(), unit: 1y)\r\nendOfYear = date.add(d: 1y, to: startOfYear)\r\n\r\nfrom(bucket: \"Solaredge\")\r\n  |> range(start: startOfYear, stop: endOfYear)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"web\" and r[\"_field\"] == \"Site\")\r\n  |> filter(fn: (r) => r[\"endpoint\"] == \"IMPORT_ENERGY\")\r\n  |> aggregateWindow(every: 1d, fn: last, createEmpty: false)\r\n  |> sum()\r\n  |> yield(name: \"Prelievo_Anno_Corrente\")"
+                        "query": "import \"timezone\"\r\nimport \"date\"\r\noption location = timezone.location(name: \"Europe/Rome\")\r\nstartOfYear = date.truncate(t: now(), unit: 1y)\r\nendOfYear = date.add(d: 1y, to: startOfYear)\r\n\r\nfrom(bucket: \"Solaredge\")\r\n  |> range(start: startOfYear, stop: endOfYear)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"api\" and r[\"endpoint\"] == \"site_energy_details\")\r\n  |> filter(fn: (r) => r[\"metric\"] == \"Purchased\")\r\n  |> aggregateWindow(every: 1d, fn: sum, createEmpty: false)\r\n  |> sum()\r\n  |> yield(name: \"Prelievo_Anno_Corrente\")"
                       }
                     },
                     "refId": "Prelievo",
@@ -2255,7 +2338,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "stat",
-            "version": "12.3.0",
+            "version": "13.2.4",
             "spec": {
               "options": {
                 "colorMode": "background",
@@ -2306,7 +2389,6 @@
         "spec": {
           "id": 177,
           "title": "",
-          "description": "",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -2323,7 +2405,7 @@
                         "name": "ff27vpmruzxtsc"
                       },
                       "spec": {
-                        "query": "import \"timezone\"\r\nimport \"date\"\r\n\r\noption location = timezone.location(name: \"Europe/Rome\")\r\n\r\nstartOfYear = date.truncate(t: now(), unit: 1y)\r\nendOfYear = date.add(d: 1y, to: startOfYear)\r\n\r\nfrom(bucket: \"Solaredge\")\r\n  |> range(start: startOfYear, stop: endOfYear)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"web\" and r[\"_field\"] == \"Site\")\r\n  |> filter(fn: (r) => \r\n      r[\"endpoint\"] == \"PRODUCTION_ENERGY\" or \r\n      r[\"endpoint\"] == \"IMPORT_ENERGY\" or \r\n      r[\"endpoint\"] == \"EXPORT_ENERGY\"\r\n  )\r\n  |> aggregateWindow(every: 1d, fn: last, createEmpty: false)\r\n  |> sum()\r\n  |> pivot(rowKey: [\"_start\"], columnKey: [\"endpoint\"], valueColumn: \"_value\")\r\n  |> map(fn: (r) => ({ \r\n      Produzione: if exists r.PRODUCTION_ENERGY then r.PRODUCTION_ENERGY else 0.0,\r\n      Prelievo: if exists r.IMPORT_ENERGY then r.IMPORT_ENERGY else 0.0,\r\n      Immissione: if exists r.EXPORT_ENERGY then r.EXPORT_ENERGY else 0.0\r\n  }))\r\n  |> map(fn: (r) => ({\r\n      r with\r\n      Consumo: r.Produzione + r.Prelievo - r.Immissione\r\n  }))\r\n  |> map(fn: (r) => ({\r\n      _time: now(),\r\n      \"% Prelievo\": if r.Consumo > 0.0 then (r.Prelievo / r.Consumo) * 100.0 else 0.0,\r\n      _field: \"Percentuale_Prelievo\"\r\n  }))\r\n  |> keep(columns: [\"_time\", \"% Prelievo\", \"_field\"])\r\n  |> yield(name: \"Percentuale_Prelievo_Anno_Corrente\")"
+                        "query": "import \"timezone\"\r\nimport \"date\"\r\n\r\noption location = timezone.location(name: \"Europe/Rome\")\r\n\r\nstartOfYear = date.truncate(t: now(), unit: 1y)\r\nendOfYear = date.add(d: 1y, to: startOfYear)\r\n\r\nfrom(bucket: \"Solaredge\")\r\n  |> range(start: startOfYear, stop: endOfYear)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"api\" and r[\"endpoint\"] == \"site_energy_details\")\r\n  |> filter(fn: (r) => \r\n      r[\"metric\"] == \"Production\" or \r\n      r[\"metric\"] == \"Purchased\" or \r\n      r[\"metric\"] == \"FeedIn\"\r\n  )\r\n  |> aggregateWindow(every: 1d, fn: sum, createEmpty: false)\r\n  |> sum()\r\n  |> pivot(rowKey: [\"_start\"], columnKey: [\"metric\"], valueColumn: \"_value\")\r\n  |> map(fn: (r) => ({ \r\n      Produzione: if exists r.Production then r.Production else 0.0,\r\n      Prelievo: if exists r.Purchased then r.Purchased else 0.0,\r\n      Immissione: if exists r.FeedIn then r.FeedIn else 0.0\r\n  }))\r\n  |> map(fn: (r) => ({\r\n      r with\r\n      Consumo: r.Produzione + r.Prelievo - r.Immissione\r\n  }))\r\n  |> map(fn: (r) => ({\r\n      _time: now(),\r\n      \"% Prelievo\": if r.Consumo > 0.0 then (r.Prelievo / r.Consumo) * 100.0 else 0.0,\r\n      _field: \"Percentuale_Prelievo\"\r\n  }))\r\n  |> keep(columns: [\"_time\", \"% Prelievo\", \"_field\"])\r\n  |> yield(name: \"Percentuale_Prelievo_Anno_Corrente\")"
                       }
                     },
                     "refId": "% Prelievo",
@@ -2342,7 +2424,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "stat",
-            "version": "12.3.0",
+            "version": "13.2.4",
             "spec": {
               "options": {
                 "colorMode": "background",
@@ -2411,7 +2493,7 @@
                         "name": "ff27vpmruzxtsc"
                       },
                       "spec": {
-                        "query": "import \"timezone\"\r\nimport \"date\"\r\noption location = timezone.location(name: \"Europe/Rome\")\r\nstartOfYear = date.truncate(t: now(), unit: 1y)\r\nendOfYear = date.add(d: 1y, to: startOfYear)\r\n\r\nfrom(bucket: \"Solaredge\")\r\n  |> range(start: startOfYear, stop: endOfYear)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"web\" and r[\"_field\"] == \"Site\")\r\n  |> filter(fn: (r) => r[\"endpoint\"] == \"EXPORT_ENERGY\")\r\n  |> aggregateWindow(every: 1d, fn: last, createEmpty: false)\r\n  |> sum()\r\n  |> yield(name: \"Immissione_Anno_Corrente\")"
+                        "query": "import \"timezone\"\r\nimport \"date\"\r\noption location = timezone.location(name: \"Europe/Rome\")\r\nstartOfYear = date.truncate(t: now(), unit: 1y)\r\nendOfYear = date.add(d: 1y, to: startOfYear)\r\n\r\nfrom(bucket: \"Solaredge\")\r\n  |> range(start: startOfYear, stop: endOfYear)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"api\" and r[\"endpoint\"] == \"site_energy_details\")\r\n  |> filter(fn: (r) => r[\"metric\"] == \"FeedIn\")\r\n  |> aggregateWindow(every: 1d, fn: sum, createEmpty: false)\r\n  |> sum()\r\n  |> yield(name: \"Immissione_Anno_Corrente\")"
                       }
                     },
                     "refId": "Immissione",
@@ -2430,7 +2512,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "stat",
-            "version": "12.3.0",
+            "version": "13.2.4",
             "spec": {
               "options": {
                 "colorMode": "background",
@@ -2481,7 +2563,6 @@
         "spec": {
           "id": 179,
           "title": "",
-          "description": "",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -2498,7 +2579,7 @@
                         "name": "ff27vpmruzxtsc"
                       },
                       "spec": {
-                        "query": "import \"timezone\"\r\nimport \"date\"\r\n\r\noption location = timezone.location(name: \"Europe/Rome\")\r\n\r\nstartOfLastYear = date.add(d: -1y, to: date.truncate(t: now(), unit: 1y))\r\nendOfLastYear = date.truncate(t: now(), unit: 1y)\r\n\r\nfrom(bucket: \"Solaredge\")\r\n  |> range(start: startOfLastYear, stop: endOfLastYear)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"web\" and r[\"_field\"] == \"Site\")\r\n  |> filter(fn: (r) => \r\n      r[\"endpoint\"] == \"PRODUCTION_ENERGY\" or \r\n      r[\"endpoint\"] == \"IMPORT_ENERGY\" or \r\n      r[\"endpoint\"] == \"EXPORT_ENERGY\"\r\n  )\r\n  |> aggregateWindow(every: 1d, fn: last, createEmpty: false)\r\n  |> sum()\r\n  |> pivot(rowKey: [\"_start\"], columnKey: [\"endpoint\"], valueColumn: \"_value\")\r\n  |> map(fn: (r) => ({ \r\n      Produzione: if exists r.PRODUCTION_ENERGY then r.PRODUCTION_ENERGY else 0.0,\r\n      Prelievo: if exists r.IMPORT_ENERGY then r.IMPORT_ENERGY else 0.0,\r\n      Immissione: if exists r.EXPORT_ENERGY then r.EXPORT_ENERGY else 0.0\r\n  }))\r\n  |> map(fn: (r) => ({\r\n      r with\r\n      Autoconsumo: r.Produzione - r.Immissione,\r\n      Consumo: r.Produzione - r.Immissione + r.Prelievo\r\n  }))\r\n  |> map(fn: (r) => ({\r\n      _time: now(),\r\n      _value: if r.Consumo > 0.0 then (r.Autoconsumo / r.Consumo) * 100.0 else 0.0,\r\n      _field: \"Indipendenza_Energetica\"\r\n  }))\r\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])\r\n  |> yield(name: \"Indipendenza_Anno_Precedente\")"
+                        "query": "import \"timezone\"\r\nimport \"date\"\r\n\r\noption location = timezone.location(name: \"Europe/Rome\")\r\n\r\nstartOfLastYear = date.add(d: -1y, to: date.truncate(t: now(), unit: 1y))\r\nendOfLastYear = date.truncate(t: now(), unit: 1y)\r\n\r\nfrom(bucket: \"Solaredge\")\r\n  |> range(start: startOfLastYear, stop: endOfLastYear)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"api\" and r[\"endpoint\"] == \"site_energy_details\")\r\n  |> filter(fn: (r) => \r\n      r[\"metric\"] == \"Production\" or \r\n      r[\"metric\"] == \"Purchased\" or \r\n      r[\"metric\"] == \"FeedIn\"\r\n  )\r\n  |> aggregateWindow(every: 1d, fn: sum, createEmpty: false)\r\n  |> sum()\r\n  |> pivot(rowKey: [\"_start\"], columnKey: [\"metric\"], valueColumn: \"_value\")\r\n  |> map(fn: (r) => ({ \r\n      Produzione: if exists r.Production then r.Production else 0.0,\r\n      Prelievo: if exists r.Purchased then r.Purchased else 0.0,\r\n      Immissione: if exists r.FeedIn then r.FeedIn else 0.0\r\n  }))\r\n  |> map(fn: (r) => ({\r\n      r with\r\n      Autoconsumo: r.Produzione - r.Immissione,\r\n      Consumo: r.Produzione - r.Immissione + r.Prelievo\r\n  }))\r\n  |> map(fn: (r) => ({\r\n      _time: now(),\r\n      _value: if r.Consumo > 0.0 then (r.Autoconsumo / r.Consumo) * 100.0 else 0.0,\r\n      _field: \"Indipendenza_Energetica\"\r\n  }))\r\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])\r\n  |> yield(name: \"Indipendenza_Anno_Precedente\")"
                       }
                     },
                     "refId": "% Autoconsumo Anno Precedente",
@@ -2517,7 +2598,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "stat",
-            "version": "12.3.0",
+            "version": "13.2.4",
             "spec": {
               "options": {
                 "colorMode": "background",
@@ -2570,7 +2651,6 @@
         "spec": {
           "id": 180,
           "title": "Risparmi Autoconsumo",
-          "description": "",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -2587,7 +2667,7 @@
                         "name": "ff27vpmruzxtsc"
                       },
                       "spec": {
-                        "query": "import \"timezone\"\nimport \"date\"\nimport \"array\"\n\noption location = timezone.location(name: \"Europe/Rome\")\n\nstart = date.truncate(t: now(), unit: 1d)\nstop = date.add(d: 1d, to: start)\nmonth_start = date.truncate(t: now(), unit: 1mo)\n\n// Recupera prezzo PUN medio mensile (già pre-calcolato)\nprezzo_pun = from(bucket: \"GME\")\n  |> range(start: month_start)\n  |> filter(fn: (r) => r._measurement == \"gme_monthly_avg\" and r._field == \"pun_kwh_avg\")\n  |> last()\n  |> findRecord(fn: (key) => true, idx: 0)\n\n// Produzione giornaliera: schema robusto (group + difference + sum)\ndata_prod = from(bucket: \"Solaredge_Realtime\")\n  |> range(start: start, stop: stop)\n  |> filter(fn: (r) => r._measurement == \"realtime\" and r._field == \"Inverter\" and r.endpoint == \"Energy Total\" and r.unit == \"Wh\")\n  |> group()\n  |> difference()\n  |> filter(fn: (r) => r._value >= 0.0)\n  |> sum()\n\nprod_value = (data_prod |> findRecord(fn: (key) => true, idx: 0))._value\n\n// Export giornaliero: schema robusto (group + difference + sum)\ndata_exp = from(bucket: \"Solaredge_Realtime\")\n  |> range(start: start, stop: stop)\n  |> filter(fn: (r) => r._measurement == \"realtime\" and r._field == \"Meter\" and r.endpoint == \"Export Energy Active\" and r.unit == \"Wh\")\n  |> group()\n  |> difference()\n  |> filter(fn: (r) => r._value >= 0.0)\n  |> sum()\n\nexp_value = (data_exp |> findRecord(fn: (key) => true, idx: 0))._value\n\n// Autoconsumo e risparmio\nautoconsumo = if (prod_value - exp_value) < 0.0 then 0.0 else (prod_value - exp_value)\nrisparmio = (autoconsumo / 1000.0) * prezzo_pun._value\n\narray.from(rows: [{PUN: prezzo_pun._value, Risparmio: risparmio}])\n"
+                        "query": "import \"timezone\"\nimport \"date\"\nimport \"array\"\n\noption location = timezone.location(name: \"Europe/Rome\")\n\nstart = date.truncate(t: now(), unit: 1d)\nstop = date.add(d: 1d, to: start)\nmonth_start = date.truncate(t: now(), unit: 1mo)\n\n// Recupera prezzo PUN medio mensile (già pre-calcolato)\nprezzo_pun = from(bucket: \"GME\")\n  |> range(start: month_start)\n  |> filter(fn: (r) => r._measurement == \"gme_monthly_avg\" and r._field == \"pun_kwh_avg\")\n  |> last()\n  |> findRecord(fn: (key) => true, idx: 0)\n\n// Produzione giornaliera: schema robusto (group + difference + sum)\ndata_prod = from(bucket: \"Solaredge_Realtime\")\n  |> range(start: start, stop: stop)\n  |> filter(fn: (r) => r._measurement == \"realtime\" and r._field == \"Inverter\" and r.endpoint == \"Energy Total\" and r.unit == \"Wh\")\n  |> group()\n  |> sort(columns: [\"_time\"])\n\nprod_value = ((data_prod |> last() |> findRecord(fn: (key) => true, idx: 0))._value - (data_prod |> first() |> findRecord(fn: (key) => true, idx: 0))._value)\n\n// Export giornaliero: schema robusto (group + difference + sum)\ndata_exp = from(bucket: \"Solaredge_Realtime\")\n  |> range(start: start, stop: stop)\n  |> filter(fn: (r) => r._measurement == \"realtime\" and r._field == \"Meter\" and r.endpoint == \"Export Energy Active\" and r.unit == \"Wh\")\n  |> group()\n  |> sort(columns: [\"_time\"])\n\nexp_value = ((data_exp |> last() |> findRecord(fn: (key) => true, idx: 0))._value - (data_exp |> first() |> findRecord(fn: (key) => true, idx: 0))._value)\n\n// Autoconsumo e risparmio\nautoconsumo = if (prod_value - exp_value) < 0.0 then 0.0 else (prod_value - exp_value)\nrisparmio = (autoconsumo / 1000.0) * prezzo_pun._value\n\narray.from(rows: [{Risparmio: risparmio}])\n"
                       }
                     },
                     "refId": "Risparmio Autoconsumo",
@@ -2605,7 +2685,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "stat",
-            "version": "12.3.0",
+            "version": "13.2.4",
             "spec": {
               "options": {
                 "colorMode": "background",
@@ -2768,7 +2848,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "timeseries",
-            "version": "12.3.0",
+            "version": "13.2.4",
             "spec": {
               "options": {
                 "legend": {
@@ -3070,7 +3150,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "timeseries",
-            "version": "12.3.0",
+            "version": "13.2.4",
             "spec": {
               "options": {
                 "legend": {
@@ -3330,10 +3410,18 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "gauge",
-            "version": "12.3.0",
+            "version": "13.2.4",
             "spec": {
               "options": {
-                "minVizHeight": 90,
+                "barShape": "flat",
+                "barWidthFactor": 0.5,
+                "effects": {
+                  "barGlow": false,
+                  "centerGlow": false,
+                  "gradient": false
+                },
+                "endpointMarker": "point",
+                "minVizHeight": 75,
                 "minVizWidth": 75,
                 "orientation": "auto",
                 "reduceOptions": {
@@ -3343,10 +3431,15 @@
                   "fields": "",
                   "values": false
                 },
+                "segmentCount": 1,
+                "segmentSpacing": 0.3,
+                "shape": "gauge",
                 "showThresholdLabels": false,
-                "showThresholdMarkers": true,
-                "sizing": "manual",
-                "text": {}
+                "showThresholdMarkers": false,
+                "sizing": "auto",
+                "sparkline": false,
+                "text": {},
+                "textMode": "auto"
               },
               "fieldConfig": {
                 "defaults": {
@@ -3402,7 +3495,7 @@
                       },
                       "spec": {
                         "alias": "Produzione",
-                        "query": "import \"timezone\"\r\nimport \"date\"\r\noption location = timezone.location(name: \"Europe/Rome\")\r\nstartOfLastYear = date.add(d: -1y, to: date.truncate(t: now(), unit: 1y))\r\nendOfLastYear = date.truncate(t: now(), unit: 1y)\r\n\r\nfrom(bucket: \"Solaredge\")\r\n  |> range(start: startOfLastYear, stop: endOfLastYear)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"web\" and r[\"_field\"] == \"Site\")\r\n  |> filter(fn: (r) => r[\"endpoint\"] == \"PRODUCTION_ENERGY\")\r\n  |> aggregateWindow(every: 1d, fn: last, createEmpty: false)\r\n  |> sum()\r\n  |> yield(name: \"Produzione_Anno_Precedente\")",
+                        "query": "import \"timezone\"\r\nimport \"date\"\r\noption location = timezone.location(name: \"Europe/Rome\")\r\nstartOfLastYear = date.add(d: -1y, to: date.truncate(t: now(), unit: 1y))\r\nendOfLastYear = date.truncate(t: now(), unit: 1y)\r\n\r\nfrom(bucket: \"Solaredge\")\r\n  |> range(start: startOfLastYear, stop: endOfLastYear)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"api\" and r[\"endpoint\"] == \"site_energy_details\")\r\n  |> filter(fn: (r) => r[\"metric\"] == \"Production\")\r\n  |> aggregateWindow(every: 1d, fn: sum, createEmpty: false)\r\n  |> sum()\r\n  |> yield(name: \"Produzione_Anno_Precedente\")",
                         "rawQuery": true,
                         "resultFormat": "time_series"
                       }
@@ -3423,7 +3516,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "stat",
-            "version": "12.3.0",
+            "version": "13.2.4",
             "spec": {
               "options": {
                 "colorMode": "background",
@@ -3497,7 +3590,7 @@
                         "name": "ff27vpmruzxtsc"
                       },
                       "spec": {
-                        "query": "import \"timezone\"\r\nimport \"date\"\r\noption location = timezone.location(name: \"Europe/Rome\")\r\nstartOfLastYear = date.add(d: -1y, to: date.truncate(t: now(), unit: 1y))\r\nendOfLastYear = date.truncate(t: now(), unit: 1y)\r\n\r\nfrom(bucket: \"Solaredge\")\r\n  |> range(start: startOfLastYear, stop: endOfLastYear)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"web\" and r[\"_field\"] == \"Site\")\r\n  |> filter(fn: (r) => r[\"endpoint\"] == \"PRODUCTION_ENERGY\" or r[\"endpoint\"] == \"IMPORT_ENERGY\" or r[\"endpoint\"] == \"EXPORT_ENERGY\")\r\n  |> aggregateWindow(every: 1d, fn: last, createEmpty: false)\r\n  |> sum()\r\n  |> pivot(rowKey: [\"_start\"], columnKey: [\"endpoint\"], valueColumn: \"_value\")\r\n  |> map(fn: (r) => ({ \r\n      _value: (if exists r.PRODUCTION_ENERGY then r.PRODUCTION_ENERGY else 0.0) + \r\n              (if exists r.IMPORT_ENERGY then r.IMPORT_ENERGY else 0.0) - \r\n              (if exists r.EXPORT_ENERGY then r.EXPORT_ENERGY else 0.0)\r\n  }))\r\n  |> yield(name: \"Consumo_Anno_Precedente\")"
+                        "query": "import \"timezone\"\r\nimport \"date\"\r\noption location = timezone.location(name: \"Europe/Rome\")\r\nstartOfLastYear = date.add(d: -1y, to: date.truncate(t: now(), unit: 1y))\r\nendOfLastYear = date.truncate(t: now(), unit: 1y)\r\n\r\nfrom(bucket: \"Solaredge\")\r\n  |> range(start: startOfLastYear, stop: endOfLastYear)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"api\" and r[\"endpoint\"] == \"site_energy_details\")\r\n  |> filter(fn: (r) => r[\"metric\"] == \"Production\" or r[\"metric\"] == \"Purchased\" or r[\"metric\"] == \"FeedIn\")\r\n  |> aggregateWindow(every: 1d, fn: sum, createEmpty: false)\r\n  |> sum()\r\n  |> pivot(rowKey: [\"_start\"], columnKey: [\"metric\"], valueColumn: \"_value\")\r\n  |> map(fn: (r) => ({ \r\n      _value: (if exists r.Production then r.Production else 0.0) + \r\n              (if exists r.Purchased then r.Purchased else 0.0) - \r\n              (if exists r.FeedIn then r.FeedIn else 0.0)\r\n  }))\r\n  |> yield(name: \"Consumo_Anno_Precedente\")"
                       }
                     },
                     "refId": "Consumo",
@@ -3516,7 +3609,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "stat",
-            "version": "12.3.0",
+            "version": "13.2.4",
             "spec": {
               "options": {
                 "colorMode": "background",
@@ -3583,7 +3676,7 @@
                         "name": "ff27vpmruzxtsc"
                       },
                       "spec": {
-                        "query": "import \"timezone\"\r\nimport \"date\"\r\noption location = timezone.location(name: \"Europe/Rome\")\r\nstartOfLastYear = date.add(d: -1y, to: date.truncate(t: now(), unit: 1y))\r\nendOfLastYear = date.truncate(t: now(), unit: 1y)\r\n\r\nfrom(bucket: \"Solaredge\")\r\n  |> range(start: startOfLastYear, stop: endOfLastYear)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"web\" and r[\"_field\"] == \"Site\")\r\n  |> filter(fn: (r) => r[\"endpoint\"] == \"PRODUCTION_ENERGY\" or r[\"endpoint\"] == \"EXPORT_ENERGY\")\r\n  |> aggregateWindow(every: 1d, fn: last, createEmpty: false)\r\n  |> sum()\r\n  |> pivot(rowKey: [\"_start\"], columnKey: [\"endpoint\"], valueColumn: \"_value\")\r\n  |> map(fn: (r) => ({ \r\n      _value: (if exists r.PRODUCTION_ENERGY then r.PRODUCTION_ENERGY else 0.0) - \r\n              (if exists r.EXPORT_ENERGY then r.EXPORT_ENERGY else 0.0)\r\n  }))\r\n  |> yield(name: \"Autoconsumo_Anno_Precedente\")"
+                        "query": "import \"timezone\"\r\nimport \"date\"\r\noption location = timezone.location(name: \"Europe/Rome\")\r\nstartOfLastYear = date.add(d: -1y, to: date.truncate(t: now(), unit: 1y))\r\nendOfLastYear = date.truncate(t: now(), unit: 1y)\r\n\r\nfrom(bucket: \"Solaredge\")\r\n  |> range(start: startOfLastYear, stop: endOfLastYear)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"api\" and r[\"endpoint\"] == \"site_energy_details\")\r\n  |> filter(fn: (r) => r[\"metric\"] == \"Production\" or r[\"metric\"] == \"FeedIn\")\r\n  |> aggregateWindow(every: 1d, fn: sum, createEmpty: false)\r\n  |> sum()\r\n  |> pivot(rowKey: [\"_start\"], columnKey: [\"metric\"], valueColumn: \"_value\")\r\n  |> map(fn: (r) => ({ \r\n      _value: (if exists r.Production then r.Production else 0.0) - \r\n              (if exists r.FeedIn then r.FeedIn else 0.0)\r\n  }))\r\n  |> yield(name: \"Autoconsumo_Anno_Precedente\")"
                       }
                     },
                     "refId": "Autoconsumo",
@@ -3602,7 +3695,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "stat",
-            "version": "12.3.0",
+            "version": "13.2.4",
             "spec": {
               "options": {
                 "colorMode": "background",
@@ -3670,7 +3763,7 @@
                         "name": "ff27vpmruzxtsc"
                       },
                       "spec": {
-                        "query": "import \"timezone\"\r\nimport \"date\"\r\noption location = timezone.location(name: \"Europe/Rome\")\r\nstartOfLastYear = date.add(d: -1y, to: date.truncate(t: now(), unit: 1y))\r\nendOfLastYear = date.truncate(t: now(), unit: 1y)\r\n\r\nfrom(bucket: \"Solaredge\")\r\n  |> range(start: startOfLastYear, stop: endOfLastYear)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"web\" and r[\"_field\"] == \"Site\")\r\n  |> filter(fn: (r) => r[\"endpoint\"] == \"IMPORT_ENERGY\")\r\n  |> aggregateWindow(every: 1d, fn: last, createEmpty: false)\r\n  |> sum()\r\n  |> yield(name: \"Prelievo_Anno_Precedente\")"
+                        "query": "import \"timezone\"\r\nimport \"date\"\r\noption location = timezone.location(name: \"Europe/Rome\")\r\nstartOfLastYear = date.add(d: -1y, to: date.truncate(t: now(), unit: 1y))\r\nendOfLastYear = date.truncate(t: now(), unit: 1y)\r\n\r\nfrom(bucket: \"Solaredge\")\r\n  |> range(start: startOfLastYear, stop: endOfLastYear)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"api\" and r[\"endpoint\"] == \"site_energy_details\")\r\n  |> filter(fn: (r) => r[\"metric\"] == \"Purchased\")\r\n  |> aggregateWindow(every: 1d, fn: sum, createEmpty: false)\r\n  |> sum()\r\n  |> yield(name: \"Prelievo_Anno_Precedente\")"
                       }
                     },
                     "refId": "Prelievo",
@@ -3689,7 +3782,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "stat",
-            "version": "12.3.0",
+            "version": "13.2.4",
             "spec": {
               "options": {
                 "colorMode": "background",
@@ -3756,7 +3849,7 @@
                         "name": "ff27vpmruzxtsc"
                       },
                       "spec": {
-                        "query": "import \"timezone\"\r\nimport \"date\"\r\noption location = timezone.location(name: \"Europe/Rome\")\r\nstartOfLastYear = date.add(d: -1y, to: date.truncate(t: now(), unit: 1y))\r\nendOfLastYear = date.truncate(t: now(), unit: 1y)\r\n\r\nfrom(bucket: \"Solaredge\")\r\n  |> range(start: startOfLastYear, stop: endOfLastYear)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"web\" and r[\"_field\"] == \"Site\")\r\n  |> filter(fn: (r) => r[\"endpoint\"] == \"EXPORT_ENERGY\")\r\n  |> aggregateWindow(every: 1d, fn: last, createEmpty: false)\r\n  |> sum()\r\n  |> yield(name: \"Immissione_Anno_Precedente\")"
+                        "query": "import \"timezone\"\r\nimport \"date\"\r\noption location = timezone.location(name: \"Europe/Rome\")\r\nstartOfLastYear = date.add(d: -1y, to: date.truncate(t: now(), unit: 1y))\r\nendOfLastYear = date.truncate(t: now(), unit: 1y)\r\n\r\nfrom(bucket: \"Solaredge\")\r\n  |> range(start: startOfLastYear, stop: endOfLastYear)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"api\" and r[\"endpoint\"] == \"site_energy_details\")\r\n  |> filter(fn: (r) => r[\"metric\"] == \"FeedIn\")\r\n  |> aggregateWindow(every: 1d, fn: sum, createEmpty: false)\r\n  |> sum()\r\n  |> yield(name: \"Immissione_Anno_Precedente\")"
                       }
                     },
                     "refId": "Immissione",
@@ -3775,7 +3868,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "stat",
-            "version": "12.3.0",
+            "version": "13.2.4",
             "spec": {
               "options": {
                 "colorMode": "background",
@@ -3826,7 +3919,6 @@
         "spec": {
           "id": 190,
           "title": "",
-          "description": "",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -3843,7 +3935,7 @@
                         "name": "ff27vpmruzxtsc"
                       },
                       "spec": {
-                        "query": "import \"timezone\"\r\nimport \"date\"\r\n\r\noption location = timezone.location(name: \"Europe/Rome\")\r\n\r\nstartOfYear = date.truncate(t: now(), unit: 1y)\r\nendOfYear = date.add(d: 1y, to: startOfYear)\r\n\r\nfrom(bucket: \"Solaredge\")\r\n  |> range(start: startOfYear, stop: endOfYear)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"web\" and r[\"_field\"] == \"Site\")\r\n  |> filter(fn: (r) => \r\n      r[\"endpoint\"] == \"PRODUCTION_ENERGY\" or \r\n      r[\"endpoint\"] == \"IMPORT_ENERGY\" or \r\n      r[\"endpoint\"] == \"EXPORT_ENERGY\"\r\n  )\r\n  // Deduplicazione giornaliera\r\n  |> aggregateWindow(every: 1d, fn: last, createEmpty: false)\r\n  \r\n  // Somma annuale\r\n  |> sum()\r\n  \r\n  |> pivot(rowKey: [\"_start\"], columnKey: [\"endpoint\"], valueColumn: \"_value\")\r\n  \r\n  |> map(fn: (r) => ({ \r\n      Produzione: if exists r.PRODUCTION_ENERGY then r.PRODUCTION_ENERGY else 0.0,\r\n      Prelievo: if exists r.IMPORT_ENERGY then r.IMPORT_ENERGY else 0.0,\r\n      Immissione: if exists r.EXPORT_ENERGY then r.EXPORT_ENERGY else 0.0\r\n  }))\r\n  \r\n  |> map(fn: (r) => ({\r\n      r with\r\n      Autoconsumo: r.Produzione - r.Immissione,\r\n      Consumo: r.Produzione - r.Immissione + r.Prelievo // (Autoconsumo + Prelievo)\r\n  }))\r\n  \r\n  |> map(fn: (r) => ({\r\n      _time: now(),\r\n      _value: if r.Consumo > 0.0 then (r.Autoconsumo / r.Consumo) * 100.0 else 0.0,\r\n      _field: \"Indipendenza_Energetica\"\r\n  }))\r\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])\r\n  |> yield(name: \"Indipendenza_Anno_Corrente\")"
+                        "query": "import \"timezone\"\r\nimport \"date\"\r\n\r\noption location = timezone.location(name: \"Europe/Rome\")\r\n\r\nstartOfYear = date.truncate(t: now(), unit: 1y)\r\nendOfYear = date.add(d: 1y, to: startOfYear)\r\n\r\nfrom(bucket: \"Solaredge\")\r\n  |> range(start: startOfYear, stop: endOfYear)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"api\" and r[\"endpoint\"] == \"site_energy_details\")\r\n  |> filter(fn: (r) => \r\n      r[\"metric\"] == \"Production\" or \r\n      r[\"metric\"] == \"Purchased\" or \r\n      r[\"metric\"] == \"FeedIn\"\r\n  )\r\n  // Deduplicazione giornaliera\r\n  |> aggregateWindow(every: 1d, fn: sum, createEmpty: false)\r\n  \r\n  // Somma annuale\r\n  |> sum()\r\n  \r\n  |> pivot(rowKey: [\"_start\"], columnKey: [\"metric\"], valueColumn: \"_value\")\r\n  \r\n  |> map(fn: (r) => ({ \r\n      Produzione: if exists r.Production then r.Production else 0.0,\r\n      Prelievo: if exists r.Purchased then r.Purchased else 0.0,\r\n      Immissione: if exists r.FeedIn then r.FeedIn else 0.0\r\n  }))\r\n  \r\n  |> map(fn: (r) => ({\r\n      r with\r\n      Autoconsumo: r.Produzione - r.Immissione,\r\n      Consumo: r.Produzione - r.Immissione + r.Prelievo // (Autoconsumo + Prelievo)\r\n  }))\r\n  \r\n  |> map(fn: (r) => ({\r\n      _time: now(),\r\n      _value: if r.Consumo > 0.0 then (r.Autoconsumo / r.Consumo) * 100.0 else 0.0,\r\n      _field: \"Indipendenza_Energetica\"\r\n  }))\r\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])\r\n  |> yield(name: \"Indipendenza_Anno_Corrente\")"
                       }
                     },
                     "refId": "% Autoconsumo",
@@ -3862,7 +3954,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "stat",
-            "version": "12.3.0",
+            "version": "13.2.4",
             "spec": {
               "options": {
                 "colorMode": "background",
@@ -3915,7 +4007,6 @@
         "spec": {
           "id": 191,
           "title": "",
-          "description": "",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -3932,7 +4023,7 @@
                         "name": "ff27vpmruzxtsc"
                       },
                       "spec": {
-                        "query": "import \"timezone\"\r\nimport \"date\"\r\n\r\noption location = timezone.location(name: \"Europe/Rome\")\r\n\r\nstartOfLastYear = date.add(d: -1y, to: date.truncate(t: now(), unit: 1y))\r\nendOfLastYear = date.truncate(t: now(), unit: 1y)\r\n\r\nfrom(bucket: \"Solaredge\")\r\n  |> range(start: startOfLastYear, stop: endOfLastYear)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"web\" and r[\"_field\"] == \"Site\")\r\n  |> filter(fn: (r) => \r\n      r[\"endpoint\"] == \"PRODUCTION_ENERGY\" or \r\n      r[\"endpoint\"] == \"IMPORT_ENERGY\" or \r\n      r[\"endpoint\"] == \"EXPORT_ENERGY\"\r\n  )\r\n  |> aggregateWindow(every: 1d, fn: last, createEmpty: false)\r\n  |> sum()\r\n  |> pivot(rowKey: [\"_start\"], columnKey: [\"endpoint\"], valueColumn: \"_value\")\r\n  |> map(fn: (r) => ({ \r\n      Produzione: if exists r.PRODUCTION_ENERGY then r.PRODUCTION_ENERGY else 0.0,\r\n      Prelievo: if exists r.IMPORT_ENERGY then r.IMPORT_ENERGY else 0.0,\r\n      Immissione: if exists r.EXPORT_ENERGY then r.EXPORT_ENERGY else 0.0\r\n  }))\r\n  |> map(fn: (r) => ({\r\n      r with\r\n      Consumo: r.Produzione + r.Prelievo - r.Immissione\r\n  }))\r\n  |> map(fn: (r) => ({\r\n      _time: now(),\r\n      \"% Prelievo\": if r.Consumo > 0.0 then (r.Prelievo / r.Consumo) * 100.0 else 0.0,\r\n      _field: \"Percentuale_Prelievo\"\r\n  }))\r\n  |> keep(columns: [\"_time\", \"% Prelievo\", \"_field\"])\r\n  |> yield(name: \"Percentuale_Prelievo_Anno_Precedente\")"
+                        "query": "import \"timezone\"\r\nimport \"date\"\r\n\r\noption location = timezone.location(name: \"Europe/Rome\")\r\n\r\nstartOfLastYear = date.add(d: -1y, to: date.truncate(t: now(), unit: 1y))\r\nendOfLastYear = date.truncate(t: now(), unit: 1y)\r\n\r\nfrom(bucket: \"Solaredge\")\r\n  |> range(start: startOfLastYear, stop: endOfLastYear)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"api\" and r[\"endpoint\"] == \"site_energy_details\")\r\n  |> filter(fn: (r) => \r\n      r[\"metric\"] == \"Production\" or \r\n      r[\"metric\"] == \"Purchased\" or \r\n      r[\"metric\"] == \"FeedIn\"\r\n  )\r\n  |> aggregateWindow(every: 1d, fn: sum, createEmpty: false)\r\n  |> sum()\r\n  |> pivot(rowKey: [\"_start\"], columnKey: [\"metric\"], valueColumn: \"_value\")\r\n  |> map(fn: (r) => ({ \r\n      Produzione: if exists r.Production then r.Production else 0.0,\r\n      Prelievo: if exists r.Purchased then r.Purchased else 0.0,\r\n      Immissione: if exists r.FeedIn then r.FeedIn else 0.0\r\n  }))\r\n  |> map(fn: (r) => ({\r\n      r with\r\n      Consumo: r.Produzione + r.Prelievo - r.Immissione\r\n  }))\r\n  |> map(fn: (r) => ({\r\n      _time: now(),\r\n      \"% Prelievo\": if r.Consumo > 0.0 then (r.Prelievo / r.Consumo) * 100.0 else 0.0,\r\n      _field: \"Percentuale_Prelievo\"\r\n  }))\r\n  |> keep(columns: [\"_time\", \"% Prelievo\", \"_field\"])\r\n  |> yield(name: \"Percentuale_Prelievo_Anno_Precedente\")"
                       }
                     },
                     "refId": "% Prelievo Anno Precedente",
@@ -3951,7 +4042,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "stat",
-            "version": "12.3.0",
+            "version": "13.2.4",
             "spec": {
               "options": {
                 "colorMode": "background",
@@ -4005,6 +4096,7 @@
         "spec": {
           "id": 192,
           "title": "Riepilogo Costo Materia Energia (SSP) - Vita Impianto",
+          "description": "Spesa = consumo (senza FV) e prelievo (con FV) × prezzo pieno, mese per mese: PUN storico + perdite 10% + dispacciamento + GO + fee + rete/oneri + accise + IVA, la stessa formula del pannello bolletta. I componenti regolati sono quelli correnti, quindi gli anni vecchi sono una stima. Rimborsi = CS + eccedenza ufficiali (anni liquidati).",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -4021,7 +4113,7 @@
                         "name": "ff27vpmruzxtsc"
                       },
                       "spec": {
-                        "query": "import \"date\"\r\nimport \"join\"\r\nimport \"timezone\"\r\n\r\noption location = timezone.location(name: \"Europe/Rome\")\r\n\r\n// 1. Consumo mensile da Site\r\nconsumo = from(bucket: \"Solaredge\")\r\n  |> range(start: 0)\r\n  |> filter(fn: (r) => \r\n      r._measurement == \"web\" and \r\n      r._field == \"Site\" and\r\n      (r.endpoint == \"PRODUCTION_ENERGY\" or \r\n       r.endpoint == \"IMPORT_ENERGY\" or \r\n       r.endpoint == \"EXPORT_ENERGY\")\r\n  )\r\n  |> aggregateWindow(every: 1mo, fn: sum, location: location, timeSrc: \"_start\")\r\n  |> pivot(rowKey: [\"_time\"], columnKey: [\"endpoint\"], valueColumn: \"_value\")\r\n  |> map(fn: (r) => ({\r\n      _time: r._time,\r\n      year: string(v: date.year(t: r._time)),\r\n      month: string(v: date.month(t: r._time)),\r\n      consumo_wh: r.PRODUCTION_ENERGY + r.IMPORT_ENERGY - r.EXPORT_ENERGY\r\n  }))\r\n  |> group()\r\n\r\n// 2. PUN mensile\r\npun = from(bucket: \"GME\")\r\n  |> range(start: 0)\r\n  |> filter(fn: (r) => r._measurement == \"gme_monthly_avg\" and r._field == \"pun_kwh_avg\")\r\n  |> map(fn: (r) => ({\r\n      _time: r._time,\r\n      year: r.year,\r\n      month: string(v: date.month(t: r._time)),\r\n      pun: r._value\r\n  }))\r\n  |> group()\r\n\r\n// 3. Join e calcolo costo totale\r\njoin.inner(\r\n  left: consumo,\r\n  right: pun,\r\n  on: (l, r) => l.year == r.year and l.month == r.month,\r\n  as: (l, r) => ({\r\n    _time: l._time,\r\n    _value: (l.consumo_wh / 1000.0) * r.pun\r\n  })\r\n)\r\n  |> sum()\r\n  |> map(fn: (r) => ({\"Spesa Senza Fotovoltaico\": r._value}))"
+                        "query": "import \"date\"\nimport \"join\"\nimport \"timezone\"\noption location = timezone.location(name: \"Europe/Rome\")\n\ncfg = from(bucket:\"Bolletta\") |> range(start: -10y)\n  |> filter(fn:(r)=>r._measurement==\"config\") |> last()\n  |> pivot(rowKey:[\"_time\"], columnKey:[\"_field\"], valueColumn:\"_value\")\nc = cfg |> findRecord(fn:(key)=>true, idx:0)\n\ngo_cfg = from(bucket:\"Bolletta\") |> range(start: -10y)\n  |> filter(fn:(r)=>r._measurement==\"go\") |> last()\n  |> pivot(rowKey:[\"_time\"], columnKey:[\"_field\"], valueColumn:\"_value\")\ng = go_cfg |> findRecord(fn:(key)=>true, idx:0)\n\nrete_cfg = from(bucket:\"Bolletta\") |> range(start: -10y)\n  |> filter(fn:(r)=>r._measurement==\"rete\") |> last()\n  |> pivot(rowKey:[\"_time\"], columnKey:[\"_field\"], valueColumn:\"_value\")\nr = rete_cfg |> findRecord(fn:(key)=>true, idx:0)\n\nmodo = \"${modo}\"\nfee = float(v: ${fee})\nfisso = float(v: ${fisso})\nperdite_inc = \"${perdite_inc}\"\ngo_inc = \"${go_inc}\"\ndisp_inc = \"${disp_inc}\"\n\nfixed_price = fisso * (if perdite_inc == \"si\" then 1.0 else 1.10) + (if disp_inc == \"si\" then 0.0 else c.disp) + (if go_inc == \"si\" then 0.0 else g.value)\nprezzo_pieno = (pun) => ((if modo == \"fisso\" then fixed_price else pun*(1.0+0.10) + c.disp + g.value + fee) + r.net_var) * (1.0 + c.iva) + c.accise\n\nenergia = from(bucket:\"Solaredge\") |> range(start: 2021-01-01T00:00:00Z)\n  |> filter(fn:(r)=>r._measurement==\"api\" and r.endpoint==\"site_energy_details\" and r.metric==\"Consumption\")\n  |> keep(columns:[\"_time\",\"_value\"])\n  |> aggregateWindow(every: 1mo, fn: sum, location: location, timeSrc: \"_start\")\n  |> map(fn:(r)=>({_time: r._time, year: string(v: date.year(t: r._time)), month: string(v: date.month(t: r._time)), kwh: r._value/1000.0}))\n  |> group()\n\npun = from(bucket:\"GME\") |> range(start: 2021-01-01T00:00:00Z)\n  |> filter(fn:(r)=>r._measurement==\"gme_monthly_avg\" and r._field==\"pun_kwh_avg\")\n  |> map(fn:(r)=>({_time: r._time, year: r.year, month: string(v: date.month(t: r._time)), pun: r._value}))\n  |> group()\n\njoin.inner(\n  left: energia,\n  right: pun,\n  on: (l, r) => l.year == r.year and l.month == r.month,\n  as: (l, r) => ({_time: l._time, _value: l.kwh * prezzo_pieno(pun: r.pun)})\n)\n  |> sum()\n  |> map(fn:(r)=>({\"Spesa Senza Fotovoltaico\": r._value}))\n"
                       }
                     },
                     "refId": "Costo Senza Fotovoltaico",
@@ -4039,7 +4131,7 @@
                         "name": "ff27vpmruzxtsc"
                       },
                       "spec": {
-                        "query": "import \"date\"\r\nimport \"join\"\r\nimport \"timezone\"\r\n\r\noption location = timezone.location(name: \"Europe/Rome\")\r\n\r\n// 1. Prelievo mensile da Site\r\nprelievo = from(bucket: \"Solaredge\")\r\n  |> range(start: 0)\r\n  |> filter(fn: (r) => \r\n      r._measurement == \"web\" and \r\n      r._field == \"Site\" and\r\n      r.endpoint == \"IMPORT_ENERGY\"\r\n  )\r\n  |> aggregateWindow(every: 1mo, fn: sum, location: location, timeSrc: \"_start\")\r\n  |> map(fn: (r) => ({\r\n      _time: r._time,\r\n      year: string(v: date.year(t: r._time)),\r\n      month: string(v: date.month(t: r._time)),\r\n      prelievo_wh: r._value\r\n  }))\r\n  |> group()\r\n\r\n// 2. PUN mensile\r\npun = from(bucket: \"GME\")\r\n  |> range(start: 0)\r\n  |> filter(fn: (r) => r._measurement == \"gme_monthly_avg\" and r._field == \"pun_kwh_avg\")\r\n  |> map(fn: (r) => ({\r\n      _time: r._time,\r\n      year: r.year,\r\n      month: string(v: date.month(t: r._time)),\r\n      pun: r._value\r\n  }))\r\n  |> group()\r\n\r\n// 3. Join e calcolo costo totale\r\njoin.inner(\r\n  left: prelievo,\r\n  right: pun,\r\n  on: (l, r) => l.year == r.year and l.month == r.month,\r\n  as: (l, r) => ({\r\n    _time: l._time,\r\n    _value: (l.prelievo_wh / 1000.0) * r.pun\r\n  })\r\n)\r\n  |> sum()\r\n  |> map(fn: (r) => ({\"Spesa Prelievo Con Fotovoltaico\": r._value}))"
+                        "query": "import \"date\"\nimport \"join\"\nimport \"timezone\"\noption location = timezone.location(name: \"Europe/Rome\")\n\ncfg = from(bucket:\"Bolletta\") |> range(start: -10y)\n  |> filter(fn:(r)=>r._measurement==\"config\") |> last()\n  |> pivot(rowKey:[\"_time\"], columnKey:[\"_field\"], valueColumn:\"_value\")\nc = cfg |> findRecord(fn:(key)=>true, idx:0)\n\ngo_cfg = from(bucket:\"Bolletta\") |> range(start: -10y)\n  |> filter(fn:(r)=>r._measurement==\"go\") |> last()\n  |> pivot(rowKey:[\"_time\"], columnKey:[\"_field\"], valueColumn:\"_value\")\ng = go_cfg |> findRecord(fn:(key)=>true, idx:0)\n\nrete_cfg = from(bucket:\"Bolletta\") |> range(start: -10y)\n  |> filter(fn:(r)=>r._measurement==\"rete\") |> last()\n  |> pivot(rowKey:[\"_time\"], columnKey:[\"_field\"], valueColumn:\"_value\")\nr = rete_cfg |> findRecord(fn:(key)=>true, idx:0)\n\nmodo = \"${modo}\"\nfee = float(v: ${fee})\nfisso = float(v: ${fisso})\nperdite_inc = \"${perdite_inc}\"\ngo_inc = \"${go_inc}\"\ndisp_inc = \"${disp_inc}\"\n\nfixed_price = fisso * (if perdite_inc == \"si\" then 1.0 else 1.10) + (if disp_inc == \"si\" then 0.0 else c.disp) + (if go_inc == \"si\" then 0.0 else g.value)\nprezzo_pieno = (pun) => ((if modo == \"fisso\" then fixed_price else pun*(1.0+0.10) + c.disp + g.value + fee) + r.net_var) * (1.0 + c.iva) + c.accise\n\nenergia = from(bucket:\"Solaredge\") |> range(start: 2021-01-01T00:00:00Z)\n  |> filter(fn:(r)=>r._measurement==\"api\" and r.endpoint==\"site_energy_details\" and r.metric==\"Purchased\")\n  |> keep(columns:[\"_time\",\"_value\"])\n  |> aggregateWindow(every: 1mo, fn: sum, location: location, timeSrc: \"_start\")\n  |> map(fn:(r)=>({_time: r._time, year: string(v: date.year(t: r._time)), month: string(v: date.month(t: r._time)), kwh: r._value/1000.0}))\n  |> group()\n\npun = from(bucket:\"GME\") |> range(start: 2021-01-01T00:00:00Z)\n  |> filter(fn:(r)=>r._measurement==\"gme_monthly_avg\" and r._field==\"pun_kwh_avg\")\n  |> map(fn:(r)=>({_time: r._time, year: r.year, month: string(v: date.month(t: r._time)), pun: r._value}))\n  |> group()\n\njoin.inner(\n  left: energia,\n  right: pun,\n  on: (l, r) => l.year == r.year and l.month == r.month,\n  as: (l, r) => ({_time: l._time, _value: l.kwh * prezzo_pieno(pun: r.pun)})\n)\n  |> sum()\n  |> map(fn:(r)=>({\"Spesa Prelievo Con Fotovoltaico\": r._value}))\n"
                       }
                     },
                     "refId": "Costo Con Fotovoltaico",
@@ -4057,7 +4149,7 @@
                         "name": "ff27vpmruzxtsc"
                       },
                       "spec": {
-                        "query": "import \"date\"\r\nimport \"join\"\r\nimport \"timezone\"\r\n\r\noption location = timezone.location(name: \"Europe/Rome\")\r\n\r\n// ============================================================================\r\n// PARAMETRI CONFIGURABILI - Modifica questi valori in base alla tua situazione\r\n// ============================================================================\r\n\r\n// Prezzo Scambio come percentuale del PUN (es. 1.00 = 100% del PUN)\r\n// Valore tipico: 0.95 - 1.05\r\n// Default fittizio: 1.00 (uguale al PUN)\r\nprezzo_scambio_percentuale = 1.00\r\n\r\n// Prezzo Eccedenza come percentuale del PUN (es. 0.90 = 90% del PUN)\r\n// Valore tipico: 0.85 - 0.95\r\n// Default fittizio: 0.90 (90% del PUN)\r\nprezzo_eccedenza_percentuale = 0.90\r\n\r\n// Tassazione personale sulle eccedenze (es. 0.40 = 40%)\r\n// Valori comuni:\r\n//   0.00 = nessuna tassazione (detrazioni 100%)\r\n//   0.23 = IRPEF 23% (primo scaglione)\r\n//   0.40 = tassazione standard 40%\r\n// Default fittizio: 0.00 (nessuna tassazione)\r\ntassazione_eccedenza = 0.00\r\n\r\n// ============================================================================\r\n// FINE PARAMETRI CONFIGURABILI\r\n// ============================================================================\r\n\r\nenergia = from(bucket: \"Solaredge\")\r\n  |> range(start: 0)\r\n  |> filter(fn: (r) => \r\n      r._measurement == \"web\" and \r\n      r._field == \"Site\" and\r\n      (r.endpoint == \"EXPORT_ENERGY\" or r.endpoint == \"IMPORT_ENERGY\")\r\n  )\r\n  |> aggregateWindow(every: 1mo, fn: sum, location: location, timeSrc: \"_start\")\r\n  |> pivot(rowKey: [\"_time\"], columnKey: [\"endpoint\"], valueColumn: \"_value\")\r\n  |> map(fn: (r) => ({\r\n      _time: r._time,\r\n      year: string(v: date.year(t: r._time)),\r\n      month: string(v: date.month(t: r._time)),\r\n      immissione_wh: r.EXPORT_ENERGY,\r\n      prelievo_wh: r.IMPORT_ENERGY\r\n  }))\r\n  |> group()\r\n\r\npun = from(bucket: \"GME\")\r\n  |> range(start: 0)\r\n  |> filter(fn: (r) => r._measurement == \"gme_monthly_avg\" and r._field == \"pun_kwh_avg\")\r\n  |> map(fn: (r) => ({\r\n      _time: r._time,\r\n      year: r.year,\r\n      month: string(v: date.month(t: r._time)),\r\n      pun: r._value\r\n  }))\r\n  |> group()\r\n\r\njoin.inner(\r\n  left: energia,\r\n  right: pun,\r\n  on: (l, r) => l.year == r.year and l.month == r.month,\r\n  as: (l, r) => {\r\n    immissione_kwh = l.immissione_wh / 1000.0\r\n    prelievo_kwh = l.prelievo_wh / 1000.0\r\n    scambio_kwh = if immissione_kwh < prelievo_kwh then immissione_kwh else prelievo_kwh\r\n    eccedenza_kwh = if immissione_kwh > prelievo_kwh then immissione_kwh - prelievo_kwh else 0.0\r\n    rimborso_scambio = scambio_kwh * r.pun * prezzo_scambio_percentuale\r\n    rimborso_eccedenza_lordo = eccedenza_kwh * r.pun * prezzo_eccedenza_percentuale\r\n    rimborso_eccedenza_netto = rimborso_eccedenza_lordo * (1.0 - tassazione_eccedenza)\r\n    return {_time: l._time, _value: rimborso_scambio + rimborso_eccedenza_netto}\r\n  }\r\n)\r\n  |> sum()\r\n  |> map(fn: (r) => ({\"Rimborsi Immissione Netti\": r._value}))"
+                        "query": "from(bucket: \"Bolletta\")\n  |> range(start: 2021-01-01T00:00:00Z)\n  |> filter(fn: (r) => r._measurement == \"ssp_monthly\" and r.zone == \"CSUD\")\n  |> filter(fn: (r) => r._field == \"ufficiale_cs_eur\" or r._field == \"ufficiale_ecc_eur\")\n  |> group(columns: [\"year\", \"_field\"])\n  |> last()\n  |> group()\n  |> sum()\n  |> map(fn: (r) => ({\"Rimborsi Immissione Netti\": r._value}))\n"
                       }
                     },
                     "refId": "Rimborsi Immissione",
@@ -4091,7 +4183,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "stat",
-            "version": "12.3.0",
+            "version": "13.2.4",
             "spec": {
               "options": {
                 "colorMode": "background",
@@ -4206,7 +4298,7 @@
                         "name": "ff27vpmruzxtsc"
                       },
                       "spec": {
-                        "query": "import \"timezone\"\r\nimport \"date\"\r\n\r\noption location = timezone.location(name: \"Europe/Rome\")\r\n\r\n// CAMBIA QUI LA METRICA DA CONFRONTARE:\r\n// PRODUCTION_ENERGY, IMPORT_ENERGY, EXPORT_ENERGY, ecc.\r\ntarget_metric = \"PRODUCTION_ENERGY\"\r\n\r\nfrom(bucket: \"Solaredge\")\r\n  // Prendi tutto lo storico\r\n  |> range(start: 0, stop: now())\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"web\" and r[\"_field\"] == \"Site\")\r\n  |> filter(fn: (r) => r[\"endpoint\"] == target_metric)\r\n  \r\n  // Aggregazione mensile con fuso orario corretto\r\n  |> aggregateWindow(\r\n      every: 1mo, \r\n      fn: sum, \r\n      createEmpty: false,\r\n      timeSrc: \"_start\",\r\n      location: location\r\n  )\r\n  \r\n  // Estrai Anno e Mese dal timestamp aggregato\r\n  |> map(fn: (r) => ({ \r\n      r with \r\n      year: string(v: date.year(t: r._time)),\r\n      month: date.month(t: r._time)\r\n  }))\r\n  \r\n  // Mappa i nomi dei mesi\r\n  |> map(fn: (r) => ({\r\n      r with\r\n      month_name: if r.month == 1 then \"Gennaio\"\r\n        else if r.month == 2 then \"Febbraio\"\r\n        else if r.month == 3 then \"Marzo\"\r\n        else if r.month == 4 then \"Aprile\"\r\n        else if r.month == 5 then \"Maggio\"\r\n        else if r.month == 6 then \"Giugno\"\r\n        else if r.month == 7 then \"Luglio\"\r\n        else if r.month == 8 then \"Agosto\"\r\n        else if r.month == 9 then \"Settembre\"\r\n        else if r.month == 10 then \"Ottobre\"\r\n        else if r.month == 11 then \"Novembre\"\r\n        else \"Dicembre\"\r\n  }))\r\n  \r\n  // Pivot per avere gli anni come colonne\r\n  |> group()\r\n  |> pivot(rowKey: [\"month\", \"month_name\"], columnKey: [\"year\"], valueColumn: \"_value\")\r\n  |> sort(columns: [\"month\"])\r\n  |> drop(columns: [\"month\"])",
+                        "query": "import \"timezone\"\nimport \"date\"\n\noption location = timezone.location(name: \"Europe/Rome\")\n\nfrom(bucket: \"Solaredge\")\n  |> range(start: 0, stop: now())\n  |> filter(fn: (r) => r._measurement == \"api\" and r.endpoint == \"site_energy_details\")\n  |> filter(fn: (r) => r.metric == \"Production\")\n  |> filter(fn: (r) => exists r._value)\n  |> aggregateWindow(every: 1mo, fn: sum, createEmpty: false, timeSrc: \"_start\", location: location)\n  |> map(fn: (r) => ({\n      r with\n      year: string(v: date.year(t: r._time)),\n      month: date.month(t: r._time)\n  }))\n  |> map(fn: (r) => ({\n      r with\n      month_name: if r.month == 1 then \"Gennaio\"\n        else if r.month == 2 then \"Febbraio\"\n        else if r.month == 3 then \"Marzo\"\n        else if r.month == 4 then \"Aprile\"\n        else if r.month == 5 then \"Maggio\"\n        else if r.month == 6 then \"Giugno\"\n        else if r.month == 7 then \"Luglio\"\n        else if r.month == 8 then \"Agosto\"\n        else if r.month == 9 then \"Settembre\"\n        else if r.month == 10 then \"Ottobre\"\n        else if r.month == 11 then \"Novembre\"\n        else \"Dicembre\"\n  }))\n  |> group()\n  |> pivot(rowKey: [\"month\", \"month_name\"], columnKey: [\"year\"], valueColumn: \"_value\")\n  |> sort(columns: [\"month\"])\n  |> drop(columns: [\"month\"])\n",
                         "rawQuery": true
                       }
                     },
@@ -4245,7 +4337,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "barchart",
-            "version": "12.3.0",
+            "version": "13.2.4",
             "spec": {
               "options": {
                 "barRadius": 0,
@@ -4328,7 +4420,6 @@
         "spec": {
           "id": 194,
           "title": "Efficienza",
-          "description": "",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -4364,7 +4455,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "stat",
-            "version": "12.3.0",
+            "version": "13.2.4",
             "spec": {
               "options": {
                 "colorMode": "background",
@@ -4496,7 +4587,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "stat",
-            "version": "12.3.0",
+            "version": "13.2.4",
             "spec": {
               "options": {
                 "colorMode": "background",
@@ -4580,7 +4671,6 @@
         "spec": {
           "id": 20,
           "title": "Stato Inverter",
-          "description": "",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -4616,7 +4706,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "stat",
-            "version": "12.3.0",
+            "version": "13.2.4",
             "spec": {
               "options": {
                 "colorMode": "background",
@@ -4754,6 +4844,820 @@
           "transparent": true
         }
       },
+      "panel-201": {
+        "kind": "Panel",
+        "spec": {
+          "id": 201,
+          "title": "PUN medio 30 giorni",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "influxdb",
+                      "version": "v0",
+                      "datasource": {
+                        "name": "ff27vpmruzxtsc"
+                      },
+                      "spec": {
+                        "query": "from(bucket: \"GME\")\n  |> range(start: -30d)\n  |> filter(fn: (r) => r._measurement == \"gme_prices\" and r._field == \"pun_mwh\")\n  |> group()\n  |> mean()\n  |> map(fn: (r) => ({_value: r._value / 1000.0}))\n  |> keep(columns: [\"_value\"])"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "stat",
+            "version": "13.2.4",
+            "spec": {
+              "options": {
+                "colorMode": "background",
+                "graphMode": "none",
+                "justifyMode": "center",
+                "orientation": "auto",
+                "percentChangeColorMode": "standard",
+                "reduceOptions": {
+                  "calcs": [
+                    "last"
+                  ],
+                  "fields": "/^_value$/",
+                  "limit": 1,
+                  "values": false
+                },
+                "showPercentChange": false,
+                "text": {},
+                "textMode": "value",
+                "wideLayout": true
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "€/kWh",
+                  "decimals": 3,
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "value": 0,
+                        "color": "dark-green"
+                      },
+                      {
+                        "value": 0.21,
+                        "color": "light-yellow"
+                      },
+                      {
+                        "value": 0.24,
+                        "color": "dark-red"
+                      }
+                    ]
+                  },
+                  "color": {
+                    "mode": "fixed",
+                    "fixedColor": "#5794F2"
+                  }
+                },
+                "overrides": []
+              }
+            }
+          },
+          "transparent": true
+        }
+      },
+      "panel-202": {
+        "kind": "Panel",
+        "spec": {
+          "id": 202,
+          "title": "PUN medio mese corrente",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "influxdb",
+                      "version": "v0",
+                      "datasource": {
+                        "name": "ff27vpmruzxtsc"
+                      },
+                      "spec": {
+                        "query": "import \"date\"\nimport \"timezone\"\noption location = timezone.location(name: \"Europe/Rome\")\nstart = date.truncate(t: now(), unit: 1mo)\nfrom(bucket: \"GME\")\n  |> range(start: start)\n  |> filter(fn: (r) => r._measurement == \"gme_monthly_avg\" and r._field == \"pun_kwh_avg\")\n  |> group()\n  |> last()\n  |> map(fn: (r) => ({_value: r._value}))\n  |> keep(columns: [\"_value\"])"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "stat",
+            "version": "13.2.4",
+            "spec": {
+              "options": {
+                "colorMode": "background",
+                "graphMode": "none",
+                "justifyMode": "center",
+                "orientation": "auto",
+                "percentChangeColorMode": "standard",
+                "reduceOptions": {
+                  "calcs": [
+                    "last"
+                  ],
+                  "fields": "/^_value$/",
+                  "limit": 1,
+                  "values": false
+                },
+                "showPercentChange": false,
+                "text": {},
+                "textMode": "value",
+                "wideLayout": true
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "€/kWh",
+                  "decimals": 3,
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "value": 0,
+                        "color": "dark-green"
+                      },
+                      {
+                        "value": 0.208,
+                        "color": "dark-red"
+                      }
+                    ]
+                  },
+                  "color": {
+                    "mode": "thresholds"
+                  }
+                },
+                "overrides": []
+              }
+            }
+          },
+          "transparent": true
+        }
+      },
+      "panel-203": {
+        "kind": "Panel",
+        "spec": {
+          "id": 203,
+          "title": "PUN medio mese precedente",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "influxdb",
+                      "version": "v0",
+                      "datasource": {
+                        "name": "ff27vpmruzxtsc"
+                      },
+                      "spec": {
+                        "query": "import \"date\"\nimport \"timezone\"\noption location = timezone.location(name: \"Europe/Rome\")\nstop = date.truncate(t: now(), unit: 1mo)\nstart = date.sub(d: 2mo, from: stop)\nfrom(bucket: \"GME\")\n  |> range(start: start, stop: stop)\n  |> filter(fn: (r) => r._measurement == \"gme_monthly_avg\" and r._field == \"pun_kwh_avg\")\n  |> group()\n  |> last()\n  |> map(fn: (r) => ({_value: r._value}))\n  |> keep(columns: [\"_value\"])"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "stat",
+            "version": "13.2.4",
+            "spec": {
+              "options": {
+                "colorMode": "background",
+                "graphMode": "none",
+                "justifyMode": "center",
+                "orientation": "auto",
+                "percentChangeColorMode": "standard",
+                "reduceOptions": {
+                  "calcs": [
+                    "last"
+                  ],
+                  "fields": "/^_value$/",
+                  "limit": 1,
+                  "values": false
+                },
+                "showPercentChange": false,
+                "text": {},
+                "textMode": "value",
+                "wideLayout": true
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "€/kWh",
+                  "decimals": 3,
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "value": 0,
+                        "color": "dark-green"
+                      },
+                      {
+                        "value": 0.21,
+                        "color": "light-yellow"
+                      },
+                      {
+                        "value": 0.24,
+                        "color": "dark-red"
+                      }
+                    ]
+                  },
+                  "color": {
+                    "mode": "fixed",
+                    "fixedColor": "#FF9830"
+                  }
+                },
+                "overrides": []
+              }
+            }
+          },
+          "transparent": true
+        }
+      },
+      "panel-205": {
+        "kind": "Panel",
+        "spec": {
+          "id": 205,
+          "title": "Andamento PUN - ultimi 30 giorni",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "influxdb",
+                      "version": "v0",
+                      "datasource": {
+                        "name": "ff27vpmruzxtsc"
+                      },
+                      "spec": {
+                        "query": "from(bucket: \"GME\")\n  |> range(start: -30d)\n  |> filter(fn: (r) => r._measurement == \"gme_prices\" and r._field == \"pun_mwh\")\n  |> group()\n  |> aggregateWindow(every: 1d, fn: mean, createEmpty: false)\n  |> map(fn: (r) => ({_time: r._time, PUN: r._value / 1000.0}))\n  |> keep(columns: [\"_time\", \"PUN\"])"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {
+                "timeFrom": "30d",
+                "maxDataPoints": 2198
+              }
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "timeseries",
+            "version": "13.2.4",
+            "spec": {
+              "options": {
+                "legend": {
+                  "calcs": [],
+                  "displayMode": "list",
+                  "placement": "bottom",
+                  "showLegend": true
+                },
+                "tooltip": {
+                  "hideZeros": false,
+                  "mode": "single",
+                  "sort": "none"
+                }
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "€/kWh",
+                  "decimals": 3,
+                  "min": 0,
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "value": 0,
+                        "color": "green"
+                      }
+                    ]
+                  },
+                  "color": {
+                    "mode": "palette-classic"
+                  },
+                  "custom": {
+                    "axisBorderShow": false,
+                    "axisCenteredZero": false,
+                    "axisColorMode": "text",
+                    "axisLabel": "€/kWh",
+                    "axisPlacement": "auto",
+                    "barAlignment": 0,
+                    "barWidthFactor": 0.6,
+                    "drawStyle": "line",
+                    "fillOpacity": 8,
+                    "gradientMode": "opacity",
+                    "hideFrom": {
+                      "legend": false,
+                      "tooltip": false,
+                      "viz": false
+                    },
+                    "insertNulls": false,
+                    "lineInterpolation": "smooth",
+                    "lineWidth": 2,
+                    "pointSize": 5,
+                    "scaleDistribution": {
+                      "type": "linear"
+                    },
+                    "showPoints": "never",
+                    "showValues": false,
+                    "spanNulls": true,
+                    "stacking": {
+                      "group": "A",
+                      "mode": "none"
+                    },
+                    "thresholdsStyle": {
+                      "mode": "off"
+                    }
+                  }
+                },
+                "overrides": [
+                  {
+                    "matcher": {
+                      "id": "byType",
+                      "options": "time"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "time:DD/MM"
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          },
+          "transparent": true
+        }
+      },
+      "panel-206": {
+        "kind": "Panel",
+        "spec": {
+          "id": 206,
+          "title": "PUN medio mensile storico",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "influxdb",
+                      "version": "v0",
+                      "datasource": {
+                        "name": "ff27vpmruzxtsc"
+                      },
+                      "spec": {
+                        "query": "from(bucket: \"GME\")\n  |> range(start: -5y)\n  |> filter(fn: (r) => r._measurement == \"gme_monthly_avg\" and r._field == \"pun_kwh_avg\")\n  |> group()\n  |> map(fn: (r) => ({_time: r._time, PUN: r._value}))\n  |> keep(columns: [\"_time\", \"PUN\"])"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {
+                "timeFrom": "5y",
+                "maxDataPoints": 2198,
+                "hideTimeOverride": true
+              }
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "timeseries",
+            "version": "13.2.4",
+            "spec": {
+              "options": {
+                "legend": {
+                  "calcs": [],
+                  "displayMode": "list",
+                  "placement": "bottom",
+                  "showLegend": true
+                },
+                "tooltip": {
+                  "hideZeros": false,
+                  "mode": "single",
+                  "sort": "none"
+                }
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "€/kWh",
+                  "decimals": 3,
+                  "min": 0,
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "value": 0,
+                        "color": "green"
+                      }
+                    ]
+                  },
+                  "color": {
+                    "mode": "palette-classic"
+                  },
+                  "custom": {
+                    "axisBorderShow": false,
+                    "axisCenteredZero": false,
+                    "axisColorMode": "text",
+                    "axisLabel": "€/kWh",
+                    "axisPlacement": "auto",
+                    "barAlignment": 0,
+                    "barWidthFactor": 0.6,
+                    "drawStyle": "line",
+                    "fillOpacity": 8,
+                    "gradientMode": "opacity",
+                    "hideFrom": {
+                      "legend": false,
+                      "tooltip": false,
+                      "viz": false
+                    },
+                    "insertNulls": false,
+                    "lineInterpolation": "smooth",
+                    "lineWidth": 2,
+                    "pointSize": 5,
+                    "scaleDistribution": {
+                      "type": "linear"
+                    },
+                    "showPoints": "never",
+                    "showValues": false,
+                    "spanNulls": true,
+                    "stacking": {
+                      "group": "A",
+                      "mode": "none"
+                    },
+                    "thresholdsStyle": {
+                      "mode": "off"
+                    }
+                  }
+                },
+                "overrides": [
+                  {
+                    "matcher": {
+                      "id": "byType",
+                      "options": "time"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "time:MM/YY"
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          },
+          "transparent": true
+        }
+      },
+      "panel-207": {
+        "kind": "Panel",
+        "spec": {
+          "id": 207,
+          "title": "Bolletta Settembre 2026",
+          "description": "Valori regolati (rete/oneri, GO, bonus) da InfluxDB Bolletta, aggiornati dal collector. PUN e consumo di settembre dalla bolletta. Modalità, fee, commerciale, fisso, bonus e nucleo sono le variabili in alto.",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "influxdb",
+                      "version": "v0",
+                      "datasource": {
+                        "name": "ff27vpmruzxtsc"
+                      },
+                      "spec": {
+                        "query": "import \"array\"\nimport \"math\"\n\ncfg = from(bucket:\"Bolletta\")\n  |> range(start: -10y)\n  |> filter(fn:(r)=>r._measurement==\"config\")\n  |> last()\n  |> pivot(rowKey:[\"_time\"], columnKey:[\"_field\"], valueColumn:\"_value\")\nc = cfg |> findRecord(fn:(key)=>true, idx:0)\n\nbonus_cfg = from(bucket:\"Bolletta\")\n  |> range(start: -10y)\n  |> filter(fn:(r)=>r._measurement==\"bonus\")\n  |> last()\n  |> pivot(rowKey:[\"_time\"], columnKey:[\"_field\"], valueColumn:\"_value\")\nb = bonus_cfg |> findRecord(fn:(key)=>true, idx:0)\n\ngo_cfg = from(bucket:\"Bolletta\")\n  |> range(start: -10y)\n  |> filter(fn:(r)=>r._measurement==\"go\")\n  |> last()\n  |> pivot(rowKey:[\"_time\"], columnKey:[\"_field\"], valueColumn:\"_value\")\ng = go_cfg |> findRecord(fn:(key)=>true, idx:0)\n\nrete_cfg = from(bucket:\"Bolletta\")\n  |> range(start: -10y)\n  |> filter(fn:(r)=>r._measurement==\"rete\")\n  |> last()\n  |> pivot(rowKey:[\"_time\"], columnKey:[\"_field\"], valueColumn:\"_value\")\nr = rete_cfg |> findRecord(fn:(key)=>true, idx:0)\n\nmodo = \"${modo}\"\nfee = float(v: ${fee})\ncommerciale = float(v: ${commerciale})\nfisso = float(v: ${fisso})\n\ngo_rate = c.go\nkwh = 338.4\npun = 0.2075\n\nperdite_inc = \"${perdite_inc}\"\ngo_inc = \"${go_inc}\"\ndisp_inc = \"${disp_inc}\"\n\nfixed_price = fisso * (if perdite_inc == \"si\" then 1.0 else 1.10) + (if disp_inc == \"si\" then 0.0 else c.disp) + (if go_inc == \"si\" then 0.0 else go_rate)\nenergy_price = if modo == \"fisso\" then fixed_price else pun*(1.0+0.10) + c.disp + go_rate + fee\nenergy_cost = kwh*energy_price\nnet_cost = kwh*r.net_var\npower = c.potenza_kw * r.potenza\nbonus = if \"${bonus}\" == \"si\" then (if \"${nucleo}\" == \"1-2\" then b.b12 else if \"${nucleo}\" == \"3-4\" then b.b34 else b.b4plus) else 0.0\npre_tax = energy_cost + net_cost + commerciale + r.net_fix + power - bonus\naccise = kwh*c.accise\niva = c.iva*pre_tax\ntax = accise + iva\ntotal = pre_tax + tax\ntotal_pay = total + c.tv\n\nf2 = (x) => string(v: math.round(x: x*100.0)/100.0)\nf4 = (x) => string(v: math.round(x: x*10000.0)/10000.0)\narray.from(rows: [\n  {\"Voce\":\"Modalità\", \"Valore\": modo},\n  {\"Voce\":\"Bonus\", \"Valore\": if \"${bonus}\" == \"si\" then \"si (\" + \"${nucleo}\" + \")\" else \"no\"},\n  {\"Voce\":\"Consumo\", \"Valore\": f2(x: kwh)+\" kWh\"},\n  {\"Voce\":\"PUN GME\", \"Valore\": if modo == \"fisso\" then \"n/d (offerta a prezzo fisso)\" else f4(x: pun)+\" €/kWh\"},\n  {\"Voce\":\"Prezzo fisso (materia energia)\", \"Valore\": if modo == \"fisso\" then f4(x: fisso)+\" €/kWh\" else \"n/d (offerta variabile)\"},\n  {\"Voce\":\"Perdite di rete (10%)\", \"Valore\": if modo == \"fisso\" then (if perdite_inc == \"si\" then \"incluse nel prezzo\" else f4(x: fisso*0.10)+\" €/kWh\") else f4(x: pun*0.10)+\" €/kWh\"},\n  {\"Voce\":\"Dispacciamento\", \"Valore\": if modo == \"fisso\" then (if disp_inc == \"si\" then \"incluso nel prezzo\" else f4(x: c.disp)+\" €/kWh\") else f4(x: c.disp)+\" €/kWh\"},\n  {\"Voce\":\"Indice GO\", \"Valore\": if modo == \"fisso\" then (if go_inc == \"si\" then \"incluso nel prezzo\" else f4(x: go_rate)+\" €/kWh\") else f4(x: go_rate)+\" €/kWh\"},\n  {\"Voce\":\"Fee / Spread\", \"Valore\": if modo == \"fisso\" then \"non applicata\" else f4(x: fee)+\" €/kWh\"},\n  {\"Voce\":\"Prezzo energia applicato\", \"Valore\": f4(x: energy_price)+\" €/kWh\"},\n  {\"Voce\":\"Costo energia\", \"Valore\": f2(x: energy_cost)+\" €\"},\n  {\"Voce\":\"Rete e oneri\", \"Valore\": f2(x: net_cost)+\" €\"},\n  {\"Voce\":\"Quota fissa vendita\", \"Valore\": f2(x: commerciale)+\" €\"},\n  {\"Voce\":\"Quota fissa rete\", \"Valore\": f2(x: r.net_fix)+\" €\"},\n  {\"Voce\":\"Quota potenza\", \"Valore\": f2(x: power)+\" €\"},\n  {\"Voce\":\"Bonus sociale\", \"Valore\": \"-\"+f2(x: bonus)+\" €\"},\n  {\"Voce\":\"Accise\", \"Valore\": f2(x: accise)+\" €\"},\n  {\"Voce\":\"IVA\", \"Valore\": f2(x: iva)+\" €\"},\n  {\"Voce\":\"TOTALE BOLLETTA\", \"Valore\": f2(x: total)+\" €\"},\n  {\"Voce\":\"Canone TV\", \"Valore\": f2(x: c.tv)+\" €\"},\n  {\"Voce\":\"TOTALE DA PAGARE\", \"Valore\": f2(x: total_pay)+\" €\"}\n])"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "table",
+            "version": "13.2.4",
+            "spec": {
+              "options": {
+                "cellHeight": "sm",
+                "enablePagination": false,
+                "showHeader": false,
+                "sortBy": []
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "value": 0,
+                        "color": "green"
+                      },
+                      {
+                        "value": 80,
+                        "color": "red"
+                      }
+                    ]
+                  },
+                  "color": {
+                    "mode": "fixed",
+                    "fixedColor": "rgba(214,120,45,0.42)"
+                  },
+                  "custom": {
+                    "align": "left",
+                    "cellOptions": {
+                      "mode": "basic",
+                      "type": "color-background"
+                    },
+                    "footer": {
+                      "reducers": []
+                    },
+                    "inspect": false
+                  }
+                },
+                "overrides": []
+              }
+            }
+          },
+          "transparent": true
+        }
+      },
+      "panel-208": {
+        "kind": "Panel",
+        "spec": {
+          "id": 208,
+          "title": "Bolletta mese corrente (previsione)",
+          "description": "Previsione mese corrente: consumo SolarEdge proiettato a fine mese, PUN medio del mese (o prezzo fisso). Valori regolati dal DB; le variabili in alto pilotano offerta e bonus.",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "influxdb",
+                      "version": "v0",
+                      "datasource": {
+                        "name": "ff27vpmruzxtsc"
+                      },
+                      "spec": {
+                        "query": "import \"array\"\nimport \"math\"\nimport \"timezone\"\nimport \"date\"\noption location = timezone.location(name: \"Europe/Rome\")\n\ncfg = from(bucket:\"Bolletta\")\n  |> range(start: -10y)\n  |> filter(fn:(r)=>r._measurement==\"config\")\n  |> last()\n  |> pivot(rowKey:[\"_time\"], columnKey:[\"_field\"], valueColumn:\"_value\")\nc = cfg |> findRecord(fn:(key)=>true, idx:0)\n\nbonus_cfg = from(bucket:\"Bolletta\")\n  |> range(start: -10y)\n  |> filter(fn:(r)=>r._measurement==\"bonus\")\n  |> last()\n  |> pivot(rowKey:[\"_time\"], columnKey:[\"_field\"], valueColumn:\"_value\")\nb = bonus_cfg |> findRecord(fn:(key)=>true, idx:0)\n\ngo_cfg = from(bucket:\"Bolletta\")\n  |> range(start: -10y)\n  |> filter(fn:(r)=>r._measurement==\"go\")\n  |> last()\n  |> pivot(rowKey:[\"_time\"], columnKey:[\"_field\"], valueColumn:\"_value\")\ng = go_cfg |> findRecord(fn:(key)=>true, idx:0)\n\nrete_cfg = from(bucket:\"Bolletta\")\n  |> range(start: -10y)\n  |> filter(fn:(r)=>r._measurement==\"rete\")\n  |> last()\n  |> pivot(rowKey:[\"_time\"], columnKey:[\"_field\"], valueColumn:\"_value\")\nr = rete_cfg |> findRecord(fn:(key)=>true, idx:0)\n\nmodo = \"${modo}\"\nfee = float(v: ${fee})\ncommerciale = float(v: ${commerciale})\nfisso = float(v: ${fisso})\n\ngo_rate = g.value\nmonth_start = date.truncate(t: now(), unit: 1mo)\nmonth_end = date.add(d: 1mo, to: month_start)\nnow_t = now()\n\nkwh_mtd = (from(bucket:\"Solaredge\")\n  |> range(start: month_start, stop: now_t)\n  |> filter(fn: (r) => r._measurement==\"api\" and r._field==\"Meter\" and r.endpoint==\"site_energy_details\" and r.metric==\"Purchased\" and exists r._value)\n  |> group() |> sum() |> findRecord(fn:(key)=>true, idx:0))._value / 1000.0\n\npun = (from(bucket:\"GME\")\n  |> range(start: month_start, stop: now_t)\n  |> filter(fn: (r) => r._measurement==\"gme_prices\" and r._field==\"pun_mwh\")\n  |> group() |> mean() |> findRecord(fn:(key)=>true, idx:0))._value / 1000.0\n\nelapsed_ns = int(v: now_t) - int(v: month_start)\ntotal_ns = int(v: month_end) - int(v: month_start)\nfactor = float(v: total_ns) / float(v: elapsed_ns)\nkwh = kwh_mtd * factor\n\nperdite_inc = \"${perdite_inc}\"\ngo_inc = \"${go_inc}\"\ndisp_inc = \"${disp_inc}\"\n\nfixed_price = fisso * (if perdite_inc == \"si\" then 1.0 else 1.10) + (if disp_inc == \"si\" then 0.0 else c.disp) + (if go_inc == \"si\" then 0.0 else go_rate)\nenergy_price = if modo == \"fisso\" then fixed_price else pun*(1.0+0.10) + c.disp + go_rate + fee\nenergy_cost = kwh*energy_price\nnet_cost = kwh*r.net_var\npower = c.potenza_kw * r.potenza\nbonus = if \"${bonus}\" == \"si\" then (if \"${nucleo}\" == \"1-2\" then b.b12 else if \"${nucleo}\" == \"3-4\" then b.b34 else b.b4plus) else 0.0\npre_tax = energy_cost + net_cost + commerciale + r.net_fix + power - bonus\naccise = kwh*c.accise\niva = c.iva*pre_tax\ntax = accise + iva\ntotal = pre_tax + tax\ntotal_pay = total + c.tv\n\nf2 = (x) => string(v: math.round(x: x*100.0)/100.0)\nf4 = (x) => string(v: math.round(x: x*10000.0)/10000.0)\narray.from(rows: [\n  {\"Voce\":\"Modalità\", \"Valore\": modo},\n  {\"Voce\":\"Bonus\", \"Valore\": if \"${bonus}\" == \"si\" then \"si (\" + \"${nucleo}\" + \")\" else \"no\"},\n  {\"Voce\":\"Consumo\", \"Valore\": f2(x: kwh)+\" kWh\"},\n  {\"Voce\":\"PUN GME\", \"Valore\": if modo == \"fisso\" then \"n/d (offerta a prezzo fisso)\" else f4(x: pun)+\" €/kWh\"},\n  {\"Voce\":\"Prezzo fisso (materia energia)\", \"Valore\": if modo == \"fisso\" then f4(x: fisso)+\" €/kWh\" else \"n/d (offerta variabile)\"},\n  {\"Voce\":\"Perdite di rete (10%)\", \"Valore\": if modo == \"fisso\" then (if perdite_inc == \"si\" then \"incluse nel prezzo\" else f4(x: fisso*0.10)+\" €/kWh\") else f4(x: pun*0.10)+\" €/kWh\"},\n  {\"Voce\":\"Dispacciamento\", \"Valore\": if modo == \"fisso\" then (if disp_inc == \"si\" then \"incluso nel prezzo\" else f4(x: c.disp)+\" €/kWh\") else f4(x: c.disp)+\" €/kWh\"},\n  {\"Voce\":\"Indice GO\", \"Valore\": if modo == \"fisso\" then (if go_inc == \"si\" then \"incluso nel prezzo\" else f4(x: go_rate)+\" €/kWh\") else f4(x: go_rate)+\" €/kWh\"},\n  {\"Voce\":\"Fee / Spread\", \"Valore\": if modo == \"fisso\" then \"non applicata\" else f4(x: fee)+\" €/kWh\"},\n  {\"Voce\":\"Prezzo energia applicato\", \"Valore\": f4(x: energy_price)+\" €/kWh\"},\n  {\"Voce\":\"Costo energia\", \"Valore\": f2(x: energy_cost)+\" €\"},\n  {\"Voce\":\"Rete e oneri\", \"Valore\": f2(x: net_cost)+\" €\"},\n  {\"Voce\":\"Quota fissa vendita\", \"Valore\": f2(x: commerciale)+\" €\"},\n  {\"Voce\":\"Quota fissa rete\", \"Valore\": f2(x: r.net_fix)+\" €\"},\n  {\"Voce\":\"Quota potenza\", \"Valore\": f2(x: power)+\" €\"},\n  {\"Voce\":\"Bonus sociale\", \"Valore\": \"-\"+f2(x: bonus)+\" €\"},\n  {\"Voce\":\"Accise\", \"Valore\": f2(x: accise)+\" €\"},\n  {\"Voce\":\"IVA\", \"Valore\": f2(x: iva)+\" €\"},\n  {\"Voce\":\"TOTALE BOLLETTA\", \"Valore\": f2(x: total)+\" €\"},\n  {\"Voce\":\"Canone TV\", \"Valore\": f2(x: c.tv)+\" €\"},\n  {\"Voce\":\"TOTALE DA PAGARE\", \"Valore\": f2(x: total_pay)+\" €\"}\n])"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "table",
+            "version": "13.2.4",
+            "spec": {
+              "options": {
+                "cellHeight": "sm",
+                "enablePagination": false,
+                "showHeader": false,
+                "sortBy": []
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "value": 0,
+                        "color": "green"
+                      },
+                      {
+                        "value": 80,
+                        "color": "red"
+                      }
+                    ]
+                  },
+                  "color": {
+                    "mode": "fixed",
+                    "fixedColor": "rgba(70,150,80,0.42)"
+                  },
+                  "custom": {
+                    "align": "left",
+                    "cellOptions": {
+                      "mode": "basic",
+                      "type": "color-background"
+                    },
+                    "footer": {
+                      "reducers": []
+                    },
+                    "inspect": false
+                  }
+                },
+                "overrides": []
+              }
+            }
+          },
+          "transparent": true
+        }
+      },
+      "panel-210": {
+        "kind": "Panel",
+        "spec": {
+          "id": 210,
+          "title": "Scambio sul Posto · ${anno} · ${zona}",
+          "description": "Quanto ti rimborsa lo Scambio sul Posto dell'anno scelto. Due pagamenti: il CS per l'energia scambiata (Es), con il conguaglio dell'anno; l'eccedenza, cioe' il valore dell'energia immessa oltre lo scambio (CEI - OE), liquidato a giugno dell'anno dopo. Le due rese sono i prezzi unitari: CS diviso Es, eccedenza divisa per l'energia eccedente (immessa meno Es). Se 'Buco di misura' non e' zero, quei giorni non hanno misure e il rimborso e' piu' basso del dovuto.",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "influxdb",
+                      "version": "v0",
+                      "datasource": {
+                        "name": "ff27vpmruzxtsc"
+                      },
+                      "spec": {
+                        "query": "import \"math\"\nimport \"strings\"\nimport \"array\"\n\ndec = (x, digits) => {\n  p = math.pow(x: 10.0, y: float(v: digits))\n  n = int(v: math.round(x: x * p))\n  s = if n < 0 then \"-\" else \"\"\n  a = if n < 0 then -n else n\n  ip = a / int(v: p)\n  fs = \"000000\" + string(v: a % int(v: p))\n  return s + string(v: ip) + \",\" + strings.substring(v: fs, start: strings.strlen(v: fs) - digits, end: strings.strlen(v: fs))\n}\n\nanno_s = \"${anno}\"\nzona_s = \"${zona}\"\n\nbase = from(bucket: \"Bolletta\")\n  |> range(start: 2020-01-01T00:00:00Z, stop: now())\n  |> filter(fn: (r) => r._measurement == \"ssp_monthly\" and r.zone == zona_s and r.year == anno_s)\n\nsomma = (f) => (base\n  |> filter(fn: (r) => r._field == f)\n  |> group()\n  |> sum()\n  |> findRecord(fn: (key) => true, idx: 0))._value\n\nprel = somma(f: \"prelievo_kwh\")\nimm = somma(f: \"immessa_kwh\")\noe = somma(f: \"oe_eur\")\ncei = somma(f: \"cei_eur\")\nbuco = somma(f: \"giorni_incompleti\")\nmesi = (base\n  |> filter(fn: (r) => r._field == \"prelievo_kwh\")\n  |> group()\n  |> count()\n  |> findRecord(fn: (key) => true, idx: 0))._value\n\ncusf_row = from(bucket: \"Bolletta\")\n  |> range(start: 2020-01-01T00:00:00Z, stop: now())\n  |> filter(fn: (r) => r._measurement == \"ssp_cusf\" and r.year == anno_s)\n  |> last()\ncusf = (cusf_row |> findRecord(fn: (key) => true, idx: 0))._value\n\nes = if prel < imm then prel else imm\necc_kwh = if imm > es then imm - es else 0.0\ncs = (if oe < cei then oe else cei) + cusf / 100.0 * es\necc = if cei > oe then cei - oe else 0.0\ntot = cs + ecc\nresa_cs = if es > 0.0 then cs / es else 0.0\nresa_ecc = if ecc_kwh > 0.0 then ecc / ecc_kwh else 0.0\nresa_tot = if imm > 0.0 then tot / imm else 0.0\n\nkwh = (x) => dec(x: x, digits: 2) + \" kWh\"\neu = (x) => dec(x: x, digits: 2) + \" €\"\nresa = (x) => dec(x: x, digits: 4) + \" €/kWh\"\nbuco_txt = if buco > 0.0 then \"⚠ \" + string(v: int(v: buco)) + \" giorni\" else \"nessuno\"\n\narray.from(rows: [\n  {\"a\": \"Prelievo dalla rete\", \"b\": kwh(x: prel), \"c\": \"\"},\n  {\"a\": \"Immessa alla rete\", \"b\": kwh(x: imm), \"c\": \"\"},\n  {\"a\": \"Energia scambiata Es\", \"b\": kwh(x: es), \"c\": \"\"},\n  {\"a\": \"Energia eccedente\", \"b\": kwh(x: ecc_kwh), \"c\": \"\"},\n  {\"a\": \"Rimborso scambio (CS)\", \"b\": eu(x: cs), \"c\": resa(x: resa_cs)},\n  {\"a\": \"Rimborso eccedenza\", \"b\": eu(x: ecc), \"c\": resa(x: resa_ecc)},\n  {\"a\": \"Totale rimborso\", \"b\": eu(x: tot), \"c\": resa(x: resa_tot)},\n  {\"a\": \"Mesi coperti\", \"b\": string(v: int(v: mesi)) + \" mesi\", \"c\": \"\"},\n  {\"a\": \"Buco di misura\", \"b\": buco_txt, \"c\": \"\"},\n])",
+                        "rawQuery": true
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "table",
+            "version": "13.2.4",
+            "spec": {
+              "options": {
+                "cellHeight": "sm",
+                "enablePagination": false,
+                "showHeader": false,
+                "sortBy": []
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "decimals": 2,
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "value": 0,
+                        "color": "green"
+                      },
+                      {
+                        "value": 80,
+                        "color": "red"
+                      }
+                    ]
+                  },
+                  "color": {
+                    "mode": "fixed",
+                    "fixedColor": "rgba(64,110,180,0.42)"
+                  },
+                  "custom": {
+                    "align": "left",
+                    "cellOptions": {
+                      "mode": "basic",
+                      "type": "color-background"
+                    },
+                    "footer": {
+                      "reducers": []
+                    },
+                    "inspect": false
+                  }
+                },
+                "overrides": [
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "a"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Voce"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "b"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Valore"
+                      },
+                      {
+                        "id": "custom.align",
+                        "value": "right"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "c"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Resa €/kWh"
+                      },
+                      {
+                        "id": "custom.align",
+                        "value": "right"
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          },
+          "transparent": true
+        }
+      },
       "panel-26": {
         "kind": "Panel",
         "spec": {
@@ -4835,7 +5739,6 @@
         "spec": {
           "id": 44,
           "title": "Produzione",
-          "description": "",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -4869,7 +5772,7 @@
                         ],
                         "orderByTime": "ASC",
                         "policy": "default",
-                        "query": "import \"date\"\nimport \"array\"\nimport \"timezone\"\n\noption location = timezone.location(name: \"Europe/Rome\")\n\nstart = date.truncate(t: now(), unit: 1d)\ndata_prod = from(bucket: \"Solaredge_Realtime\")\n  |> range(start: start)\n  |> filter(fn: (r) =>\n      r._measurement == \"realtime\" and\n      r._field == \"Inverter\" and\n      r.endpoint == \"Energy Total\" and\n      r.unit == \"Wh\" and\n      exists r._value)\n  |> group()\n  |> difference()\n  |> filter(fn: (r) => r._value >= 0.0)\n  |> sum()\n\nprod_value = (data_prod |> findRecord(fn: (key) => true, idx: 0))._value\n\narray.from(rows: [{\n  \"produzione_oggi_wh\": prod_value,}])\n",
+                        "query": "import \"date\"\nimport \"array\"\nimport \"timezone\"\n\noption location = timezone.location(name: \"Europe/Rome\")\n\nstart = date.truncate(t: now(), unit: 1d)\ndata_prod = from(bucket: \"Solaredge_Realtime\")\n  |> range(start: start)\n  |> filter(fn: (r) =>\n      r._measurement == \"realtime\" and\n      r._field == \"Inverter\" and\n      r.endpoint == \"Energy Total\" and\n      r.unit == \"Wh\" and\n      exists r._value and r._value > 0.0)\n  |> group()\n  |> sort(columns: [\"_time\"])\n\nprod_value = ((data_prod |> last() |> findRecord(fn: (key) => true, idx: 0))._value - (data_prod |> first() |> findRecord(fn: (key) => true, idx: 0))._value)\n\narray.from(rows: [{\n  \"produzione_oggi_wh\": prod_value,}])\n",
                         "queryType": "randomWalk",
                         "rawQuery": true,
                         "resultFormat": "time_series",
@@ -4906,7 +5809,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "stat",
-            "version": "12.3.0",
+            "version": "13.2.4",
             "spec": {
               "options": {
                 "colorMode": "background",
@@ -5012,10 +5915,18 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "gauge",
-            "version": "12.3.0",
+            "version": "13.2.4",
             "spec": {
               "options": {
-                "minVizHeight": 90,
+                "barShape": "flat",
+                "barWidthFactor": 0.5,
+                "effects": {
+                  "barGlow": false,
+                  "centerGlow": false,
+                  "gradient": false
+                },
+                "endpointMarker": "point",
+                "minVizHeight": 75,
                 "minVizWidth": 75,
                 "orientation": "horizontal",
                 "reduceOptions": {
@@ -5025,10 +5936,15 @@
                   "fields": "",
                   "values": false
                 },
+                "segmentCount": 1,
+                "segmentSpacing": 0.3,
+                "shape": "gauge",
                 "showThresholdLabels": false,
-                "showThresholdMarkers": true,
-                "sizing": "manual",
-                "text": {}
+                "showThresholdMarkers": false,
+                "sizing": "auto",
+                "sparkline": false,
+                "text": {},
+                "textMode": "auto"
               },
               "fieldConfig": {
                 "defaults": {
@@ -5063,7 +5979,6 @@
         "spec": {
           "id": 58,
           "title": "Riepilogo Energia - Vita Impianto",
-          "description": "",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -5080,7 +5995,7 @@
                         "name": "ff27vpmruzxtsc"
                       },
                       "spec": {
-                        "query": "emission_factor_kg_per_kwh = 0.4\r\n\r\nfrom(bucket: \"Solaredge\")\r\n  |> range(start: 2021-09-01T00:00:00Z)\r\n  |> filter(fn: (r) => \r\n      r._measurement == \"web\" and \r\n      r._field == \"Site\" and\r\n      (r.endpoint == \"PRODUCTION_ENERGY\" or \r\n       r.endpoint == \"EXPORT_ENERGY\" or \r\n       r.endpoint == \"IMPORT_ENERGY\")\r\n  )\r\n  |> aggregateWindow(every: 1d, fn: last, createEmpty: false)\r\n  |> group(columns: [\"endpoint\"])\r\n  |> sum()\r\n  |> map(fn: (r) => ({r with dummy: \"total\"}))\r\n  |> pivot(rowKey: [\"dummy\"], columnKey: [\"endpoint\"], valueColumn: \"_value\")\r\n  |> map(fn: (r) => {\r\n      prod = r.PRODUCTION_ENERGY\r\n      imp = r.IMPORT_ENERGY\r\n      exp = r.EXPORT_ENERGY\r\n      \r\n      return {\r\n          Produzione: prod,\r\n          Immissione: exp,\r\n          Prelievo: imp,\r\n          Consumo: (prod + imp - exp) / 1000.0,\r\n          Autoconsumo: prod - exp,\r\n          \"Emissioni CO2 Evitate\": (prod / 1000.0) * emission_factor_kg_per_kwh,\r\n          \"% Autoconsumo\": ((prod - exp) / (prod + imp - exp)) * 100.0,\r\n          \"% Prelievo\": (imp / (prod + imp - exp)) * 100.0\r\n      }\r\n  })"
+                        "query": "emission_factor_kg_per_kwh = 0.4\n\nfrom(bucket: \"Solaredge\")\n  |> range(start: 2021-09-01T00:00:00Z)\n  |> filter(fn: (r) =>\n      r._measurement == \"api\" and\n      r.endpoint == \"site_energy_details\" and\n      (r.metric == \"Production\" or r.metric == \"FeedIn\" or r.metric == \"Purchased\")\n  )\n  |> keep(columns: [\"_time\", \"_value\", \"metric\"])\n  |> group(columns: [\"metric\"])\n  |> sum(column: \"_value\")\n  |> map(fn: (r) => ({r with dummy: \"total\"}))\n  |> pivot(rowKey: [\"dummy\"], columnKey: [\"metric\"], valueColumn: \"_value\")\n  |> map(fn: (r) => {\n      prod = r.Production\n      imp = r.Purchased\n      exp = r.FeedIn\n\n      return {\n          Produzione: prod,\n          Immissione: exp,\n          Prelievo: imp,\n          Consumo: (prod + imp - exp) / 1000.0,\n          Autoconsumo: prod - exp,\n          \"Emissioni CO2 Evitate\": (prod / 1000.0) * emission_factor_kg_per_kwh,\n          \"% Autoconsumo\": ((prod - exp) / (prod + imp - exp)) * 100.0,\n          \"% Prelievo\": (imp / (prod + imp - exp)) * 100.0\n      }\n  })\n"
                       }
                     },
                     "refId": "Statistiche",
@@ -5097,13 +6012,13 @@
                       "excludeByName": {},
                       "includeByName": {},
                       "indexByName": {
-                        "% Autoconsumo": 6,
-                        "% Prelievo": 7,
+                        "% Autoconsumo": 7,
+                        "% Prelievo": 6,
                         "Autoconsumo": 3,
-                        "Consumo": 2,
-                        "Emissioni CO2 Evitate": 1,
-                        "Immissione": 5,
-                        "Prelievo": 4,
+                        "Consumo": 4,
+                        "Emissioni CO2 Evitate": 5,
+                        "Immissione": 1,
+                        "Prelievo": 2,
                         "Produzione": 0
                       },
                       "renameByName": {}
@@ -5120,7 +6035,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "stat",
-            "version": "12.3.0",
+            "version": "13.2.4",
             "spec": {
               "options": {
                 "colorMode": "background",
@@ -5402,7 +6317,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "barchart",
-            "version": "12.3.0",
+            "version": "13.2.4",
             "spec": {
               "options": {
                 "barRadius": 0,
@@ -5556,7 +6471,6 @@
         "spec": {
           "id": 60,
           "title": "Percentuale Autoconsumo",
-          "description": "",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -5573,7 +6487,7 @@
                         "name": "ff27vpmruzxtsc"
                       },
                       "spec": {
-                        "query": "import \"date\"\nimport \"array\"\nimport \"timezone\"\n\noption location = timezone.location(name: \"Europe/Rome\")\n\nstart = date.truncate(t: now(), unit: 1d)\ndata_imp = from(bucket: \"Solaredge_Realtime\")\n  |> range(start: start)\n  |> filter(fn: (r) =>\n      r._measurement == \"realtime\" and\n      r._field == \"Meter\" and\n      r.endpoint == \"Import Energy Active\" and\n      r.unit == \"Wh\" and\n      exists r._value)\n  |> group()\n  |> difference()\n  |> filter(fn: (r) => r._value >= 0.0)\n  |> sum()\n\nimp_value = (data_imp |> findRecord(fn: (key) => true, idx: 0))._value\ndata_prod = from(bucket: \"Solaredge_Realtime\")\n  |> range(start: start)\n  |> filter(fn: (r) =>\n      r._measurement == \"realtime\" and\n      r._field == \"Inverter\" and\n      r.endpoint == \"Energy Total\" and\n      r.unit == \"Wh\" and\n      exists r._value)\n  |> group()\n  |> difference()\n  |> filter(fn: (r) => r._value >= 0.0)\n  |> sum()\n\nprod_value = (data_prod |> findRecord(fn: (key) => true, idx: 0))._value\ndata_exp = from(bucket: \"Solaredge_Realtime\")\n  |> range(start: start)\n  |> filter(fn: (r) =>\n      r._measurement == \"realtime\" and\n      r._field == \"Meter\" and\n      r.endpoint == \"Export Energy Active\" and\n      r.unit == \"Wh\" and\n      exists r._value)\n  |> group()\n  |> difference()\n  |> filter(fn: (r) => r._value >= 0.0)\n  |> sum()\n\nexp_value = (data_exp |> findRecord(fn: (key) => true, idx: 0))._value\n\narray.from(rows: [{\n  \"% Autoconsumo OGGI\": if (imp_value + prod_value - exp_value) > 0.0 then ((if (prod_value - exp_value) < 0.0 then 0.0 else (prod_value - exp_value)) / (imp_value + prod_value - exp_value)) * 100.0 else 0.0,}])\n"
+                        "query": "import \"date\"\nimport \"array\"\nimport \"timezone\"\n\noption location = timezone.location(name: \"Europe/Rome\")\n\nstart = date.truncate(t: now(), unit: 1d)\ndata_imp = from(bucket: \"Solaredge_Realtime\")\n  |> range(start: start)\n  |> filter(fn: (r) =>\n      r._measurement == \"realtime\" and\n      r._field == \"Meter\" and\n      r.endpoint == \"Import Energy Active\" and\n      r.unit == \"Wh\" and\n      exists r._value and r._value > 0.0)\n  |> group()\n  |> sort(columns: [\"_time\"])\n\nimp_value = ((data_imp |> last() |> findRecord(fn: (key) => true, idx: 0))._value - (data_imp |> first() |> findRecord(fn: (key) => true, idx: 0))._value)\ndata_prod = from(bucket: \"Solaredge_Realtime\")\n  |> range(start: start)\n  |> filter(fn: (r) =>\n      r._measurement == \"realtime\" and\n      r._field == \"Inverter\" and\n      r.endpoint == \"Energy Total\" and\n      r.unit == \"Wh\" and\n      exists r._value and r._value > 0.0)\n  |> group()\n  |> sort(columns: [\"_time\"])\n\nprod_value = ((data_prod |> last() |> findRecord(fn: (key) => true, idx: 0))._value - (data_prod |> first() |> findRecord(fn: (key) => true, idx: 0))._value)\ndata_exp = from(bucket: \"Solaredge_Realtime\")\n  |> range(start: start)\n  |> filter(fn: (r) =>\n      r._measurement == \"realtime\" and\n      r._field == \"Meter\" and\n      r.endpoint == \"Export Energy Active\" and\n      r.unit == \"Wh\" and\n      exists r._value and r._value > 0.0)\n  |> group()\n  |> sort(columns: [\"_time\"])\n\nexp_value = ((data_exp |> last() |> findRecord(fn: (key) => true, idx: 0))._value - (data_exp |> first() |> findRecord(fn: (key) => true, idx: 0))._value)\n\narray.from(rows: [{\n  \"% Autoconsumo OGGI\": if (imp_value + prod_value - exp_value) > 0.0 then ((if (prod_value - exp_value) < 0.0 then 0.0 else (prod_value - exp_value)) / (imp_value + prod_value - exp_value)) * 100.0 else 0.0,}])\n"
                       }
                     },
                     "refId": "% Autoconsumo",
@@ -5592,7 +6506,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "stat",
-            "version": "12.3.0",
+            "version": "13.2.4",
             "spec": {
               "options": {
                 "colorMode": "background",
@@ -5679,7 +6593,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "stat",
-            "version": "12.3.0",
+            "version": "13.2.4",
             "spec": {
               "options": {
                 "colorMode": "background",
@@ -5699,7 +6613,7 @@
               },
               "fieldConfig": {
                 "defaults": {
-                  "unit": "watth",
+                  "unit": "watt",
                   "thresholds": {
                     "mode": "absolute",
                     "steps": [
@@ -5762,7 +6676,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "stat",
-            "version": "12.3.0",
+            "version": "13.2.4",
             "spec": {
               "options": {
                 "colorMode": "background",
@@ -5782,7 +6696,7 @@
               },
               "fieldConfig": {
                 "defaults": {
-                  "unit": "watth",
+                  "unit": "watt",
                   "thresholds": {
                     "mode": "absolute",
                     "steps": [
@@ -5865,10 +6779,18 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "gauge",
-            "version": "12.3.0",
+            "version": "13.2.4",
             "spec": {
               "options": {
-                "minVizHeight": 90,
+                "barShape": "flat",
+                "barWidthFactor": 0.5,
+                "effects": {
+                  "barGlow": false,
+                  "centerGlow": false,
+                  "gradient": false
+                },
+                "endpointMarker": "point",
+                "minVizHeight": 75,
                 "minVizWidth": 75,
                 "orientation": "horizontal",
                 "reduceOptions": {
@@ -5878,10 +6800,15 @@
                   "fields": "",
                   "values": false
                 },
+                "segmentCount": 1,
+                "segmentSpacing": 0.3,
+                "shape": "gauge",
                 "showThresholdLabels": false,
-                "showThresholdMarkers": true,
+                "showThresholdMarkers": false,
                 "sizing": "auto",
-                "text": {}
+                "sparkline": false,
+                "text": {},
+                "textMode": "auto"
               },
               "fieldConfig": {
                 "defaults": {
@@ -5917,7 +6844,6 @@
         "spec": {
           "id": 66,
           "title": "Consumo",
-          "description": "",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -5934,7 +6860,7 @@
                         "name": "ff27vpmruzxtsc"
                       },
                       "spec": {
-                        "query": "import \"date\"\nimport \"array\"\nimport \"timezone\"\n\noption location = timezone.location(name: \"Europe/Rome\")\n\nstart = date.truncate(t: now(), unit: 1d)\ndata_imp = from(bucket: \"Solaredge_Realtime\")\n  |> range(start: start)\n  |> filter(fn: (r) =>\n      r._measurement == \"realtime\" and\n      r._field == \"Meter\" and\n      r.endpoint == \"Import Energy Active\" and\n      r.unit == \"Wh\" and\n      exists r._value)\n  |> group()\n  |> difference()\n  |> filter(fn: (r) => r._value >= 0.0)\n  |> sum()\n\nimp_value = (data_imp |> findRecord(fn: (key) => true, idx: 0))._value\ndata_prod = from(bucket: \"Solaredge_Realtime\")\n  |> range(start: start)\n  |> filter(fn: (r) =>\n      r._measurement == \"realtime\" and\n      r._field == \"Inverter\" and\n      r.endpoint == \"Energy Total\" and\n      r.unit == \"Wh\" and\n      exists r._value)\n  |> group()\n  |> difference()\n  |> filter(fn: (r) => r._value >= 0.0)\n  |> sum()\n\nprod_value = (data_prod |> findRecord(fn: (key) => true, idx: 0))._value\ndata_exp = from(bucket: \"Solaredge_Realtime\")\n  |> range(start: start)\n  |> filter(fn: (r) =>\n      r._measurement == \"realtime\" and\n      r._field == \"Meter\" and\n      r.endpoint == \"Export Energy Active\" and\n      r.unit == \"Wh\" and\n      exists r._value)\n  |> group()\n  |> difference()\n  |> filter(fn: (r) => r._value >= 0.0)\n  |> sum()\n\nexp_value = (data_exp |> findRecord(fn: (key) => true, idx: 0))._value\n\narray.from(rows: [{\n  \"Consumo Oggi (Wh)\": imp_value + prod_value - exp_value,}])\n"
+                        "query": "import \"date\"\nimport \"array\"\nimport \"timezone\"\n\noption location = timezone.location(name: \"Europe/Rome\")\n\nstart = date.truncate(t: now(), unit: 1d)\ndata_imp = from(bucket: \"Solaredge_Realtime\")\n  |> range(start: start)\n  |> filter(fn: (r) =>\n      r._measurement == \"realtime\" and\n      r._field == \"Meter\" and\n      r.endpoint == \"Import Energy Active\" and\n      r.unit == \"Wh\" and\n      exists r._value and r._value > 0.0)\n  |> group()\n  |> sort(columns: [\"_time\"])\n\nimp_value = ((data_imp |> last() |> findRecord(fn: (key) => true, idx: 0))._value - (data_imp |> first() |> findRecord(fn: (key) => true, idx: 0))._value)\ndata_prod = from(bucket: \"Solaredge_Realtime\")\n  |> range(start: start)\n  |> filter(fn: (r) =>\n      r._measurement == \"realtime\" and\n      r._field == \"Inverter\" and\n      r.endpoint == \"Energy Total\" and\n      r.unit == \"Wh\" and\n      exists r._value and r._value > 0.0)\n  |> group()\n  |> sort(columns: [\"_time\"])\n\nprod_value = ((data_prod |> last() |> findRecord(fn: (key) => true, idx: 0))._value - (data_prod |> first() |> findRecord(fn: (key) => true, idx: 0))._value)\ndata_exp = from(bucket: \"Solaredge_Realtime\")\n  |> range(start: start)\n  |> filter(fn: (r) =>\n      r._measurement == \"realtime\" and\n      r._field == \"Meter\" and\n      r.endpoint == \"Export Energy Active\" and\n      r.unit == \"Wh\" and\n      exists r._value and r._value > 0.0)\n  |> group()\n  |> sort(columns: [\"_time\"])\n\nexp_value = ((data_exp |> last() |> findRecord(fn: (key) => true, idx: 0))._value - (data_exp |> first() |> findRecord(fn: (key) => true, idx: 0))._value)\n\narray.from(rows: [{\n  \"Consumo Oggi (Wh)\": imp_value + prod_value - exp_value,}])\n"
                       }
                     },
                     "refId": "Consumo",
@@ -5952,7 +6878,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "stat",
-            "version": "12.3.0",
+            "version": "13.2.4",
             "spec": {
               "options": {
                 "colorMode": "background",
@@ -6000,7 +6926,6 @@
         "spec": {
           "id": 67,
           "title": "Immissione",
-          "description": "",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -6017,7 +6942,7 @@
                         "name": "ff27vpmruzxtsc"
                       },
                       "spec": {
-                        "query": "import \"date\"\nimport \"array\"\nimport \"timezone\"\n\noption location = timezone.location(name: \"Europe/Rome\")\n\nstart = date.truncate(t: now(), unit: 1d)\ndata_exp = from(bucket: \"Solaredge_Realtime\")\n  |> range(start: start)\n  |> filter(fn: (r) =>\n      r._measurement == \"realtime\" and\n      r._field == \"Meter\" and\n      r.endpoint == \"Export Energy Active\" and\n      r.unit == \"Wh\" and\n      exists r._value)\n  |> group()\n  |> difference()\n  |> filter(fn: (r) => r._value >= 0.0)\n  |> sum()\n\nexp_value = (data_exp |> findRecord(fn: (key) => true, idx: 0))._value\n\narray.from(rows: [{\n  \"Immissione Oggi (Wh)\": exp_value,}])\n"
+                        "query": "import \"date\"\nimport \"array\"\nimport \"timezone\"\n\noption location = timezone.location(name: \"Europe/Rome\")\n\nstart = date.truncate(t: now(), unit: 1d)\ndata_exp = from(bucket: \"Solaredge_Realtime\")\n  |> range(start: start)\n  |> filter(fn: (r) =>\n      r._measurement == \"realtime\" and\n      r._field == \"Meter\" and\n      r.endpoint == \"Export Energy Active\" and\n      r.unit == \"Wh\" and\n      exists r._value and r._value > 0.0)\n  |> group()\n  |> sort(columns: [\"_time\"])\n\nexp_value = ((data_exp |> last() |> findRecord(fn: (key) => true, idx: 0))._value - (data_exp |> first() |> findRecord(fn: (key) => true, idx: 0))._value)\n\narray.from(rows: [{\n  \"Immissione Oggi (Wh)\": exp_value,}])\n"
                       }
                     },
                     "refId": "Immissione",
@@ -6035,7 +6960,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "stat",
-            "version": "12.3.0",
+            "version": "13.2.4",
             "spec": {
               "options": {
                 "colorMode": "background",
@@ -6083,7 +7008,6 @@
         "spec": {
           "id": 68,
           "title": "Prelievo",
-          "description": "",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -6100,7 +7024,7 @@
                         "name": "ff27vpmruzxtsc"
                       },
                       "spec": {
-                        "query": "import \"date\"\nimport \"array\"\nimport \"timezone\"\n\noption location = timezone.location(name: \"Europe/Rome\")\n\nstart = date.truncate(t: now(), unit: 1d)\ndata_imp = from(bucket: \"Solaredge_Realtime\")\n  |> range(start: start)\n  |> filter(fn: (r) =>\n      r._measurement == \"realtime\" and\n      r._field == \"Meter\" and\n      r.endpoint == \"Import Energy Active\" and\n      r.unit == \"Wh\" and\n      exists r._value)\n  |> group()\n  |> difference()\n  |> filter(fn: (r) => r._value >= 0.0)\n  |> sum()\n\nimp_value = (data_imp |> findRecord(fn: (key) => true, idx: 0))._value\n\narray.from(rows: [{\n  \"Prelievo Oggi (Wh)\": imp_value,}])\n"
+                        "query": "import \"date\"\nimport \"array\"\nimport \"timezone\"\n\noption location = timezone.location(name: \"Europe/Rome\")\n\nstart = date.truncate(t: now(), unit: 1d)\ndata_imp = from(bucket: \"Solaredge_Realtime\")\n  |> range(start: start)\n  |> filter(fn: (r) =>\n      r._measurement == \"realtime\" and\n      r._field == \"Meter\" and\n      r.endpoint == \"Import Energy Active\" and\n      r.unit == \"Wh\" and\n      exists r._value and r._value > 0.0)\n  |> group()\n  |> sort(columns: [\"_time\"])\n\nimp_value = ((data_imp |> last() |> findRecord(fn: (key) => true, idx: 0))._value - (data_imp |> first() |> findRecord(fn: (key) => true, idx: 0))._value)\n\narray.from(rows: [{\n  \"Prelievo Oggi (Wh)\": imp_value,}])\n"
                       }
                     },
                     "refId": "Prelievo",
@@ -6118,7 +7042,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "stat",
-            "version": "12.3.0",
+            "version": "13.2.4",
             "spec": {
               "options": {
                 "colorMode": "background",
@@ -6168,7 +7092,6 @@
         "spec": {
           "id": 69,
           "title": "Autoconsumo",
-          "description": "",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -6185,7 +7108,7 @@
                         "name": "ff27vpmruzxtsc"
                       },
                       "spec": {
-                        "query": "import \"date\"\nimport \"array\"\nimport \"timezone\"\n\noption location = timezone.location(name: \"Europe/Rome\")\n\nstart = date.truncate(t: now(), unit: 1d)\ndata_prod = from(bucket: \"Solaredge_Realtime\")\n  |> range(start: start)\n  |> filter(fn: (r) =>\n      r._measurement == \"realtime\" and\n      r._field == \"Inverter\" and\n      r.endpoint == \"Energy Total\" and\n      r.unit == \"Wh\" and\n      exists r._value)\n  |> group()\n  |> difference()\n  |> filter(fn: (r) => r._value >= 0.0)\n  |> sum()\n\nprod_value = (data_prod |> findRecord(fn: (key) => true, idx: 0))._value\ndata_exp = from(bucket: \"Solaredge_Realtime\")\n  |> range(start: start)\n  |> filter(fn: (r) =>\n      r._measurement == \"realtime\" and\n      r._field == \"Meter\" and\n      r.endpoint == \"Export Energy Active\" and\n      r.unit == \"Wh\" and\n      exists r._value)\n  |> group()\n  |> difference()\n  |> filter(fn: (r) => r._value >= 0.0)\n  |> sum()\n\nexp_value = (data_exp |> findRecord(fn: (key) => true, idx: 0))._value\n\narray.from(rows: [{\n  \"Autoconsumo (Wh)\": if (prod_value - exp_value) < 0.0 then 0.0 else (prod_value - exp_value),}])\n"
+                        "query": "import \"date\"\nimport \"array\"\nimport \"timezone\"\n\noption location = timezone.location(name: \"Europe/Rome\")\n\nstart = date.truncate(t: now(), unit: 1d)\ndata_prod = from(bucket: \"Solaredge_Realtime\")\n  |> range(start: start)\n  |> filter(fn: (r) =>\n      r._measurement == \"realtime\" and\n      r._field == \"Inverter\" and\n      r.endpoint == \"Energy Total\" and\n      r.unit == \"Wh\" and\n      exists r._value and r._value > 0.0)\n  |> group()\n  |> sort(columns: [\"_time\"])\n\nprod_value = ((data_prod |> last() |> findRecord(fn: (key) => true, idx: 0))._value - (data_prod |> first() |> findRecord(fn: (key) => true, idx: 0))._value)\ndata_exp = from(bucket: \"Solaredge_Realtime\")\n  |> range(start: start)\n  |> filter(fn: (r) =>\n      r._measurement == \"realtime\" and\n      r._field == \"Meter\" and\n      r.endpoint == \"Export Energy Active\" and\n      r.unit == \"Wh\" and\n      exists r._value and r._value > 0.0)\n  |> group()\n  |> sort(columns: [\"_time\"])\n\nexp_value = ((data_exp |> last() |> findRecord(fn: (key) => true, idx: 0))._value - (data_exp |> first() |> findRecord(fn: (key) => true, idx: 0))._value)\n\narray.from(rows: [{\n  \"Autoconsumo (Wh)\": if (prod_value - exp_value) < 0.0 then 0.0 else (prod_value - exp_value),}])\n"
                       }
                     },
                     "refId": "Autoconsumo",
@@ -6203,7 +7126,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "stat",
-            "version": "12.3.0",
+            "version": "13.2.4",
             "spec": {
               "options": {
                 "colorMode": "background",
@@ -6287,7 +7210,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "stat",
-            "version": "12.3.0",
+            "version": "13.2.4",
             "spec": {
               "options": {
                 "colorMode": "background",
@@ -6307,7 +7230,7 @@
               },
               "fieldConfig": {
                 "defaults": {
-                  "unit": "watth",
+                  "unit": "watt",
                   "thresholds": {
                     "mode": "absolute",
                     "steps": [
@@ -6349,7 +7272,7 @@
                         "name": "ff27vpmruzxtsc"
                       },
                       "spec": {
-                        "query": "import \"timezone\"\r\nimport \"date\"\r\n\r\noption location = timezone.location(name: \"Europe/Rome\")\r\n\r\n// Usa il time range selezionato in Grafana\r\n// Puoi usare \"Last 1 year\" oppure selezionare un range custom\r\nstartOfPeriod = date.truncate(t: v.timeRangeStart, unit: 1y)\r\nendOfPeriod = date.add(d: 1y, to: startOfPeriod)\r\n\r\nfrom(bucket: \"Solaredge\")\r\n  |> range(start: startOfPeriod, stop: endOfPeriod)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"web\" and r[\"_field\"] == \"Site\")\r\n  |> filter(fn: (r) => \r\n      r[\"endpoint\"] == \"PRODUCTION_ENERGY\" or \r\n      r[\"endpoint\"] == \"IMPORT_ENERGY\" or \r\n      r[\"endpoint\"] == \"EXPORT_ENERGY\"\r\n  )\r\n  \r\n  // Aggreghiamo per mese usando il fuso orario configurato\r\n  |> aggregateWindow(\r\n      every: 1mo, \r\n      fn: sum, \r\n      createEmpty: true,\r\n      timeSrc: \"_start\",\r\n      location: location\r\n  )\r\n  \r\n  // Riempiamo eventuali valori mancanti con zero\r\n  |> fill(value: 0.0)\r\n  \r\n  // Trasformiamo da formato lungo a formato largo\r\n  |> pivot(rowKey: [\"_time\"], columnKey: [\"endpoint\"], valueColumn: \"_value\")\r\n  \r\n  // Gestiamo eventuali valori null dopo il pivot\r\n  |> map(fn: (r) => ({ r with \r\n      prod: if exists r.PRODUCTION_ENERGY then r.PRODUCTION_ENERGY else 0.0,\r\n      imp: if exists r.IMPORT_ENERGY then r.IMPORT_ENERGY else 0.0,\r\n      exp: if exists r.EXPORT_ENERGY then r.EXPORT_ENERGY else 0.0\r\n  }))\r\n  \r\n  // Calcoliamo le metriche derivate\r\n  |> map(fn: (r) => ({ \r\n      _time: r._time,\r\n      Produzione: r.prod,\r\n      Prelievo: r.imp,\r\n      Immissione: r.exp,\r\n      Consumo: r.prod + r.imp - r.exp,\r\n      Autoconsumo: r.prod - r.exp\r\n  }))\r\n  \r\n  // Filtriamo solo i dati entro il periodo selezionato\r\n  |> filter(fn: (r) => r._time < endOfPeriod)"
+                        "query": "import \"timezone\"\nimport \"date\"\noption location = timezone.location(name: \"Europe/Rome\")\n\nstartOfPeriod = date.truncate(t: v.timeRangeStart, unit: 1y)\nendOfPeriod = date.add(d: 1y, to: startOfPeriod)\n\nfrom(bucket: \"Solaredge\")\n  |> range(start: startOfPeriod, stop: endOfPeriod)\n  |> filter(fn: (r) => r._measurement == \"api\" and r.endpoint == \"site_energy_details\")\n  |> filter(fn: (r) =>\n      r.metric == \"Production\" or r.metric == \"Purchased\" or\n      r.metric == \"FeedIn\" or r.metric == \"Consumption\")\n  |> aggregateWindow(every: 1mo, fn: sum, createEmpty: true, timeSrc: \"_start\", location: location)\n  |> group(columns: [\"metric\"])\n  |> fill(value: 0.0)\n  |> pivot(rowKey: [\"_time\"], columnKey: [\"metric\"], valueColumn: \"_value\")\n  |> map(fn: (r) => ({\n      _time: r._time,\n      Produzione: r.Production,\n      Prelievo: r.Purchased,\n      Immissione: r.FeedIn,\n      Consumo: r.Consumption,\n      Autoconsumo: r.Production - r.FeedIn,\n  }))\n  |> filter(fn: (r) => r._time < endOfPeriod)\n"
                       }
                     },
                     "refId": "Statistiche Anno Corrente",
@@ -6389,7 +7312,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "barchart",
-            "version": "12.3.0",
+            "version": "13.2.4",
             "spec": {
               "options": {
                 "barRadius": 0,
@@ -6549,7 +7472,6 @@
         "spec": {
           "id": 86,
           "title": "Percentuale Prelievo",
-          "description": "",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -6566,7 +7488,7 @@
                         "name": "ff27vpmruzxtsc"
                       },
                       "spec": {
-                        "query": "import \"date\"\nimport \"array\"\nimport \"timezone\"\n\noption location = timezone.location(name: \"Europe/Rome\")\n\nstart = date.truncate(t: now(), unit: 1d)\ndata_imp = from(bucket: \"Solaredge_Realtime\")\n  |> range(start: start)\n  |> filter(fn: (r) =>\n      r._measurement == \"realtime\" and\n      r._field == \"Meter\" and\n      r.endpoint == \"Import Energy Active\" and\n      r.unit == \"Wh\" and\n      exists r._value)\n  |> group()\n  |> difference()\n  |> filter(fn: (r) => r._value >= 0.0)\n  |> sum()\n\nimp_value = (data_imp |> findRecord(fn: (key) => true, idx: 0))._value\ndata_prod = from(bucket: \"Solaredge_Realtime\")\n  |> range(start: start)\n  |> filter(fn: (r) =>\n      r._measurement == \"realtime\" and\n      r._field == \"Inverter\" and\n      r.endpoint == \"Energy Total\" and\n      r.unit == \"Wh\" and\n      exists r._value)\n  |> group()\n  |> difference()\n  |> filter(fn: (r) => r._value >= 0.0)\n  |> sum()\n\nprod_value = (data_prod |> findRecord(fn: (key) => true, idx: 0))._value\ndata_exp = from(bucket: \"Solaredge_Realtime\")\n  |> range(start: start)\n  |> filter(fn: (r) =>\n      r._measurement == \"realtime\" and\n      r._field == \"Meter\" and\n      r.endpoint == \"Export Energy Active\" and\n      r.unit == \"Wh\" and\n      exists r._value)\n  |> group()\n  |> difference()\n  |> filter(fn: (r) => r._value >= 0.0)\n  |> sum()\n\nexp_value = (data_exp |> findRecord(fn: (key) => true, idx: 0))._value\n\narray.from(rows: [{\n  \"% Prelievo OGGI\": if (imp_value + prod_value - exp_value) > 0.0 then (imp_value / (imp_value + prod_value - exp_value)) * 100.0 else 0.0,}])\n"
+                        "query": "import \"date\"\nimport \"array\"\nimport \"timezone\"\n\noption location = timezone.location(name: \"Europe/Rome\")\n\nstart = date.truncate(t: now(), unit: 1d)\ndata_imp = from(bucket: \"Solaredge_Realtime\")\n  |> range(start: start)\n  |> filter(fn: (r) =>\n      r._measurement == \"realtime\" and\n      r._field == \"Meter\" and\n      r.endpoint == \"Import Energy Active\" and\n      r.unit == \"Wh\" and\n      exists r._value and r._value > 0.0)\n  |> group()\n  |> sort(columns: [\"_time\"])\n\nimp_value = ((data_imp |> last() |> findRecord(fn: (key) => true, idx: 0))._value - (data_imp |> first() |> findRecord(fn: (key) => true, idx: 0))._value)\ndata_prod = from(bucket: \"Solaredge_Realtime\")\n  |> range(start: start)\n  |> filter(fn: (r) =>\n      r._measurement == \"realtime\" and\n      r._field == \"Inverter\" and\n      r.endpoint == \"Energy Total\" and\n      r.unit == \"Wh\" and\n      exists r._value and r._value > 0.0)\n  |> group()\n  |> sort(columns: [\"_time\"])\n\nprod_value = ((data_prod |> last() |> findRecord(fn: (key) => true, idx: 0))._value - (data_prod |> first() |> findRecord(fn: (key) => true, idx: 0))._value)\ndata_exp = from(bucket: \"Solaredge_Realtime\")\n  |> range(start: start)\n  |> filter(fn: (r) =>\n      r._measurement == \"realtime\" and\n      r._field == \"Meter\" and\n      r.endpoint == \"Export Energy Active\" and\n      r.unit == \"Wh\" and\n      exists r._value and r._value > 0.0)\n  |> group()\n  |> sort(columns: [\"_time\"])\n\nexp_value = ((data_exp |> last() |> findRecord(fn: (key) => true, idx: 0))._value - (data_exp |> first() |> findRecord(fn: (key) => true, idx: 0))._value)\n\narray.from(rows: [{\n  \"% Prelievo OGGI\": if (imp_value + prod_value - exp_value) > 0.0 then (imp_value / (imp_value + prod_value - exp_value)) * 100.0 else 0.0,}])\n"
                       }
                     },
                     "refId": "% Prelievo",
@@ -6584,7 +7506,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "stat",
-            "version": "12.3.0",
+            "version": "13.2.4",
             "spec": {
               "options": {
                 "colorMode": "background",
@@ -6762,7 +7684,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "timeseries",
-            "version": "12.3.0",
+            "version": "13.2.4",
             "spec": {
               "options": {
                 "legend": {
@@ -7560,7 +8482,7 @@
               "x": 0,
               "y": 98,
               "width": 24,
-              "height": 14,
+              "height": 13,
               "element": {
                 "kind": "ElementReference",
                 "name": "panel-154"
@@ -7571,9 +8493,113 @@
             "kind": "GridLayoutItem",
             "spec": {
               "x": 0,
-              "y": 112,
-              "width": 24,
-              "height": 3,
+              "y": 111,
+              "width": 8,
+              "height": 4,
+              "element": {
+                "kind": "ElementReference",
+                "name": "panel-201"
+              }
+            }
+          },
+          {
+            "kind": "GridLayoutItem",
+            "spec": {
+              "x": 8,
+              "y": 111,
+              "width": 8,
+              "height": 4,
+              "element": {
+                "kind": "ElementReference",
+                "name": "panel-202"
+              }
+            }
+          },
+          {
+            "kind": "GridLayoutItem",
+            "spec": {
+              "x": 16,
+              "y": 111,
+              "width": 8,
+              "height": 4,
+              "element": {
+                "kind": "ElementReference",
+                "name": "panel-203"
+              }
+            }
+          },
+          {
+            "kind": "GridLayoutItem",
+            "spec": {
+              "x": 0,
+              "y": 115,
+              "width": 12,
+              "height": 9,
+              "element": {
+                "kind": "ElementReference",
+                "name": "panel-205"
+              }
+            }
+          },
+          {
+            "kind": "GridLayoutItem",
+            "spec": {
+              "x": 12,
+              "y": 115,
+              "width": 12,
+              "height": 9,
+              "element": {
+                "kind": "ElementReference",
+                "name": "panel-206"
+              }
+            }
+          },
+          {
+            "kind": "GridLayoutItem",
+            "spec": {
+              "x": 0,
+              "y": 124,
+              "width": 8,
+              "height": 22,
+              "element": {
+                "kind": "ElementReference",
+                "name": "panel-207"
+              }
+            }
+          },
+          {
+            "kind": "GridLayoutItem",
+            "spec": {
+              "x": 8,
+              "y": 124,
+              "width": 8,
+              "height": 10,
+              "element": {
+                "kind": "ElementReference",
+                "name": "panel-210"
+              }
+            }
+          },
+          {
+            "kind": "GridLayoutItem",
+            "spec": {
+              "x": 16,
+              "y": 124,
+              "width": 8,
+              "height": 22,
+              "element": {
+                "kind": "ElementReference",
+                "name": "panel-208"
+              }
+            }
+          },
+          {
+            "kind": "GridLayoutItem",
+            "spec": {
+              "x": 8,
+              "y": 134,
+              "width": 8,
+              "height": 6,
               "element": {
                 "kind": "ElementReference",
                 "name": "panel-58"
@@ -7583,10 +8609,10 @@
           {
             "kind": "GridLayoutItem",
             "spec": {
-              "x": 0,
-              "y": 115,
-              "width": 24,
-              "height": 3,
+              "x": 8,
+              "y": 140,
+              "width": 8,
+              "height": 5,
               "element": {
                 "kind": "ElementReference",
                 "name": "panel-192"
@@ -7601,6 +8627,7 @@
     "preload": false,
     "tags": [],
     "timeSettings": {
+      "timezone": "browser",
       "from": "now/d",
       "to": "now/d",
       "autoRefresh": "5s",
@@ -7621,6 +8648,317 @@
       "fiscalYearStartMonth": 0
     },
     "title": "Solaredge 3.0",
-    "variables": []
+    "variables": [
+      {
+        "kind": "CustomVariable",
+        "spec": {
+          "name": "modo",
+          "query": "variabile,fisso",
+          "current": {
+            "text": "variabile",
+            "value": "variabile"
+          },
+          "options": [
+            {
+              "selected": true,
+              "text": "variabile",
+              "value": "variabile"
+            },
+            {
+              "selected": false,
+              "text": "fisso",
+              "value": "fisso"
+            }
+          ],
+          "multi": false,
+          "includeAll": false,
+          "label": "Modalità",
+          "hide": "dontHide",
+          "skipUrlSync": false,
+          "allowCustomValue": true,
+          "valuesFormat": "csv"
+        }
+      },
+      {
+        "kind": "TextVariable",
+        "spec": {
+          "name": "fee",
+          "current": {
+            "text": "0.0182",
+            "value": "0.0182"
+          },
+          "query": "0.0182",
+          "label": "Fee / Spread (€/kWh)",
+          "hide": "dontHide",
+          "skipUrlSync": false
+        }
+      },
+      {
+        "kind": "TextVariable",
+        "spec": {
+          "name": "commerciale",
+          "current": {
+            "text": "5.05",
+            "value": "5.05"
+          },
+          "query": "5.05",
+          "label": "Costo commerciale (€/mese)",
+          "hide": "dontHide",
+          "skipUrlSync": false
+        }
+      },
+      {
+        "kind": "TextVariable",
+        "spec": {
+          "name": "fisso",
+          "current": {
+            "text": "0.1815",
+            "value": "0.1815"
+          },
+          "query": "0.1815",
+          "label": "Prezzo fisso (€/kWh)",
+          "hide": "dontHide",
+          "skipUrlSync": false
+        }
+      },
+      {
+        "kind": "CustomVariable",
+        "spec": {
+          "name": "perdite_inc",
+          "query": "si,no",
+          "current": {
+            "text": "si",
+            "value": "si"
+          },
+          "options": [
+            {
+              "selected": true,
+              "text": "si",
+              "value": "si"
+            },
+            {
+              "selected": false,
+              "text": "no",
+              "value": "no"
+            }
+          ],
+          "multi": false,
+          "includeAll": false,
+          "label": "Fisso - perdite incluse",
+          "hide": "dontHide",
+          "skipUrlSync": false,
+          "allowCustomValue": true,
+          "valuesFormat": "csv"
+        }
+      },
+      {
+        "kind": "CustomVariable",
+        "spec": {
+          "name": "go_inc",
+          "query": "si,no",
+          "current": {
+            "text": "si",
+            "value": "si"
+          },
+          "options": [
+            {
+              "selected": true,
+              "text": "si",
+              "value": "si"
+            },
+            {
+              "selected": false,
+              "text": "no",
+              "value": "no"
+            }
+          ],
+          "multi": false,
+          "includeAll": false,
+          "label": "Fisso - GO inclusa",
+          "hide": "dontHide",
+          "skipUrlSync": false,
+          "allowCustomValue": true,
+          "valuesFormat": "csv"
+        }
+      },
+      {
+        "kind": "CustomVariable",
+        "spec": {
+          "name": "disp_inc",
+          "query": "si,no",
+          "current": {
+            "text": "no",
+            "value": "no"
+          },
+          "options": [
+            {
+              "selected": false,
+              "text": "si",
+              "value": "si"
+            },
+            {
+              "selected": true,
+              "text": "no",
+              "value": "no"
+            }
+          ],
+          "multi": false,
+          "includeAll": false,
+          "label": "Fisso - dispacciamento incluso",
+          "hide": "dontHide",
+          "skipUrlSync": false,
+          "allowCustomValue": true,
+          "valuesFormat": "csv"
+        }
+      },
+      {
+        "kind": "CustomVariable",
+        "spec": {
+          "name": "bonus",
+          "query": "si,no",
+          "current": {
+            "text": "si",
+            "value": "si"
+          },
+          "options": [
+            {
+              "selected": true,
+              "text": "si",
+              "value": "si"
+            },
+            {
+              "selected": false,
+              "text": "no",
+              "value": "no"
+            }
+          ],
+          "multi": false,
+          "includeAll": false,
+          "label": "Bonus sociale",
+          "hide": "dontHide",
+          "skipUrlSync": false,
+          "allowCustomValue": true,
+          "valuesFormat": "csv"
+        }
+      },
+      {
+        "kind": "CustomVariable",
+        "spec": {
+          "name": "nucleo",
+          "query": "1-2,3-4,oltre4",
+          "current": {
+            "text": "1-2",
+            "value": "1-2"
+          },
+          "options": [
+            {
+              "selected": true,
+              "text": "1-2",
+              "value": "1-2"
+            },
+            {
+              "selected": false,
+              "text": "3-4",
+              "value": "3-4"
+            },
+            {
+              "selected": false,
+              "text": "oltre4",
+              "value": "oltre4"
+            }
+          ],
+          "multi": false,
+          "includeAll": false,
+          "label": "Nucleo ISEE",
+          "hide": "dontHide",
+          "skipUrlSync": false,
+          "allowCustomValue": true,
+          "valuesFormat": "csv"
+        }
+      },
+      {
+        "kind": "CustomVariable",
+        "spec": {
+          "name": "zona",
+          "query": "NORD,CNOR,CSUD,SUD,SICI,SARD",
+          "current": {
+            "text": "CSUD",
+            "value": "CSUD"
+          },
+          "options": [
+            {
+              "selected": false,
+              "text": "NORD",
+              "value": "NORD"
+            },
+            {
+              "selected": false,
+              "text": "CNOR",
+              "value": "CNOR"
+            },
+            {
+              "selected": true,
+              "text": "CSUD",
+              "value": "CSUD"
+            },
+            {
+              "selected": false,
+              "text": "SUD",
+              "value": "SUD"
+            },
+            {
+              "selected": false,
+              "text": "SICI",
+              "value": "SICI"
+            },
+            {
+              "selected": false,
+              "text": "SARD",
+              "value": "SARD"
+            }
+          ],
+          "multi": false,
+          "includeAll": false,
+          "label": "Zona di mercato",
+          "hide": "dontHide",
+          "skipUrlSync": false,
+          "allowCustomValue": true,
+          "valuesFormat": "csv"
+        }
+      },
+      {
+        "kind": "QueryVariable",
+        "spec": {
+          "name": "anno",
+          "current": {
+            "text": "",
+            "value": ""
+          },
+          "label": "Anno SSP",
+          "hide": "dontHide",
+          "refresh": "onTimeRangeChanged",
+          "skipUrlSync": false,
+          "query": {
+            "kind": "DataQuery",
+            "group": "influxdb",
+            "version": "v0",
+            "datasource": {
+              "name": "ff27vpmruzxtsc"
+            },
+            "spec": {
+              "__legacyStringValue": "from(bucket: \"Bolletta\")\n  |> range(start: 2021-01-01T00:00:00Z)\n  |> filter(fn: (r) => r._measurement == \"ssp_monthly\" and r._field == \"prelievo_kwh\")\n  |> keep(columns: [\"year\"])\n  |> group()\n  |> distinct(column: \"year\")\n"
+            }
+          },
+          "regex": "",
+          "regexApplyTo": "value",
+          "sort": "numericalAsc",
+          "definition": "from(bucket: \"Bolletta\")\n  |> range(start: 2021-01-01T00:00:00Z)\n  |> filter(fn: (r) => r._measurement == \"ssp_monthly\" and r._field == \"prelievo_kwh\")\n  |> keep(columns: [\"year\"])\n  |> group()\n  |> distinct(column: \"year\")\n",
+          "options": [],
+          "multi": false,
+          "includeAll": false,
+          "allowCustomValue": true
+        }
+      }
+    ]
   }
 }

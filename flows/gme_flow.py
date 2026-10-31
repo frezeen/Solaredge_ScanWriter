@@ -88,7 +88,7 @@ def run_gme_flow(
             monthly_avg_point = None
             if month_prices:
                 # Estrai solo i valori pun_kwh per il calcolo
-                pun_values = [p.get('pun_kwh') for p in month_prices if p.get('pun_kwh') is not None]
+                pun_values = [p.get('pun_kwh') for p in month_prices if p.get('pun_kwh') is not None and p.get('zone', 'PUN') == 'PUN']
                 if pun_values:
                     monthly_avg_point = parser.create_monthly_avg_point(pun_values, current_date)
                     log.info(color.dim(f"   Media mensile progressiva calcolata su {len(pun_values)} ore"))
@@ -108,6 +108,14 @@ def run_gme_flow(
         raise
     finally:
         collector.close()
+
+    # Aggiorna l'aggregato SSP degli ultimi mesi (non blocca mai il flusso GME)
+    try:
+        from flows import ssp_flow
+        written = ssp_flow.update_recent(months=3)
+        log.info(f"📊 SSP: {written} righe mensili aggiornate")
+    except Exception as e:
+        log.warning(f"SSP: aggiornamento saltato ({e})")
 
     log.info("[FLOW:GME:STOP]")
     return 0
@@ -228,7 +236,7 @@ def run_gme_month_flow(
         return 0
 
     # 2. Calculate monthly average
-    pun_values = [p.get('pun_kwh') for p in all_prices if p.get('pun_kwh') is not None]
+    pun_values = [p.get('pun_kwh') for p in all_prices if p.get('pun_kwh') is not None and p.get('zone', 'PUN') == 'PUN']
     monthly_avg_point = parser.create_monthly_avg_point(pun_values, datetime(year, month, 1))
 
     log.info(color.dim(f"   Generati {len(hourly_points)} punti orari + {1 if monthly_avg_point else 0} media mensile"))

@@ -272,11 +272,15 @@ nano /opt/Solaredge_ScanWriter/.env
 **Parametri obbligatori da configurare**:
 
 ```bash
-# Credenziali SolarEdge (OBBLIGATORI)
+# Credenziali SolarEdge (OBBLIGATORI) - Monitoring API v2, Site Access OAuth
 SOLAREDGE_SITE_ID=123456
+SOLAREDGE_V2_CLIENT_ID=your_client_id
+SOLAREDGE_V2_CLIENT_SECRET=your_client_secret
+SOLAREDGE_V2_REDIRECT_URI=http://localhost:8092/oauth/callback
+SOLAREDGE_V2_REFRESH_TOKEN=your_refresh_token
+# Portale web (sessione per lo scraping)
 SOLAREDGE_USERNAME=your.email@example.com
 SOLAREDGE_PASSWORD=your_password
-SOLAREDGE_API_KEY=your_api_key
 
 # Modbus Realtime (OPZIONALE - solo se hai l'inverter in rete)
 REALTIME_MODBUS_HOST=192.168.1.100  # IP del tuo inverter

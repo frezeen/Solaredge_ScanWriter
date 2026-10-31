@@ -24,7 +24,8 @@ from flows import (
     run_realtime_flow,
     run_scan_flow,
     run_gui_mode,
-    run_gme_flow
+    run_gme_flow,
+    run_bolletta_flow
 )
 from tools.history_manager import run_history_flow
 
@@ -67,6 +68,12 @@ MODES: Dict[str, Dict[str, Any]] = {
         'log_env': 'LOG_FILE_GME',
         'default_log': 'gme_flow.log',
         'handler': run_gme_flow
+    },
+    'bolletta': {
+        'help': 'Aggiorna i valori della bolletta (ARERA/GME)',
+        'log_env': 'LOG_FILE_BOLLETTA',
+        'default_log': 'bolletta_flow.log',
+        'handler': run_bolletta_flow
     },
     'scan': {
         'help': 'Esegui scansione web tree e aggiorna configurazione',
