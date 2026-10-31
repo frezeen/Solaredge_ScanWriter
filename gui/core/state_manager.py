@@ -112,7 +112,9 @@ class StateManager:
 
         if self._is_important(log_entry):
             # timestamp_obj e' un datetime: nell'archivio va solo la stringa
-            self.error_archive.append({k: v for k, v in log_entry.items() if k != 'timestamp_obj'})
+            archived = {k: v for k, v in log_entry.items() if k != 'timestamp_obj'}
+            archived['at'] = log_entry['timestamp_obj'].isoformat(timespec='seconds')
+            self.error_archive.append(archived)
             del self.error_archive[:-self.error_max]
             self._save_error_archive()
 

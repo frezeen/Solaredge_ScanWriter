@@ -29,7 +29,7 @@ function shell(active) {
     <div class="logo">◈</div>
     ${NAV.map(([p, i, l]) => `<a class="ric ${p === active ? 'on' : ''}" href="#${p}" title="${l}">${i}</a>`).join('')}
     <div class="grow"></div>
-    <div class="foot">v26.30<br>solaredge</div>
+    <div class="foot">v26.32<br>solaredge</div>
   </aside>
   <main class="main">
     <div class="top">
@@ -617,7 +617,21 @@ async function viewLoop() {
     // L'archivio non scade: qui restano gli errori e gli avvisi anche quando il
     // buffer in memoria li ha gia' fatti scorrere via.
     const allErrs = (errArchive.errors || []).slice().reverse();
-    const evts = LOOP_STATE.runFlow === 'all' ? allErrs : allErrs.filter(e => String(e.flow_type || 'general') === LOOP_STATE.runFlow);
+    const filtered = LOOP_STATE.runFlow === 'all' ? allErrs : allErrs.filter(e => String(e.flow_type || 'general') === LOOP_STATE.runFlow);
+    // Una riga per messaggio: la piu' recente, con quante volte e' ricapitato.
+    const group = (list) => {
+      const seen = new Map();
+      for (const e of list) {
+        const k = `${e.flow_type}|${e.level}|${e.message}`;
+        const hit = seen.get(k);
+        if (hit) hit.count += 1;
+        else seen.set(k, { ...e, count: 1 });
+      }
+      return [...seen.values()];
+    };
+    const allDistinct = group(allErrs);
+    const evts = group(filtered);
+    const stamp = (e) => String(e.at || e.timestamp || '').replace('T', ' ').slice(0, 19);
     const totals = ['realtime_stats', 'web_stats', 'api_stats', 'gme_stats', 'bolletta_stats'].reduce((a, k) => {
       const f = st[k] || {};
       a.run += f.executed || 0; a.ok += f.success || 0; a.fail += f.failed || 0;
@@ -636,7 +650,7 @@ async function viewLoop() {
         <div class="kpi"><div class="t">Uptime</div><div class="v" style="font-size:1.5rem">${esc(st.uptime_formatted || '-')}</div><div class="s">dall'avvio del processo</div></div>
         <div class="kpi"><div class="t">Ultimo ciclo</div><div class="v" style="font-size:1.5rem">${esc(st.last_update_formatted || '-')}</div><div class="s">ultima iterazione</div></div>
         <div class="kpi ok"><div class="t">Run</div><div class="v">${totals.run}</div><div class="s">${totals.ok} ok</div></div>
-        <div class="kpi ${allErrs.length ? 'bad' : ''}"><div class="t">Con errori o avvisi</div><div class="v">${allErrs.length}</div><div class="s">${allErrs.length ? 'nella tabella in basso' : 'nessuno'}</div></div>
+        <div class="kpi ${allDistinct.length ? 'bad' : ''}"><div class="t">Con errori o avvisi</div><div class="v">${allDistinct.length}</div><div class="s">${allDistinct.length ? 'distinti, nella tabella in basso' : 'nessuno'}</div></div>
       </div>
 
       <div class="c">
@@ -648,17 +662,18 @@ async function viewLoop() {
 
       <div class="c">
         <div class="h">
-          <span class="t">Errori e avvisi</span><span class="m">${evts.length} in archivio, mai rimossi</span>
+          <span class="t">Errori e avvisi</span><span class="m">${evts.length} distinti su ${filtered.length} in archivio</span>
           <select id="runflow" class="search" style="max-width:14rem;margin-left:1rem">
             ${['all','realtime','web','api','gme','bolletta'].map(k => `<option value="${k}" ${LOOP_STATE.runFlow === k ? 'selected' : ''}>sorgente: ${k}</option>`).join('')}
           </select>
         </div>
         <div class="tblwrap"><table class="tbl">
-          <thead><tr><th>Flusso</th><th>Orario</th><th>Livello</th><th>Motivo</th></tr></thead>
+          <thead><tr><th>Flusso</th><th>Ultimo</th><th>Livello</th><th class="num">Volte</th><th>Motivo</th></tr></thead>
           <tbody>${evts.slice(0, 200).map(e => `<tr>
             <td><span class="tag ${flowTag(e.flow_type)}">${esc(String(e.flow_type || 'general').slice(0, 8).toUpperCase())}</span></td>
-            <td class="mono">${esc(e.timestamp || '')}</td>
+            <td class="mono">${esc(stamp(e))}</td>
             <td>${esc(String(e.level || '').toUpperCase())}</td>
+            <td class="num">${e.count}</td>
             <td style="white-space:normal">${esc(e.message || '')}</td>
           </tr>`).join('')}</tbody>
         </table></div>
