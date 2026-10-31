@@ -288,7 +288,8 @@ class SimpleWebGUI:
             # Delega a StateManager (gestisce serializzazione datetime)
             status = self.state_manager.get_loop_status()
             # Add retention config for dynamic UI
-            status['retention_config'] = self.state_manager.retention_config
+            status['retention_config'] = dict(self.state_manager.retention_config)
+            status['log_file'] = self._log_file_info()
             # Cadenza dei flow, per la Overview (secondi)
             status['intervals_seconds'] = {
                 'realtime': int(float(os.environ.get('LOOP_REALTIME_INTERVAL_SECONDS', '5'))),
@@ -306,20 +307,64 @@ class SimpleWebGUI:
 
         except Exception as e:
             return self.error_handler.handle_api_error(e, "getting loop status", "Error retrieving loop status")
+    def _log_file_info(self) -> Dict[str, Any]:
+        """Percorso e dimensione del log su disco e dell'archivio errori."""
+        base = Path(os.environ.get('LOG_DIRECTORY', 'logs')) / 'main' / 'loop_mode.log'
+        archive = Path('cache/error_log.json')
+        def size(p: Path) -> int:
+            try:
+                return p.stat().st_size
+            except OSError:
+                return 0
+        return {
+            'path': str(base),
+            'bytes': size(base),
+            'errors_path': str(archive),
+            'errors_bytes': size(archive),
+        }
+
+    async def handle_logs_retention(self, request: web.Request) -> web.Response:
+        """Cambia la durata del log in giorni, scrivendo .env."""
+        try:
+            payload = await request.json() if request.can_read_body else {}
+            days = int(payload.get('days', 0))
+        except Exception:
+            days = 0
+        if days < 1 or days > 365:
+            return web.json_response({'status': 'error', 'message': 'giorni fuori range (1-365)'}, status=400)
+        try:
+            env_path = Path(self.config_handler.CONFIG_FILE_PATHS['env'])
+            lines = env_path.read_text(encoding='utf-8').splitlines()
+            for i, line in enumerate(lines):
+                if line.split('=', 1)[0].strip() == 'LOG_RETENTION_DAYS':
+                    lines[i] = f'LOG_RETENTION_DAYS={days}'
+                    break
+            else:
+                lines.append(f'LOG_RETENTION_DAYS={days}')
+            env_path.write_text('\n'.join(lines) + '\n', encoding='utf-8')
+            os.environ['LOG_RETENTION_DAYS'] = str(days)
+            self.state_manager.set_retention_days(days)
+            return web.json_response({'status': 'success', 'days': days,
+                                      'retention_config': dict(self.state_manager.retention_config)})
+        except Exception as e:
+            return self.error_handler.handle_api_error(e, "setting log retention", "Error setting retention")
+
+    async def handle_loop_errors(self, request: web.Request) -> web.Response:
+        """Errori e avvisi accumulati: non scadono e nessuna pulizia li tocca."""
+        try:
+            limit = int(request.query.get('limit', 0)) or None
+            errors = self.state_manager.get_errors(limit)
+            return web.json_response({"errors": errors, "total": len(errors)})
+        except Exception as e:
+            return self.error_handler.handle_api_error(e, "getting errors", "Error retrieving errors")
+
     async def handle_loop_logs(self, request: web.Request) -> web.Response:
         """Restituisce i log del loop mode con filtro opzionale per flow"""
         try:
             # Parametri query
             limit = int(request.query.get('limit', DEFAULT_LOG_LIMIT))
-            flow_filter = request.query.get('flow', 'all')
-
-            # Delega a StateManager
-            filtered_logs = self.state_manager.get_filtered_logs(flow_filter, limit)
-            return web.json_response({
-                "logs": filtered_logs,
-                "total": len(filtered_logs),
-                "flow_filter": flow_filter
-            })
+            rows = self.state_manager.get_logs(limit)
+            return web.json_response({"logs": rows, "total": len(rows)})
 
         except Exception as e:
             return self.error_handler.handle_api_error(e, "getting loop logs", "Error retrieving logs")
@@ -423,9 +468,11 @@ class SimpleWebGUI:
             # Delega a StateManager
             self.state_manager.clear_logs()
 
-            self.logger.info("[GUI] ✅ Log puliti con successo")
+            result = self.state_manager.clear_logs()
+            self.logger.info("[GUI] ✅ Log puliti; errori e avvisi conservati")
 
-            return self.error_handler.create_success_response("Log puliti con successo")
+            return self.error_handler.create_success_response(
+                f"Log puliti ({result['removed']} righe); errori e avvisi conservati")
         except Exception as e:
             return self.error_handler.handle_api_error(e, "clearing logs", "Error clearing logs")
 
@@ -477,6 +524,8 @@ class SimpleWebGUI:
         self.app.router.add_post('/api/loop/start', self.handle_loop_start)
         self.app.router.add_post('/api/loop/stop', self.handle_loop_stop)
         self.app.router.add_post('/api/loop/logs/clear', self.handle_clear_logs)
+        self.app.router.add_get('/api/loop/errors', self.handle_loop_errors)
+        self.app.router.add_post('/api/loop/logs/retention', self.handle_logs_retention)
 
         # Endpoint configuration routes
         self.app.router.add_post('/api/endpoints/toggle', self.handle_toggle_endpoint)
@@ -590,10 +639,8 @@ class SimpleWebGUI:
                 # Cache
                 self.logger.info("[SYSTEM] 🗄️  Cache centralizzata inizializzata e operativa")
                 
-                # Log settings info (dynamic from retention_config)
-                all_hours = self.state_manager.retention_config['all_hours']
-                flow_runs = self.state_manager.retention_config['flow_runs']
-                self.logger.info(f"[SYSTEM] 📝 Log inizializzati (TUTTI: reset {all_hours}h, Flow: ultime {flow_runs} run, SISTEMA: mai resettati)")
+                days = self.state_manager.retention_config['days']
+                self.logger.info(f"[SYSTEM] 📝 Log inizializzati (un solo log, {days} giorni; errori e avvisi mai rimossi)")
 
             except Exception as e:
                 self.logger.warning(f"Impossibile inizializzare config manager per log: {e}")

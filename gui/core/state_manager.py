@@ -4,7 +4,10 @@ State Manager - Gestione stato applicazione
 Single Responsibility: tracking stato loop, log, statistiche
 """
 
+import json
+import os
 from datetime import datetime
+from pathlib import Path
 from typing import Dict, List, Optional
 from collections import deque
 from app_logging.universal_logger import get_logger
@@ -21,30 +24,28 @@ class StateManager:
         self.loop_running = False
         self.stop_requested = False
 
-        # Log tracking con deque per auto-eviction
-        self.log_buffer = deque(maxlen=max_log_buffer)
+        # Log tracking: il buffer ha una cap manuale, cosi' un errore non viene
+        # mai espulso dall'auto-eviction; errori e avvisi hanno un archivio
+        # persistente che nessuna pulizia tocca.
+        self.max_log_buffer = max_log_buffer
+        self.log_buffer = deque()
+        self.error_max = 2000
+        self._error_path = Path('cache/error_log.json')
+        self.error_archive: List[dict] = self._load_error_archive()
+        # Un solo log: gli errori e gli avvisi gia' archiviati rientrano nel buffer
+        # all'avvio, cosi' la pagina Logs li mostra anche dopo un riavvio.
+        for entry in self.error_archive:
+            seeded = dict(entry)
+            seeded['timestamp_obj'] = None
+            self.log_buffer.append(seeded)
 
-        # Retention configuration (exposed to UI)
+        # Retention: giorni di vita del log, non delle singole run. Errori e
+        # avvisi non scadono mai.
+        days = int(os.getenv('LOG_RETENTION_DAYS', '7') or 7)
         self.retention_config = {
-            'all_hours': 12,        # Hours for "Tutti" tab
-            'flow_runs': 3,         # Number of runs for flow tabs
-            'sistema_reset': False  # Sistema never resets
+            'days': days,
+            'sistema_reset': False
         }
-
-        # Flow runs tracking - logs raggruppati per flow type
-        # Ogni flow ha una deque di liste (runs), max 3 run
-        self.flow_runs: Dict[str, deque] = {
-            'api': deque(maxlen=self.retention_config['flow_runs']),
-            'web': deque(maxlen=self.retention_config['flow_runs']),
-            'realtime': deque(maxlen=self.retention_config['flow_runs']),
-            'gme': deque(maxlen=self.retention_config['flow_runs']),
-            'bolletta': deque(maxlen=self.retention_config['flow_runs']),
-            'sistema': deque(maxlen=1)  # Sistema ha solo una "run" continua
-        }
-        
-        # Inizializza la prima run per ogni flow
-        for flow in self.flow_runs:
-            self.flow_runs[flow].append([])
 
         # Update tracking
         self.updates_available = False
@@ -119,78 +120,93 @@ class StateManager:
         }
 
         self.log_buffer.append(log_entry)
-        
-        # Retention policy per log_buffer (pulizia lazy)
-        # Controlla solo il primo elemento (il più vecchio)
-        retention_seconds = self.retention_config['all_hours'] * 3600
-        if self.log_buffer:
-            oldest = self.log_buffer[0]
-            if oldest.get('timestamp_obj'):
-                age = (timestamp - oldest['timestamp_obj']).total_seconds()
-                if age > retention_seconds:
-                    self.log_buffer.popleft()
 
-        self._add_log_to_flow_runs(log_entry)
+        if self._is_important(log_entry):
+            # timestamp_obj e' un datetime: nell'archivio va solo la stringa
+            self.error_archive.append({k: v for k, v in log_entry.items() if k != 'timestamp_obj'})
+            del self.error_archive[:-self.error_max]
+            self._save_error_archive()
+
+        # Retention: scade solo cio' che non e' un errore o un avviso.
+        retention_seconds = self.retention_config['days'] * 86400
+        cutoff = datetime.fromtimestamp(timestamp.timestamp() - retention_seconds)
+        while True:
+            idx = next((i for i, e in enumerate(self.log_buffer)
+                        if not self._is_important(e)
+                        and e.get('timestamp_obj') and e['timestamp_obj'] < cutoff), None)
+            if idx is None:
+                break
+            del self.log_buffer[idx]
+
+        # Cap del buffer: espelle il piu' vecchio non importante, mai un errore.
+        while len(self.log_buffer) > self.max_log_buffer:
+            idx = next((i for i, e in enumerate(self.log_buffer)
+                        if not self._is_important(e)), None)
+            if idx is None:
+                break
+            del self.log_buffer[idx]
 
         # Aggiorna timestamp ultimo update
         self.loop_stats['last_update'] = timestamp
 
-    def _add_log_to_flow_runs(self, log_entry: dict):
-        """Aggiunge log alla run corrente del flow"""
-        flow_type = log_entry.get('flow_type', 'general')
+    @staticmethod
+    def _is_important(entry: dict) -> bool:
+        """Errore o avviso: non scade, non si cancella, non si espelle."""
+        level = str(entry.get('level', '')).lower()
+        msg = str(entry.get('message', ''))
+        return level in ('error', 'warning', 'critical') or '❌' in msg or '⚠' in msg
 
-        # Solo i flow specifici vengono tracciati
-        if flow_type in self.flow_runs:
-            # Aggiunge alla run corrente (l'ultima della deque)
-            self.flow_runs[flow_type][-1].append(log_entry)
-
-    def get_filtered_logs(self, flow_filter: str = 'all', limit: int = 2000) -> List[dict]:
-        """
-        Ottiene log filtrati per flow type
-        
-        Args:
-            flow_filter: Filtro flow ('all', 'api', 'web', 'realtime', 'gme', 'sistema')
-            limit: Numero massimo log da restituire (usato solo per 'all')
-            
-        Returns:
-            Lista di log entries
-        """
-        if flow_filter == 'all':
-            # Tab "Tutti": mostra tutto il log buffer (ultimi N)
-            # Rimuovi timestamp_obj prima di inviare al frontend
-            result = []
-            for log in list(self.log_buffer)[-limit:]:
-                log_copy = log.copy()
-                if 'timestamp_obj' in log_copy:
-                    del log_copy['timestamp_obj']
-                result.append(log_copy)
-            return result
-            
-        elif flow_filter == 'general':
-            # Backward compatibility: redirect to sistema
-            flow_filter = 'sistema'
-
-        # Tab specifici: appiattisci le run correnti
-        if flow_filter in self.flow_runs:
-            result = []
-            # Itera su tutte le run salvate (max 3)
-            for run in self.flow_runs[flow_filter]:
-                for log in run:
-                    log_copy = log.copy()
-                    if 'timestamp_obj' in log_copy:
-                        del log_copy['timestamp_obj']
-                    result.append(log_copy)
-            return result
-            
+    def _load_error_archive(self) -> List[dict]:
+        try:
+            if self._error_path.exists():
+                data = json.loads(self._error_path.read_text(encoding='utf-8'))
+                return data if isinstance(data, list) else []
+        except Exception as e:
+            self.logger.warning(f"Archivio errori non leggibile: {e}")
         return []
 
-    def clear_logs(self):
-        """Pulisce tutti i log e le run"""
+    def _save_error_archive(self) -> None:
+        try:
+            self._error_path.parent.mkdir(parents=True, exist_ok=True)
+            tmp = self._error_path.with_suffix('.tmp')
+            tmp.write_text(json.dumps(self.error_archive[-self.error_max:], ensure_ascii=False),
+                           encoding='utf-8')
+            os.replace(tmp, self._error_path)
+        except Exception as e:
+            self.logger.warning(f"Archivio errori non scrivibile: {e}")
+
+    def get_errors(self, limit: Optional[int] = None) -> List[dict]:
+        """Errori e avvisi accumulati, dal piu' vecchio al piu' recente."""
+        rows = self.error_archive[-limit:] if limit else list(self.error_archive)
+        return [{k: v for k, v in e.items() if k != 'timestamp_obj'} for e in rows]
+
+    def get_logs(self, limit: int = 5000) -> List[dict]:
+        """Ultime `limit` righe del buffer, dalla piu' vecchia alla piu' recente."""
+        result = []
+        for log in list(self.log_buffer)[-limit:]:
+            log_copy = log.copy()
+            log_copy.pop('timestamp_obj', None)
+            result.append(log_copy)
+        return result
+
+    def set_retention_days(self, days: int) -> None:
+        self.retention_config['days'] = days
+        cutoff = datetime.now().timestamp() - days * 86400
+        self.log_buffer = deque(
+            e for e in self.log_buffer
+            if self._is_important(e)
+            or not e.get('timestamp_obj')
+            or e['timestamp_obj'].timestamp() >= cutoff
+        )
+
+    def clear_logs(self) -> Dict[str, int]:
+        """Pulisce i log informativi; errori e avvisi restano."""
+        kept = [e for e in self.log_buffer if self._is_important(e)]
+        removed = len(self.log_buffer) - len(kept)
         self.log_buffer.clear()
-        for flow_type in self.flow_runs:
-            self.flow_runs[flow_type].clear()
-            self.flow_runs[flow_type].append([])  # Ripristina run corrente vuota
-        self.logger.info("Log puliti")
+        self.log_buffer.extend(kept)
+        self.logger.info(f"Log puliti ({removed} righe); errori e avvisi conservati")
+        return {'removed': removed, 'kept': len(self.error_archive)}
 
     def update_stats(self, flow_type: str, success: bool):
         """

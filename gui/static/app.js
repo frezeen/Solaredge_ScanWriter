@@ -29,7 +29,7 @@ function shell(active) {
     <div class="logo">◈</div>
     ${NAV.map(([p, i, l]) => `<a class="ric ${p === active ? 'on' : ''}" href="#${p}" title="${l}">${i}</a>`).join('')}
     <div class="grow"></div>
-    <div class="foot">v26.13<br>solaredge</div>
+    <div class="foot">v26.16<br>solaredge</div>
   </aside>
   <main class="main">
     <div class="top">
@@ -160,6 +160,7 @@ async function viewOverview() {
     api('/api/loop/status'), api('/api/sources?type=web'), api('/api/sources?type=api'),
     api('/api/sources?type=modbus'), api('/api/loop/logs?flow=all&limit=600'),
     api('/api/updates/status'), api('/api/freshness'), api('/api/config'),
+    api('/api/loop/errors'),
   ]);
   if (token !== VIEW_TOKEN) return;
   const val = (i, fb) => (res[i].status === 'fulfilled' ? res[i].value : fb);
@@ -198,7 +199,7 @@ async function viewOverview() {
   const done = totals.ok + totals.failed;
   const rate = done ? (100 * totals.ok / done).toFixed(1) : null;
 
-  const errs = logs.filter(l => /ERROR|WARN|❌|⚠/i.test(String(l.level || '') + ' ' + String(l.message || l.msg || '')));
+  const errs = val(8, { errors: [] }).errors || [];
   const buckets = fresh.buckets || [];
   const retention = status.retention_config || {};
 
@@ -260,9 +261,9 @@ async function viewOverview() {
         <div class="hrow"><span class="lbl">Uptime</span><span class="val">${esc(st.uptime_formatted || '—')}</span></div>
         <div class="hrow"><span class="lbl">Ultimo ciclo</span><span class="val">${esc(st.last_update_formatted || '—')}</span></div>
         <div class="hrow"><span class="lbl">InfluxDB</span><span class="val">${fresh.reachable ? 'raggiungibile' : 'non raggiungibile'}</span></div>
-        <div class="hrow"><span class="lbl">Errori nel buffer</span><span class="val">${errs.length}</span></div>
+        <div class="hrow"><span class="lbl">Errori e avvisi</span><span class="val">${errs.length}</span></div>
         <div class="hrow"><span class="lbl">Aggiornamenti</span><span class="val">${upd.updates_available ? 'disponibili' : 'nessuno'}</span></div>
-        <div class="hrow"><span class="lbl">Retention log</span><span class="val">${retention.all_hours ? retention.all_hours + 'h' : '—'}</span></div>
+        <div class="hrow"><span class="lbl">Retention log</span><span class="val">${retention.days ? retention.days + 'g' : '—'}</span></div>
       </div>
     </div>
 
@@ -295,7 +296,7 @@ async function viewOverview() {
 
     <div class="dash">
       <div class="c span-7">
-        <div class="h"><span class="t">Errori e avvisi</span><span class="m">${errs.length} nel buffer</span></div>
+        <div class="h"><span class="t">Errori e avvisi</span><span class="m">${errs.length} in archivio</span></div>
         <div class="term" style="height:15rem" id="overr">${errs.slice(-40).map(logLine).join('') || '<div class="empty">nessun errore o avviso recente</div>'}</div>
       </div>
 
@@ -478,7 +479,7 @@ async function viewFlowInfo(kind) {
   const body = $('#srcbody');
   const token = VIEW_TOKEN;
   const info = FLOW_INFO[kind];
-  const res = await Promise.allSettled([api('/api/loop/status'), api('/api/loop/logs?flow=' + kind + '&limit=200')]);
+  const res = await Promise.allSettled([api('/api/loop/status'), api('/api/loop/logs?limit=2000')]);
   const status = res[0].status === 'fulfilled' ? res[0].value : {};
   const st = status.stats || {};
   const fe = status.flows_enabled || {};
@@ -486,7 +487,9 @@ async function viewFlowInfo(kind) {
   const on = kind === 'gme' ? !!fe.gme : !!fe.bolletta;
   const stats = st[kind + '_stats'] || {};
   const nextRel = st[kind + '_next_at'] ? rel(st[kind + '_next_at']) : '';
-  const rows = res[1].status === 'fulfilled' ? (res[1].value.logs || []) : [];
+  const rows = res[1].status === 'fulfilled'
+    ? (res[1].value.logs || []).filter(l => String(l.flow_type || 'general') === kind)
+    : [];
   if (token !== VIEW_TOKEN || !body.isConnected) return;
 
   body.innerHTML = infoCard({
@@ -635,7 +638,6 @@ async function viewLoop() {
         <div><h1>Loop</h1><p>Un solo processo esegue i flussi a turno, ognuno alla sua cadenza.</p></div>
         <div style="margin-left:auto;display:flex;gap:.5rem">
           <button class="btn ${status.loop_mode ? 'coral' : 'mint'}" id="loopToggle">${status.loop_mode ? 'Stop' : 'Start'}</button>
-          <button class="btn" id="clearLogs">Pulisci log</button>
         </div>
       </div>
       <div class="kpis">
@@ -669,10 +671,6 @@ async function viewLoop() {
       toast(status.loop_mode ? 'Loop fermato' : 'Loop avviato');
       viewLoop();
     });
-    $('#clearLogs').addEventListener('click', async () => {
-      await api('/api/loop/logs/clear', { method: 'POST' });
-      viewLoop();
-    });
     v.querySelectorAll('[data-runflow]').forEach(el => el.addEventListener('click', () => {
       LOOP_STATE.runFlow = el.dataset.runflow;
       viewLoop();
@@ -688,45 +686,89 @@ async function viewLoop() {
   }
 }
 
-const LOGS_STATE = { flow: 'all', q: '' };
+const LOGS_STATE = { q: '', src: 'all', lvl: 'all' };
 let LOGCACHE = [];
+let LOGMETA = { days: 7, file: '' };
+
+function fmtBytes(n) {
+  if (!n) return '0 KB';
+  return n >= 1048576 ? (n / 1048576).toFixed(1) + ' MB' : Math.round(n / 1024) + ' KB';
+}
 
 function renderLogLines() {
   const q = LOGS_STATE.q.toLowerCase();
-  const rows = LOGCACHE.filter(l => !q || String(l.message || l.msg || '').toLowerCase().includes(q));
+  const rows = LOGCACHE.filter(l => {
+    if (q && !String(l.message || l.msg || '').toLowerCase().includes(q)) return false;
+    if (LOGS_STATE.src !== 'all' && String(l.flow_type || 'general') !== LOGS_STATE.src) return false;
+    if (LOGS_STATE.lvl !== 'all' && String(l.level || '').toLowerCase() !== LOGS_STATE.lvl) return false;
+    return true;
+  });
   const el = $('#logterm');
   if (!el) return;
   const cnt = $('#logcount');
   if (cnt) cnt.textContent = rows.length;
-  el.innerHTML = rows.map(logLine).join('') || '<div class="empty">nessun log</div>';
+  el.innerHTML = rows.map(logLine).join('') || '<div class="empty">nessun log con questi filtri</div>';
   el.scrollTop = el.scrollHeight;
 }
 
 async function loadLogs() {
-  const d = await api('/api/loop/logs?flow=' + LOGS_STATE.flow + '&limit=2000');
+  const [d, status] = await Promise.all([api('/api/loop/logs?limit=5000'), api('/api/loop/status')]);
   if (!$('#logterm')) return;
   LOGCACHE = d.logs || [];
+  const rc = status.retention_config || {};
+  LOGMETA = { days: rc.days || 7, file: (status.log_file || {}) };
+  const info = $('#logfile');
+  if (info) info.textContent = `${LOGMETA.file.path || ''} · ${fmtBytes(LOGMETA.file.bytes)}`;
   renderLogLines();
 }
 
 async function viewLogs() {
   const v = $('#view');
-  v.innerHTML = `<div class="pagehead"><div><h1>Logs</h1><p>buffer del collector · <span id="logcount">${LOGCACHE.length}</span> righe</p></div></div>
-    <div class="filters" id="logflows">${['all','realtime','web','api','gme','bolletta'].map(f => `<button class="chip ${LOGS_STATE.flow === f ? 'on' : ''}" data-flow="${f}">${f}</button>`).join('')}
+  v.innerHTML = `<div class="pagehead">
+      <div><h1>Logs</h1><p>un solo log · <span id="logcount">${LOGCACHE.length}</span> righe visibili · <span id="logfile">${esc((LOGMETA.file || {}).path || '')} · ${fmtBytes((LOGMETA.file || {}).bytes)}</span></p></div>
+      <div style="margin-left:auto;display:flex;gap:.5rem">
+        <button class="btn" id="clearLogs" title="gli errori e gli avvisi non vengono rimossi">Pulisci log</button>
+      </div>
+    </div>
+    <div class="filters" id="logflows">
       <input id="logq" placeholder="cerca nel messaggio…" value="${esc(LOGS_STATE.q)}" class="search">
+      <select id="logsrc" class="search">
+        ${['all', 'realtime', 'web', 'api', 'gme', 'bolletta', 'sistema', 'general']
+          .map(s => `<option value="${s}" ${LOGS_STATE.src === s ? 'selected' : ''}>sorgente: ${s}</option>`).join('')}
+      </select>
+      <select id="loglvl" class="search">
+        ${['all', 'error', 'warning', 'info', 'success', 'debug']
+          .map(l => `<option value="${l}" ${LOGS_STATE.lvl === l ? 'selected' : ''}>tipo: ${l}</option>`).join('')}
+      </select>
+      <select id="logdays" class="search">
+        ${[1, 3, 7, 14, 30].map(d => `<option value="${d}" ${LOGMETA.days === d ? 'selected' : ''}>durata: ${d} g</option>`).join('')}
+      </select>
     </div>
     <div class="c"><div class="term" id="logterm" style="height:calc(100vh - 300px)"><div class="empty">caricamento…</div></div></div>`;
-  v.querySelectorAll('[data-flow]').forEach(el => el.addEventListener('click', async () => {
-    LOGS_STATE.flow = el.dataset.flow;
-    v.querySelectorAll('[data-flow]').forEach(x => x.classList.toggle('on', x.dataset.flow === LOGS_STATE.flow));
-    await loadLogs();
-  }));
-  let t = null;
+
+  let deb = null;
   $('#logq').addEventListener('input', (e) => {
     LOGS_STATE.q = e.target.value;
-    clearTimeout(t);
-    t = setTimeout(renderLogLines, 120);
+    clearTimeout(deb);
+    deb = setTimeout(renderLogLines, 120);
   });
+  $('#logsrc').addEventListener('change', (e) => { LOGS_STATE.src = e.target.value; renderLogLines(); });
+  $('#loglvl').addEventListener('change', (e) => { LOGS_STATE.lvl = e.target.value; renderLogLines(); });
+  $('#logdays').addEventListener('change', async (e) => {
+    const days = Number(e.target.value);
+    try {
+      const r = await api('/api/loop/logs/retention', { method: 'POST', body: JSON.stringify({ days }) });
+      LOGMETA.days = (r.retention_config || {}).days || days;
+      toast(`Log: ${LOGMETA.days} giorni`);
+      await loadLogs();
+    } catch (err) { toast('Retention non cambiata: ' + err.message); }
+  });
+  $('#clearLogs').addEventListener('click', async () => {
+    const r = await api('/api/loop/logs/clear', { method: 'POST' });
+    toast((r && r.message) || 'Log puliti');
+    await loadLogs();
+  });
+
   try { await loadLogs(); } catch (e) { $('#logterm').innerHTML = `<div class="empty">errore: ${esc(e.message)}</div>`; }
 }
 
