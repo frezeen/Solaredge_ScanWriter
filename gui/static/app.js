@@ -29,7 +29,7 @@ function shell(active) {
     <div class="logo">◈</div>
     ${NAV.map(([p, i, l]) => `<a class="ric ${p === active ? 'on' : ''}" href="#${p}" title="${l}">${i}</a>`).join('')}
     <div class="grow"></div>
-    <div class="foot">v26.16<br>solaredge</div>
+    <div class="foot">v26.17<br>solaredge</div>
   </aside>
   <main class="main">
     <div class="top">
@@ -627,6 +627,11 @@ async function viewLoop() {
     const iv = status.intervals_seconds || {};
     const allRuns = extractRuns(logs.logs || []).reverse();
     const runs = LOOP_STATE.runFlow === 'all' ? allRuns : allRuns.filter(r => r.flow === LOOP_STATE.runFlow);
+    const fails = runs.filter(r => !r.ok);
+    const reasonOf = (r) => {
+      const bad = r.lines.find(l => /ERROR|❌|fallit/i.test(String(l.message || l.msg || '')));
+      return bad ? String(bad.message || bad.msg || '') : '—';
+    };
     const totals = ['realtime_stats', 'web_stats', 'api_stats', 'gme_stats', 'bolletta_stats'].reduce((a, k) => {
       const f = st[k] || {};
       a.run += f.executed || 0; a.ok += f.success || 0; a.fail += f.failed || 0;
@@ -654,16 +659,20 @@ async function viewLoop() {
         <div class="note">Il loop e' sequenziale: ogni flusso parte quando scade il suo intervallo. Un fallimento non ferma gli altri; Stop ferma tutto fino al prossimo Start.</div>
       </div>
 
-      <div class="split-even">
-        <div class="c">
-          <div class="h"><span class="t">Ultimi run</span><span class="m">${runs.length} nel buffer</span></div>
-          <div class="filters">${['all', 'realtime', 'web', 'api', 'gme', 'bolletta'].map(k => `<button class="chip ${LOOP_STATE.runFlow === k ? 'on' : ''}" data-runflow="${k}">${k}</button>`).join('')}</div>
-          <div class="slist">${runs.slice(0, 20).map(r => `<div class="srow" data-run="${esc(r.flow)}" data-start="${esc(r.start)}"><span class="hd ${r.ok ? 'ok' : 'er'}"></span><span class="tag ${flowTag(r.flow)}">${esc(r.flow.slice(0,8).toUpperCase())}</span><span class="nm">${esc(r.start)} - ${esc(r.end)}</span><span class="mt">${fmtDur(r.start, r.end)}</span><span class="mt" style="color:var(--dim)">></span></div>`).join('') || '<div class="empty">nessun run di questo flusso nel buffer</div>'}</div>
-        </div>
-        <div class="c">
-          <div class="h"><span class="t">Log live</span><span class="m">ultimi 200</span></div>
-          <div class="term" id="loopterm" style="height:26rem">${(logs.logs || []).slice(-200).map(logLine).join('') || '<div class="empty">nessun log</div>'}</div>
-        </div>
+      <div class="c">
+        <div class="h"><span class="t">Run falliti</span><span class="m">${fails.length} su ${runs.length} run nel buffer</span></div>
+        <div class="filters">${['all','realtime','web','api','gme','bolletta'].map(k => `<button class="chip ${LOOP_STATE.runFlow === k ? 'on' : ''}" data-runflow="${k}">${k}</button>`).join('')}</div>
+        <div class="tblwrap"><table class="tbl">
+          <thead><tr><th>Flusso</th><th>Inizio</th><th>Fine</th><th class="num">Durata</th><th>Motivo</th></tr></thead>
+          <tbody>${fails.slice(0, 50).map(r => `<tr>
+            <td><span class="tag ${flowTag(r.flow)}">${esc(r.flow.slice(0, 8).toUpperCase())}</span></td>
+            <td class="mono">${esc(r.start)}</td>
+            <td class="mono">${esc(r.end)}</td>
+            <td class="num">${fmtDur(r.start, r.end)}</td>
+            <td>${esc(reasonOf(r))}</td>
+          </tr>`).join('') || `<tr><td colspan="5"><span class="empty">nessun run fallito${LOOP_STATE.runFlow === 'all' ? '' : ' per ' + esc(LOOP_STATE.runFlow)}</span></td></tr>`}</tbody>
+        </table></div>
+        <div class="note">Solo i falliti. La storia completa sta in Logs, con i filtri per sorgente e tipo.</div>
       </div>`;
 
     $('#loopToggle').addEventListener('click', async () => {
@@ -675,11 +684,6 @@ async function viewLoop() {
       LOOP_STATE.runFlow = el.dataset.runflow;
       viewLoop();
     }));
-    v.querySelectorAll('[data-run]').forEach(el => el.addEventListener('click', () => {
-      location.hash = `#/loop/run/${encodeURIComponent(el.dataset.run)}/${encodeURIComponent(el.dataset.start)}`;
-    }));
-    const term = $('#loopterm');
-    term.scrollTop = term.scrollHeight;
     window.scrollTo(0, keepY);
   } catch (e) {
     v.innerHTML = `<div class="empty">errore: ${esc(e.message)}</div>`;
