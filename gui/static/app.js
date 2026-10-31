@@ -29,7 +29,7 @@ function shell(active) {
     <div class="logo">◈</div>
     ${NAV.map(([p, i, l]) => `<a class="ric ${p === active ? 'on' : ''}" href="#${p}" title="${l}">${i}</a>`).join('')}
     <div class="grow"></div>
-    <div class="foot">v26.24<br>solaredge</div>
+    <div class="foot">v26.26<br>solaredge</div>
   </aside>
   <main class="main">
     <div class="top">
@@ -84,7 +84,7 @@ function extractRuns(logs) {
     if (!cur) continue;
     cur.lines.push(l);
     cur.end = ts;
-    if (/ERROR|❌|fallit/i.test(msg)) cur.ok = false;
+    if (/ERROR|WARN|❌|⚠|fallit/i.test(msg)) cur.ok = false;
   }
   if (cur) runs.push(cur);
   return runs;
@@ -670,7 +670,7 @@ async function viewLoop() {
 
       <div class="c">
         <div class="h">
-          <span class="t">Run falliti</span><span class="m">${fails.length} su ${runs.length} run nel buffer</span>
+          <span class="t">Run con errori o avvisi</span><span class="m">${fails.length} su ${runs.length} run nel buffer</span>
           <select id="runflow" class="search" style="max-width:14rem;margin-left:1rem">
             ${['all','realtime','web','api','gme','bolletta'].map(k => `<option value="${k}" ${LOOP_STATE.runFlow === k ? 'selected' : ''}>sorgente: ${k}</option>`).join('')}
           </select>
@@ -683,9 +683,8 @@ async function viewLoop() {
             <td class="mono">${esc(r.end)}</td>
             <td class="num">${fmtDur(r.start, r.end)}</td>
             <td style="white-space:normal">${esc(reasonOf(r))}</td>
-          </tr>`).join('') || `<tr><td colspan="5" style="padding:1rem;color:var(--dim)">nessun run fallito${LOOP_STATE.runFlow === 'all' ? '' : ' per ' + esc(LOOP_STATE.runFlow)} — qui compaiono flusso, inizio, fine, durata e motivo</td></tr>`}</tbody>
+          </tr>`).join('')}</tbody>
         </table></div>
-        <div class="note">Solo i falliti. La storia completa sta in Logs, con i filtri per sorgente e tipo.</div>
       </div>`;
 
     $('#loopToggle').addEventListener('click', async () => {
