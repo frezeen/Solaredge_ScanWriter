@@ -811,7 +811,13 @@ except Exception as e:
                             try:
                                 get_resp = requests.get(api_url, auth=(grafana_user, grafana_pass), timeout=10)
                                 if get_resp.status_code == 200:
-                                    dashboard_json['metadata']['resourceVersion'] = get_resp.json()['metadata']['resourceVersion']
+                                    cur_md = get_resp.json().get('metadata', {}) or {}
+                                    # Grafana confronta l'uid del corpo con quello
+                                    # della risorsa: quello del file e' di un'altra
+                                    # installazione, va preso dal box che riceve.
+                                    dashboard_json['metadata']['resourceVersion'] = cur_md.get('resourceVersion')
+                                    if cur_md.get('uid'):
+                                        dashboard_json['metadata']['uid'] = cur_md['uid']
                             except Exception as e:
                                 self.log(f"Warning: could not read current resourceVersion: {e}", "WARNING")
                             put_resp = requests.put(api_url, auth=(grafana_user, grafana_pass), json=dashboard_json, timeout=10)
@@ -824,7 +830,7 @@ except Exception as e:
                             if put_resp.status_code == 404 and title:
                                 body = dict(dashboard_json)
                                 body['metadata'] = {k: v for k, v in (body.get('metadata') or {}).items()
-                                                    if k != 'resourceVersion'}
+                                                    if k not in ('resourceVersion', 'uid')}
                                 cr = requests.post(
                                     f"{grafana_url}/apis/dashboard.grafana.app/v2/namespaces/{ns}/dashboards",
                                     auth=(grafana_user, grafana_pass), json=body, timeout=10)
