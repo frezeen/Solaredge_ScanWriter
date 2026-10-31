@@ -182,7 +182,7 @@ curl -H "Authorization: Bearer $V2_ACCESS_TOKEN" \
 
 - Sito di riferimento: **1234567**; la chiave V1 attiva resta in `.env` (non qui).
 - Perimetro migrazione: **solo il `collector_api`** (chiave V1). Il realtime legge l'inverter
-  via Modbus locale (192.168.2.225:1502, nessun costo); il collector `web` è scraping del
+  via Modbus locale (<ip-inverter>:1502, nessun costo); il collector `web` è scraping del
   portale (login `/solaredge-apigw/api/login` risponde 410 dal 21/10/2026, sopravvive finché
   il server accetta il vecchio cookie — non migrabile, va sostituito o disattivato).
 - Migrazione da pianificare entro il 2026-10-31 per non subire la finestra di deprecazione.

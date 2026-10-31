@@ -62,7 +62,7 @@ class SolarEdgeWebConfig:
 @dataclass(frozen=True)
 class RealtimeConfig:
     """Configurazione Modbus Realtime."""
-    host: str = "192.168.2.59"
+    host: str = "127.0.0.1"
     port: int = 1502
     timeout: int = 1
     unit: int = 1
@@ -240,7 +240,7 @@ class ConfigManager:
     def get_realtime_config(self) -> RealtimeConfig:
         """Ottieni configurazione Realtime dalle variabili d'ambiente."""
         return RealtimeConfig(
-            host=os.environ.get('REALTIME_MODBUS_HOST', '192.168.2.59'),
+            host=os.environ.get('REALTIME_MODBUS_HOST', '127.0.0.1'),
             port=int(os.environ.get('REALTIME_MODBUS_PORT', '1502')),
             timeout=int(os.environ.get('REALTIME_MODBUS_TIMEOUT', '1')),
             unit=int(os.environ.get('REALTIME_MODBUS_UNIT', '1'))
