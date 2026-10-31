@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Collector API — SolarEdge Monitoring API v2 (Site Access / OAuth 2.0).
 
-La Monitoring API v1 è ritirata: qui non c'è più niente da comporre, né URL né
-api key. Il client vive in `collector/solaredge_v2.py` e risponde nella forma
-(`energyDetails.meters[].values`) che il parser e Influx si aspettano.
+Qui non c'è niente da comporre: né URL né api key. Il client vive in
+`collector/solaredge_v2.py` e risponde con `energyDetails.meters[].values`, la
+forma che il parser e Influx si aspettano.
 """
 
 import logging
@@ -65,7 +65,7 @@ class CollectorAPI:
         return results
 
     def archive_payload(self, endpoint_name: str, payload: Dict[str, Any]) -> None:
-        """Archivia nella stessa cache che alimentava la v1: un file per giorno,
+        """Archivia nella cache: un file per giorno,
         stesso wrapper `{data, source, endpoint, date, data_hash}`.
 
         Nessuno la legge piu' (la coda di un giorno letto dal vivo non e' quella

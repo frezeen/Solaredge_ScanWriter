@@ -1,9 +1,7 @@
 """SolarEdge Monitoring API v2 (Site Access / OAuth 2.0).
 
-Sostituisce la V1, ritirata il 1/11/2026. Due chiamate per endpoint bastano:
-ogni risposta contiene la giornata intera a 15 minuti.
-
-I payload tornano nella forma V1 (`energyDetails.meters[].values`) cosi' il
+Due chiamate per endpoint bastano: ogni risposta contiene la giornata intera a
+15 minuti. I payload tornano con `energyDetails.meters[].values`, cosi' il
 parser, Influx e le dashboard restano identici.
 """
 
@@ -63,7 +61,7 @@ def _write_json(path: Path, obj: Any, private: bool = False) -> None:
 def _immutable_site_fields() -> Dict[str, Any]:
     """Impianto e moduli: la V2 non li espone e non cambiano nel tempo.
 
-    Si leggono dal payload v1 piu' recente rimasto in archivio; se l'archivio
+    Si leggono dal payload piu' recente rimasto in archivio; se l'archivio
     non c'e' restano assenti e il pannello mostra quelle colonne vuote.
     """
     try:
@@ -236,11 +234,11 @@ class SolarEdgeV2:
         return meta
 
     def site_details_payload(self) -> Dict[str, Any]:
-        """Forma V1 per il parser: {'details': {...}}.
+        """Il payload per il parser: {'details': {...}}.
 
         La V2 non pubblica `status`, `type` e `primaryModule`: il primo arriva da
         `activationStatus`, gli altri due non cambiano mai e si leggono
-        dall'archivio v1 congelato, che e' l'unica cosa che se ne legge ancora.
+        dall'archivio congelato, che e' l'unica cosa che se ne legge ancora.
         """
         meta = self.site_meta()
         details = {k: v for k, v in meta.items() if not k.startswith("_")}
@@ -297,7 +295,7 @@ class SolarEdgeV2:
     def energy_details_payload(self, day: Optional[date] = None,
                                with_production: bool = True,
                                include_previous: bool = False) -> Dict[str, Any]:
-        """Forma V1 (`energyDetails.meters[].values`) costruita da V2.
+        """`energyDetails.meters[].values`, costruito da questo collector.
 
         I contatori si leggono sempre (una chiamata); la produzione solo se
         `with_production`, perche' di notte non cambia. `include_previous`
@@ -316,7 +314,7 @@ class SolarEdgeV2:
         return payload
 
     def range_payload(self, start: date, stop: date) -> Dict[str, Any]:
-        """Forma V1 per un intervallo [start, stop), al massimo una settimana.
+        """`energyDetails.meters[].values` per un intervallo [start, stop), al massimo una settimana.
 
         E' il limite del fornitore su QUARTER_HOUR ("maximum window of 1 week"):
         una settimana costa due chiamate, una per endpoint.
