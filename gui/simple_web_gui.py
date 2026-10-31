@@ -299,7 +299,7 @@ class SimpleWebGUI:
             }
             # Quali flussi a dataset fisso sono abilitati
             status['flows_enabled'] = {
-                'gme': bool(self.config.get('gme', {}).get('enabled', False)),
+                'gme': str(os.environ.get('GME_ENABLED', 'false')).lower() == 'true',
                 'bolletta': str(os.environ.get('BOLLETTA_ENABLED', 'false')).lower() == 'true',
             }
             return web.json_response(status)
@@ -484,7 +484,7 @@ class SimpleWebGUI:
         self.app.router.add_post('/api/devices/metrics/toggle', self.handle_toggle_device_metric)
         self.app.router.add_post('/api/modbus/devices/toggle', self.handle_toggle_modbus_device)
         self.app.router.add_post('/api/modbus/devices/metrics/toggle', self.handle_toggle_modbus_metric)
-        self.app.router.add_post('/api/gme/toggle', self.handle_toggle_gme)
+        self.app.router.add_post('/api/flows/toggle', self.handle_toggle_flow)
 
         self.app.router.add_post('/api/log', self.handle_log)
 
@@ -707,33 +707,43 @@ class SimpleWebGUI:
         except Exception as e:
             return self.error_handler.handle_api_error(e, "toggling modbus device metric", "Error toggling modbus metric")
 
-    async def handle_toggle_gme(self, request: web.Request) -> web.Response:
-        """Toggle GME flow enabled/disabled state"""
+    async def handle_toggle_flow(self, request: web.Request) -> web.Response:
+        """Abilita o disabilita un flusso a dataset fisso, scrivendo .env.
+
+        I flag GME_ENABLED / BOLLETTA_ENABLED vivono nel .env e il loop li
+        rilegge a ogni giro, quindi il cambio vale senza riavviare il servizio.
+        """
+        env_keys = {'gme': 'GME_ENABLED', 'bolletta': 'BOLLETTA_ENABLED'}
+        flow = request.query.get('flow') or request.query.get('id') or ''
+        key = env_keys.get(flow)
+        if not key:
+            return web.json_response(
+                {'status': 'error', 'message': f'Flusso sconosciuto: {flow}'}, status=400)
+
         try:
-            await self.load_config()
+            env_path = Path(self.config_handler.CONFIG_FILE_PATHS['env'])
+            current = os.environ.get(key, 'false').strip().lower() == 'true'
+            value = 'false' if current else 'true'
 
-            # Toggle GME enabled state
-            current_state = self.config.get('gme', {}).get('enabled', False)
-            new_state = not current_state
+            lines = env_path.read_text(encoding='utf-8').splitlines() if env_path.exists() else []
+            for i, line in enumerate(lines):
+                if line.split('=', 1)[0].strip() == key:
+                    lines[i] = f'{key}={value}'
+                    break
+            else:
+                lines.append(f'{key}={value}')
+            env_path.write_text('\n'.join(lines) + '\n', encoding='utf-8')
 
-            if 'gme' not in self.config:
-                self.config['gme'] = {}
-
-            self.config['gme']['enabled'] = new_state
-
-            # Save config
-            await self.save_config()
-
-            self.logger.info(f"[GUI] GME {'abilitato' if new_state else 'disabilitato'}")
-
+            os.environ[key] = value
+            self.logger.info(f"[GUI] {flow} {'abilitato' if value == 'true' else 'disabilitato'}")
             return web.json_response({
                 'status': 'success',
-                'message': f'GME {"abilitato" if new_state else "disabilitato"}',
-                'enabled': new_state
+                'flow': flow,
+                'enabled': value == 'true',
+                'message': f"{flow.capitalize()} {'abilitato' if value == 'true' else 'disabilitato'}",
             })
-
         except Exception as e:
-            return self.error_handler.handle_api_error(e, "toggling GME", "Error toggling GME")
+            return self.error_handler.handle_api_error(e, f"toggling {flow}", "Error toggling flow")
 
     async def handle_check_updates(self, request: web.Request) -> web.Response:
         """Controlla se ci sono nuovi aggiornamenti disponibili"""

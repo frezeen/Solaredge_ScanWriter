@@ -133,6 +133,11 @@ class LoopExecutor:
             while self.state_manager.loop_running and not self.state_manager.stop_requested:
                 current_time = datetime.now()
 
+                # I flag dei flussi fissi si rileggono a ogni giro: il toggle
+                # della GUI scrive .env e os.environ, senza riavviare il servizio.
+                gme_enabled = os.getenv('GME_ENABLED', 'false').lower() == 'true'
+                bolletta_enabled = os.getenv('BOLLETTA_ENABLED', 'false').lower() == 'true'
+
                 # Calcola tempo fino alla prossima operazione
                 time_until_api_web = (last_api_web_run + api_web_interval - current_time).total_seconds()
                 time_until_realtime = (last_realtime_run + realtime_interval - current_time).total_seconds()

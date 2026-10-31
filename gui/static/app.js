@@ -29,7 +29,7 @@ function shell(active) {
     <div class="logo">◈</div>
     ${NAV.map(([p, i, l]) => `<a class="ric ${p === active ? 'on' : ''}" href="#${p}" title="${l}">${i}</a>`).join('')}
     <div class="grow"></div>
-    <div class="foot">v26.10<br>solaredge</div>
+    <div class="foot">v26.11<br>solaredge</div>
   </aside>
   <main class="main">
     <div class="top">
@@ -98,7 +98,7 @@ function bindToggles(root) {
   root.querySelectorAll('[data-toggle]').forEach(el => el.addEventListener('click', async (e) => {
     e.stopPropagation();
     const kind = el.dataset.toggle, id = el.dataset.id;
-    const map = { web: '/api/devices/toggle', api: '/api/endpoints/toggle', modbus: '/api/modbus/devices/toggle', webmetric: '/api/devices/metrics/toggle', modbusmetric: '/api/modbus/devices/metrics/toggle', gme: '/api/gme/toggle' };
+    const map = { web: '/api/devices/toggle', api: '/api/endpoints/toggle', modbus: '/api/modbus/devices/toggle', webmetric: '/api/devices/metrics/toggle', modbusmetric: '/api/modbus/devices/metrics/toggle', flow: '/api/flows/toggle' };
     let url = `${map[kind]}?id=${encodeURIComponent(id)}`;
     if (el.dataset.metric) url += '&metric=' + encodeURIComponent(el.dataset.metric);
     try { await api(url, { method: 'POST' }); route(); }
@@ -277,9 +277,10 @@ async function viewOverview() {
           const lastTime = f.key === 'realtime' ? (st.last_update_formatted || '—') : (st[f.key + '_last_run'] || '—');
           const lastRel = f.key !== 'realtime' && st[f.last] ? rel(st[f.last]) : '';
           const nextRel = st[f.next] ? rel(st[f.next]) : '';
-          const off = f.key === 'gme' && !gmeOn;
+          const on = f.key === 'gme' ? gmeOn : f.key === 'bolletta' ? bollettaOn : true;
+          const off = (f.key === 'gme' || f.key === 'bolletta') && !on;
           return `<tr>
-            <td><span class="name"><span class="hd ${off ? 'off' : 'ok'}"></span>${esc(f.label)}${off ? ' <span class="tag t-off">off</span>' : ''}</span></td>
+            <td><span class="name"><span class="hd ${off ? 'off' : 'ok'}"></span>${esc(f.label)}${off ? ' <span class="tag t-off">off</span>' : ''}${f.key === 'gme' || f.key === 'bolletta' ? toggleHtml('flow', f.key, on) : ''}</span></td>
             <td class="mono">${every((status.intervals_seconds || {})[f.key])}</td>
             <td>${esc(lastTime)}${lastRel ? ` <span class="sub">${lastRel}</span>` : ''}</td>
             <td>${esc(st[f.key + '_next_run'] || '—')}${nextRel ? ` <span class="sub">${nextRel}</span>` : ''}</td>
@@ -317,6 +318,7 @@ async function viewOverview() {
 
   const term = $('#overr');
   if (term) term.scrollTop = term.scrollHeight;
+  bindToggles(v);
   window.scrollTo(0, keepY);
 }
 
