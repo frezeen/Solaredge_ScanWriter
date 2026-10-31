@@ -20,6 +20,9 @@ python-dotenv>=1.0.0
 # Async file operations
 aiofiles>=22.1.0
 
+# ARERA xlsx parsing (bolletta flow)
+openpyxl>=3.1.0
+
 # Timezone support
 pytz>=2023.3
 
