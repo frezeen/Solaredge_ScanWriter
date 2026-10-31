@@ -29,7 +29,7 @@ function shell(active) {
     <div class="logo">◈</div>
     ${NAV.map(([p, i, l]) => `<a class="ric ${p === active ? 'on' : ''}" href="#${p}" title="${l}">${i}</a>`).join('')}
     <div class="grow"></div>
-    <div class="foot">v26.27<br>solaredge</div>
+    <div class="foot">v26.30<br>solaredge</div>
   </aside>
   <main class="main">
     <div class="top">
@@ -67,28 +67,6 @@ function fmtDur(a, b) {
   const p = (t) => { const [h, m, s] = String(t).split(':').map(Number); return h * 3600 + m * 60 + s; };
   const d = p(b) - p(a);
   return d >= 0 && d < 86400 ? d + 's' : '—';
-}
-
-function extractRuns(logs) {
-  const runs = [];
-  let cur = null;
-  for (const l of logs) {
-    const msg = String(l.message || l.msg || '');
-    const flow = String(l.flow_type || l.flow || 'sistema');
-    const ts = l.timestamp || l.time || '';
-    if (/Avvio (flusso|raccolta)/i.test(msg)) {
-      if (cur) runs.push(cur);
-      cur = { flow, start: ts, end: ts, ok: true, lines: [l] };
-      continue;
-    }
-    if (!cur) continue;
-    cur.lines.push(l);
-    cur.end = ts;
-    const lvl = String(l.level || '').toUpperCase();
-    if (/ERROR|WARN|❌|⚠|fallit/i.test(msg) || lvl.startsWith('WARN') || lvl.startsWith('ERR')) cur.ok = false;
-  }
-  if (cur) runs.push(cur);
-  return runs;
 }
 
 function toggleHtml(kind, id, on) {
@@ -629,22 +607,17 @@ async function viewLoop() {
   const keepY = window.scrollY;
   const token = VIEW_TOKEN;
   try {
-    const [status, logs] = await Promise.all([api('/api/loop/status'), api('/api/loop/logs?flow=all&limit=800')]);
+    const [status, errArchive] = await Promise.all([
+      api('/api/loop/status'), api('/api/loop/errors?limit=500'),
+    ]);
     if (token !== VIEW_TOKEN) return;
     const st = status.stats || {};
     const fe = status.flows_enabled || {};
     const iv = status.intervals_seconds || {};
-    const allRuns = extractRuns(logs.logs || []).reverse();
-    const runs = LOOP_STATE.runFlow === 'all' ? allRuns : allRuns.filter(r => r.flow === LOOP_STATE.runFlow);
-    const fails = runs.filter(r => !r.ok);
-    const reasonOf = (r) => {
-      const bad = r.lines.find(l => {
-        const m = String(l.message || l.msg || '');
-        const lvl = String(l.level || '').toUpperCase();
-        return /ERROR|WARN|❌|⚠|fallit/i.test(m) || lvl.startsWith('WARN') || lvl.startsWith('ERR');
-      });
-      return bad ? String(bad.message || bad.msg || '') : '—';
-    };
+    // L'archivio non scade: qui restano gli errori e gli avvisi anche quando il
+    // buffer in memoria li ha gia' fatti scorrere via.
+    const allErrs = (errArchive.errors || []).slice().reverse();
+    const evts = LOOP_STATE.runFlow === 'all' ? allErrs : allErrs.filter(e => String(e.flow_type || 'general') === LOOP_STATE.runFlow);
     const totals = ['realtime_stats', 'web_stats', 'api_stats', 'gme_stats', 'bolletta_stats'].reduce((a, k) => {
       const f = st[k] || {};
       a.run += f.executed || 0; a.ok += f.success || 0; a.fail += f.failed || 0;
@@ -663,7 +636,7 @@ async function viewLoop() {
         <div class="kpi"><div class="t">Uptime</div><div class="v" style="font-size:1.5rem">${esc(st.uptime_formatted || '-')}</div><div class="s">dall'avvio del processo</div></div>
         <div class="kpi"><div class="t">Ultimo ciclo</div><div class="v" style="font-size:1.5rem">${esc(st.last_update_formatted || '-')}</div><div class="s">ultima iterazione</div></div>
         <div class="kpi ok"><div class="t">Run</div><div class="v">${totals.run}</div><div class="s">${totals.ok} ok</div></div>
-        <div class="kpi ${totals.fail ? 'bad' : ''}"><div class="t">Falliti</div><div class="v">${totals.fail}</div><div class="s">${totals.fail ? 'da controllare nei log' : 'nessuno'}</div></div>
+        <div class="kpi ${allErrs.length ? 'bad' : ''}"><div class="t">Con errori o avvisi</div><div class="v">${allErrs.length}</div><div class="s">${allErrs.length ? 'nella tabella in basso' : 'nessuno'}</div></div>
       </div>
 
       <div class="c">
@@ -675,19 +648,18 @@ async function viewLoop() {
 
       <div class="c">
         <div class="h">
-          <span class="t">Run con errori o avvisi</span><span class="m">${fails.length} su ${runs.length} run nel buffer</span>
+          <span class="t">Errori e avvisi</span><span class="m">${evts.length} in archivio, mai rimossi</span>
           <select id="runflow" class="search" style="max-width:14rem;margin-left:1rem">
             ${['all','realtime','web','api','gme','bolletta'].map(k => `<option value="${k}" ${LOOP_STATE.runFlow === k ? 'selected' : ''}>sorgente: ${k}</option>`).join('')}
           </select>
         </div>
         <div class="tblwrap"><table class="tbl">
-          <thead><tr><th>Flusso</th><th>Inizio</th><th>Fine</th><th class="num">Durata</th><th>Motivo</th></tr></thead>
-          <tbody>${fails.slice(0, 50).map(r => `<tr>
-            <td><span class="tag ${flowTag(r.flow)}">${esc(r.flow.slice(0, 8).toUpperCase())}</span></td>
-            <td class="mono">${esc(r.start)}</td>
-            <td class="mono">${esc(r.end)}</td>
-            <td class="num">${fmtDur(r.start, r.end)}</td>
-            <td style="white-space:normal">${esc(reasonOf(r))}</td>
+          <thead><tr><th>Flusso</th><th>Orario</th><th>Livello</th><th>Motivo</th></tr></thead>
+          <tbody>${evts.slice(0, 200).map(e => `<tr>
+            <td><span class="tag ${flowTag(e.flow_type)}">${esc(String(e.flow_type || 'general').slice(0, 8).toUpperCase())}</span></td>
+            <td class="mono">${esc(e.timestamp || '')}</td>
+            <td>${esc(String(e.level || '').toUpperCase())}</td>
+            <td style="white-space:normal">${esc(e.message || '')}</td>
           </tr>`).join('')}</tbody>
         </table></div>
       </div>`;
