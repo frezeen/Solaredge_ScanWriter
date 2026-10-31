@@ -51,6 +51,7 @@ cache/web/
 cache/gme/
 cache/snapshots/*
 !cache/snapshots/.gitkeep
+cache/oauth/
 cache/*.json
 cache/*.cache
 *.cache

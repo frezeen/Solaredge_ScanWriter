@@ -2,7 +2,7 @@ global:
   api_request_timeout: 20
   batch_request_timeout: 60
   filter_debug: false
-  site_id: 1234567
+  site_id: ${SOLAREDGE_SITE_ID}
   timeout_seconds: 30
   timezone: Europe/Rome
   web_request_timeout: 40
@@ -26,7 +26,7 @@ influxdb:
   org: fotovoltaico
   retry_interval_ms: 1000
   token: ${INFLUXDB_TOKEN}
-  url: http://192.168.2.124:8086
+  url: ${INFLUXDB_URL}
   write_precision: s
 logging:
   file_logging: true
@@ -40,16 +40,10 @@ scheduler:
   web_delay_seconds: 2
 solaredge:
   api:
-    api_key: ${SOLAREDGE_API_KEY}
-    base_url: https://monitoringapi.solaredge.com
-    rate_limit_seconds: 1
-    retry_attempts: 3
-    retry_delay_seconds: 2
-    site_id: 1234567
-    timeout_seconds: 30
+    site_id: ${SOLAREDGE_SITE_ID}
   modbus:
     enabled: true
-    host: 192.168.2.225
+    host: ${REALTIME_MODBUS_HOST}
     port: 1502
     retries: 3
     timeout: 1
