@@ -818,6 +818,11 @@ except Exception as e:
                                     dashboard_json['metadata']['resourceVersion'] = cur_md.get('resourceVersion')
                                     if cur_md.get('uid'):
                                         dashboard_json['metadata']['uid'] = cur_md['uid']
+                                    # l'id interno legacy vive in un label: va
+                                    # conservato quello del box di destinazione
+                                    labels = dict((dashboard_json['metadata'] or {}).get('labels') or {})
+                                    labels.update(cur_md.get('labels') or {})
+                                    dashboard_json['metadata']['labels'] = labels
                             except Exception as e:
                                 self.log(f"Warning: could not read current resourceVersion: {e}", "WARNING")
                             put_resp = requests.put(api_url, auth=(grafana_user, grafana_pass), json=dashboard_json, timeout=10)
