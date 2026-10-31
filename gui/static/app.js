@@ -29,7 +29,7 @@ function shell(active) {
     <div class="logo">◈</div>
     ${NAV.map(([p, i, l]) => `<a class="ric ${p === active ? 'on' : ''}" href="#${p}" title="${l}">${i}</a>`).join('')}
     <div class="grow"></div>
-    <div class="foot">v26.26<br>solaredge</div>
+    <div class="foot">v26.27<br>solaredge</div>
   </aside>
   <main class="main">
     <div class="top">
@@ -84,7 +84,8 @@ function extractRuns(logs) {
     if (!cur) continue;
     cur.lines.push(l);
     cur.end = ts;
-    if (/ERROR|WARN|❌|⚠|fallit/i.test(msg)) cur.ok = false;
+    const lvl = String(l.level || '').toUpperCase();
+    if (/ERROR|WARN|❌|⚠|fallit/i.test(msg) || lvl.startsWith('WARN') || lvl.startsWith('ERR')) cur.ok = false;
   }
   if (cur) runs.push(cur);
   return runs;
@@ -637,7 +638,11 @@ async function viewLoop() {
     const runs = LOOP_STATE.runFlow === 'all' ? allRuns : allRuns.filter(r => r.flow === LOOP_STATE.runFlow);
     const fails = runs.filter(r => !r.ok);
     const reasonOf = (r) => {
-      const bad = r.lines.find(l => /ERROR|❌|fallit/i.test(String(l.message || l.msg || '')));
+      const bad = r.lines.find(l => {
+        const m = String(l.message || l.msg || '');
+        const lvl = String(l.level || '').toUpperCase();
+        return /ERROR|WARN|❌|⚠|fallit/i.test(m) || lvl.startsWith('WARN') || lvl.startsWith('ERR');
+      });
       return bad ? String(bad.message || bad.msg || '') : '—';
     };
     const totals = ['realtime_stats', 'web_stats', 'api_stats', 'gme_stats', 'bolletta_stats'].reduce((a, k) => {
