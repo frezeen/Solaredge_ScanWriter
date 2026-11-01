@@ -714,6 +714,63 @@ except Exception as e:
         body['metadata'] = md
         return body
 
+    @staticmethod
+    def rewrite_datasource_refs(dashboard_json: dict, influx_uid, sunmoon_uid) -> list:
+        """Allinea i riferimenti ai datasource al Grafana che riceve il file.
+
+        Un export v2 porta ``{"datasource": {"name": "<uid>"}}`` con il plugin in
+        ``group`` accanto; il formato vecchio porta ``{"type": ..., "uid": ...}``.
+        L'uid nel file e' di un'altra installazione: senza questa passata ogni
+        pannello cerca un datasource che su quel box non esiste.
+        """
+        ref_map = {}
+
+        def collect(obj):
+            if isinstance(obj, dict):
+                ds = obj.get('datasource')
+                if isinstance(ds, dict) and isinstance(ds.get('name'), str):
+                    group = obj.get('group')
+                    if group == 'influxdb' and influx_uid:
+                        ref_map[ds['name']] = influx_uid
+                    elif group == 'fetzerch-sunandmoon-datasource' and sunmoon_uid:
+                        ref_map[ds['name']] = sunmoon_uid
+                for value in obj.values():
+                    collect(value)
+            elif isinstance(obj, list):
+                for item in obj:
+                    collect(item)
+
+        rewritten = []
+
+        def apply(obj, path=()):
+            if isinstance(obj, dict):
+                ds = obj.get('datasource')
+                if isinstance(ds, dict) and ds.get('name') in ref_map:
+                    if ds['name'] != ref_map[ds['name']]:
+                        ds['name'] = ref_map[ds['name']]
+                        rewritten.append(path)
+                if obj.get('type') == 'influxdb' and influx_uid:
+                    if obj.get('uid') != influx_uid:
+                        obj['uid'] = influx_uid
+                        rewritten.append(path)
+                elif obj.get('type') == 'fetzerch-sunandmoon-datasource' and sunmoon_uid:
+                    if obj.get('uid') != sunmoon_uid:
+                        obj['uid'] = sunmoon_uid
+                        rewritten.append(path)
+                elif 'uid' in obj and 'type' not in obj and influx_uid and path[-1:] != ('metadata',):
+                    if obj['uid'] != influx_uid:
+                        obj['uid'] = influx_uid
+                        rewritten.append(path)
+                for key, value in obj.items():
+                    apply(value, path + (key,))
+            elif isinstance(obj, list):
+                for idx, item in enumerate(obj):
+                    apply(item, path + (idx,))
+
+        collect(dashboard_json)
+        apply(dashboard_json)
+        return rewritten
+
     def ensure_grafana_plugins(self) -> None:
         """Installa i plugin della dashboard e il datasource Sun and Moon se mancano.
 
@@ -833,36 +890,12 @@ except Exception as e:
                     with open(dashboard_file, 'r') as f:
                         dashboard_json = json.load(f)
 
-                    # 3. Aggiorna UIDs nel dashboard (walk through nested structure)
-                    def update_datasource_uids(obj, influx_uid, sunmoon_uid, path=()):
-                        """Recursively update data source UIDs in dashboard JSON"""
-                        if isinstance(obj, dict):
-                            # Update InfluxDB datasources (with type field)
-                            if obj.get('type') == 'influxdb' and influx_uid:
-                                obj['uid'] = influx_uid
-                            # Update Sun and Moon datasources (with type field)
-                            elif obj.get('type') == 'fetzerch-sunandmoon-datasource' and sunmoon_uid:
-                                obj['uid'] = sunmoon_uid
-                            # Update datasource objects without type (panel-level datasources)
-                            # These are typically InfluxDB datasources in panels.
-                            # metadata.uid is the DASHBOARD's own uid, not a
-                            # datasource: rewriting it corrupts the identity
-                            # the v2 PUT is addressed by, so skip it.
-                            elif ('uid' in obj and 'type' not in obj and influx_uid
-                                  and path[-1] != 'metadata'):
-                                # This is a datasource reference object like {"uid": "xxx"}
-                                obj['uid'] = influx_uid
-                            # Recurse into nested objects
-                            for key, value in obj.items():
-                                update_datasource_uids(value, influx_uid, sunmoon_uid, path + (key,))
-                        elif isinstance(obj, list):
-                            # Recurse into list items
-                            for idx, item in enumerate(obj):
-                                update_datasource_uids(item, influx_uid, sunmoon_uid, path + (idx,))
-
-                    if influx_uid or sunmoon_uid:
-                        update_datasource_uids(dashboard_json, influx_uid, sunmoon_uid, ())
-                        self.log("✅ Dashboard UIDs updated", "SUCCESS")
+                    # 3. Allinea i riferimenti ai datasource al Grafana che riceve il file
+                    rewritten = self.rewrite_datasource_refs(dashboard_json, influx_uid, sunmoon_uid)
+                    if rewritten:
+                        self.log(f"✅ Dashboard UIDs updated ({len(rewritten)} riferimenti)", "SUCCESS")
+                    elif influx_uid or sunmoon_uid:
+                        self.log("ℹ️ Riferimenti ai datasource già allineati", "INFO")
                     else:
                         self.log("⚠️ No data source UIDs found, importing dashboard as-is", "WARNING")
 
