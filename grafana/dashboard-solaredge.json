@@ -7815,17 +7815,13 @@
           },
           "vizConfig": {
             "kind": "VizConfig",
-            "group": "text",
-            "version": "13.2.4",
+            "group": "volkovlabs-variable-panel",
+            "version": "5.2.0",
             "spec": {
               "options": {
-                "code": {
-                  "language": "html",
-                  "showLineNumbers": false,
-                  "showMiniMap": false
-                },
-                "content": "<div style=\"display:flex;flex-wrap:wrap;gap:4px;align-items:center;font-size:12px;padding:2px\"><span style=\"opacity:.7;margin-right:4px\">Bolletta del mese:</span><a href=\"?var-bolletta_mese=2026-11\" style=\"padding:2px 6px;border:1px solid #666;border-radius:3px;text-decoration:none;color:inherit\">nov 26</a><a href=\"?var-bolletta_mese=2026-10\" style=\"padding:2px 6px;border:1px solid #666;border-radius:3px;text-decoration:none;color:inherit\">ott 26</a><a href=\"?var-bolletta_mese=2026-09\" style=\"padding:2px 6px;border:1px solid #666;border-radius:3px;text-decoration:none;color:inherit\">set 26</a><a href=\"?var-bolletta_mese=2026-08\" style=\"padding:2px 6px;border:1px solid #666;border-radius:3px;text-decoration:none;color:inherit\">ago 26</a><a href=\"?var-bolletta_mese=2026-07\" style=\"padding:2px 6px;border:1px solid #666;border-radius:3px;text-decoration:none;color:inherit\">lug 26</a><a href=\"?var-bolletta_mese=2026-06\" style=\"padding:2px 6px;border:1px solid #666;border-radius:3px;text-decoration:none;color:inherit\">giu 26</a><a href=\"?var-bolletta_mese=2026-05\" style=\"padding:2px 6px;border:1px solid #666;border-radius:3px;text-decoration:none;color:inherit\">mag 26</a><a href=\"?var-bolletta_mese=2026-04\" style=\"padding:2px 6px;border:1px solid #666;border-radius:3px;text-decoration:none;color:inherit\">apr 26</a><a href=\"?var-bolletta_mese=2026-03\" style=\"padding:2px 6px;border:1px solid #666;border-radius:3px;text-decoration:none;color:inherit\">mar 26</a><a href=\"?var-bolletta_mese=2026-02\" style=\"padding:2px 6px;border:1px solid #666;border-radius:3px;text-decoration:none;color:inherit\">feb 26</a><a href=\"?var-bolletta_mese=2026-01\" style=\"padding:2px 6px;border:1px solid #666;border-radius:3px;text-decoration:none;color:inherit\">gen 26</a><a href=\"?var-bolletta_mese=2025-12\" style=\"padding:2px 6px;border:1px solid #666;border-radius:3px;text-decoration:none;color:inherit\">dic 25</a><a href=\"?var-bolletta_mese=2025-11\" style=\"padding:2px 6px;border:1px solid #666;border-radius:3px;text-decoration:none;color:inherit\">nov 25</a><a href=\"?var-bolletta_mese=2025-10\" style=\"padding:2px 6px;border:1px solid #666;border-radius:3px;text-decoration:none;color:inherit\">ott 25</a><a href=\"?var-bolletta_mese=2025-09\" style=\"padding:2px 6px;border:1px solid #666;border-radius:3px;text-decoration:none;color:inherit\">set 25</a><a href=\"?var-bolletta_mese=2025-08\" style=\"padding:2px 6px;border:1px solid #666;border-radius:3px;text-decoration:none;color:inherit\">ago 25</a><a href=\"?var-bolletta_mese=2025-07\" style=\"padding:2px 6px;border:1px solid #666;border-radius:3px;text-decoration:none;color:inherit\">lug 25</a><a href=\"?var-bolletta_mese=2025-06\" style=\"padding:2px 6px;border:1px solid #666;border-radius:3px;text-decoration:none;color:inherit\">giu 25</a></div>",
-                "mode": "html"
+                "displayMode": "minimize",
+                "padding": 0,
+                "variable": "bolletta_mese"
               },
               "fieldConfig": {
                 "defaults": {},
@@ -9043,17 +9039,36 @@
         }
       },
       {
-        "kind": "TextVariable",
+        "kind": "QueryVariable",
         "spec": {
           "name": "bolletta_mese",
           "current": {
-            "text": "2026-09",
-            "value": "2026-09"
+            "text": "",
+            "value": ""
           },
-          "query": "2026-09",
-          "label": "Mese bolletta",
+          "label": "Bolletta del mese",
           "hide": "hideVariable",
-          "skipUrlSync": false
+          "refresh": "onDashboardLoad",
+          "skipUrlSync": false,
+          "query": {
+            "kind": "DataQuery",
+            "group": "influxdb",
+            "version": "v0",
+            "datasource": {
+              "name": "ff27vpmruzxtsc"
+            },
+            "spec": {
+              "__legacyStringValue": "from(bucket: \"Bolletta\")\n  |> range(start: -400d)\n  |> filter(fn: (r) => r._measurement == \"tasse\" and r._field == \"disp\")\n  |> keep(columns: [\"mese\"])\n  |> group()\n  |> distinct(column: \"mese\")\n"
+            }
+          },
+          "regex": "",
+          "regexApplyTo": "value",
+          "sort": "alphabeticalDesc",
+          "definition": "from(bucket: \"Bolletta\")\n  |> range(start: -400d)\n  |> filter(fn: (r) => r._measurement == \"tasse\" and r._field == \"disp\")\n  |> keep(columns: [\"mese\"])\n  |> group()\n  |> distinct(column: \"mese\")\n",
+          "options": [],
+          "multi": false,
+          "includeAll": false,
+          "allowCustomValue": true
         }
       }
     ],

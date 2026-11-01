@@ -790,7 +790,8 @@ except Exception as e:
         grafana_url = os.getenv('GRAFANA_URL', 'http://localhost:3000')
         user = os.getenv('GRAFANA_USER', 'admin')
         pwd = os.getenv('GRAFANA_PASSWORD', 'admin')
-        wanted = ('fetzerch-sunandmoon-datasource', 'grafana-clock-panel')
+        wanted = ('fetzerch-sunandmoon-datasource', 'grafana-clock-panel',
+                  'volkovlabs-variable-panel')
 
         if shutil.which('grafana-cli'):
             try:
