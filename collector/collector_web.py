@@ -575,11 +575,19 @@ class CollectorWeb(CollectorWebInterface):
             grouped[device_type].append(req)
 
         results = []
+        failures = []
         for device_type, group in grouped.items():
-            if device_type == 'OPTIMIZER' and len(group) > OPTIMIZER_BATCH_SIZE:
-                results.extend(self._fetch_optimizer_batches(group))
-            else:
-                results.extend(self._fetch_batch(device_type, group))
+            try:
+                if device_type == 'OPTIMIZER' and len(group) > OPTIMIZER_BATCH_SIZE:
+                    results.extend(self._fetch_optimizer_batches(group))
+                else:
+                    results.extend(self._fetch_batch(device_type, group))
+            except Exception as e:
+                # Un tipo che cade non porta via gli altri: il tick successivo riprova.
+                failures.append(e)
+
+        if not results and failures:
+            raise failures[0]
 
         return {"list": results}
 
@@ -610,7 +618,8 @@ class CollectorWeb(CollectorWebInterface):
                 resp = session.post(url, params=params, headers=headers, json=clean_batch, timeout=self._global_config.batch_request_timeout)
 
                 if resp.status_code != 200:
-                    raise RuntimeError(f"HTTP {resp.status_code} for {device_type}")
+                    body = (resp.text or "").strip().replace("\n", " ")[:300]
+                    raise RuntimeError(f"HTTP {resp.status_code} for {device_type}: {body}")
 
                 data = resp.json()
                 results = data if isinstance(data, list) else data.get('list', [data])
