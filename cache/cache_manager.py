@@ -221,6 +221,17 @@ class CacheManager:
         self.stats['cache_hits'] += 1
         return cache_entry.get('data')
 
+    def peek_cached_data(self, source: str, endpoint: str, date: str) -> Optional[Dict[str, Any]]:
+        """Il dato in cache senza TTL, senza log e senza toccare le statistiche.
+
+        Serve a chi deve *fondere* cio' che ha gia' scritto (la raccolta live
+        riscrive la stessa giornata ogni ora), non a chi vuole un cache hit.
+        """
+        cache_path = self._find_latest_cache_file(source, endpoint, date)
+        if not cache_path:
+            return None
+        return (self._read_cache_file(cache_path) or {}).get('data')
+
     def _build_cache_entry(self, source: str, endpoint: str, date: str, data: Dict[str, Any], data_hash: str) -> Dict[str, Any]:
         """Costruisce entry cache standard."""
         return {

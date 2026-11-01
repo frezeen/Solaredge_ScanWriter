@@ -20,6 +20,13 @@ logger = logging.getLogger(__name__)
 V2_ENDPOINTS = ('site_details', 'site_energy_details')
 
 
+def _merge_series(old: List[Dict[str, Any]], new: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Fonde due serie per data; sulla stessa data vince la nuova."""
+    merged = {item["date"]: item["value"] for item in old}
+    merged.update({item["date"]: item["value"] for item in new})
+    return [{"date": d, "value": v} for d, v in sorted(merged.items())]
+
+
 class CollectorAPI:
     """Legge gli endpoint abilitati nel YAML e li serve dalla V2."""
 
@@ -87,6 +94,18 @@ class CollectorAPI:
                 per_day.setdefault(value["date"][:10], {}).setdefault(meter["type"], []).append(value)
 
         for day, by_type in per_day.items():
+            # si fonde con cio' che e' gia' archiviato: di notte la produzione non
+            # si legge, e un giro senza produzione non deve cancellare quella di
+            # una giornata gia' archiviata
+            old = self.cache.peek_cached_data("api_ufficiali", endpoint_name, day) or {}
+            for meter in ((old.get("energyDetails") or {}).get("meters") or []):
+                values = meter.get("values") or []
+                if not values:
+                    continue
+                if meter.get("type") in by_type:
+                    by_type[meter["type"]] = _merge_series(values, by_type[meter["type"]])
+                else:
+                    by_type[meter["type"]] = values      # canale assente in questo giro
             self.cache.save_to_cache("api_ufficiali", endpoint_name, day, {"energyDetails": {
                 "unit": payload["energyDetails"].get("unit", "Wh"),
                 "timeUnit": payload["energyDetails"].get("timeUnit"),
@@ -110,7 +129,7 @@ class CollectorAPI:
             self._v2 = SolarEdgeV2(self.site_id)
         return self._v2.get(path.format(siteId=self.site_id), cfg.get('params') or {})
 
-    def _v2_payload(self, endpoint_name: str, day=None, force: bool = False) -> Dict[str, Any]:
+    def _v2_payload(self, endpoint_name: str, force: bool = False) -> Dict[str, Any]:
         """Endpoint serviti dalla V2: anagrafica dal cache, energia a ore, contatori ogni giro."""
         if getattr(self, '_v2', None) is None:
             self._v2 = SolarEdgeV2(self.site_id)
@@ -121,13 +140,11 @@ class CollectorAPI:
         with_prod, why = (True, 'forzato') if force else self._v2.energy_due()
         if not with_prod:
             logger.debug(f"produzione non letta: {why}")
-        # prima lettura del giorno dopo le 06:00: rilegge anche ieri, il cui
-        # ultimo quarto d'ora era stato scritto a meta'
-        include_prev = self._v2.previous_day_due()
-        payload = self._v2.energy_details_payload(day=day, with_production=with_prod, include_previous=include_prev)
+        # finestra di 7 giorni, sempre la stessa: una giornata o un'ora persa
+        # mentre le chiamate erano giu' torna da sola al giro dopo, e il giorno
+        # prima e' dentro la finestra senza una rilettura dedicata
+        payload = self._v2.recent_payload(with_production=with_prod)
         if with_prod:
             self._v2.mark_energy_done()
-        if include_prev:
-            self._v2.mark_previous_done()
         self._v2.mark_meters_done()
         return payload

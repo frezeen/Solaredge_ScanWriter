@@ -32,8 +32,9 @@ DAILY_CAP = 64          # 2.000 crediti al mese / 31 giorni: la cadenza vera sta
 METERS_GATE_MIN = 55    # il loop gira a 15': cosi' i contatori si leggono ogni ora
 META_TTL_DAYS = 30
 CLOSE_AFTER_SUNSET_MIN = 20
-SETTLE_HOUR = 6         # ora da cui l'ultimo quarto d'ora di ieri e' chiuso
 MAX_RANGE_DAYS = 7      # limite del fornitore su QUARTER_HOUR: una settimana
+# HOUR si ferma a 24 ore, QUARTER_HOUR a 7 giorni, DAY a un mese: la history usa DAY
+TIME_UNITS = {"QUARTER_HOUR": "QUARTER_OF_AN_HOUR", "HOUR": "HOUR", "DAY": "DAY"}
 RATE_CALLS = 10         # limite del fornitore: 10 chiamate al minuto
 RATE_WINDOW = 60
 
@@ -72,13 +73,6 @@ def _immutable_site_fields() -> Dict[str, Any]:
         return {k: details[k] for k in ("type", "primaryModule") if k in details}
     except Exception:
         return {}
-
-
-def _series_union(a: List[Dict[str, Any]], b: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """Unisce due serie a 15 minuti; in caso di stessa data vince la seconda."""
-    merged = {item["date"]: item["value"] for item in a}
-    merged.update({item["date"]: item["value"] for item in b})
-    return [{"date": d, "value": v} for d, v in sorted(merged.items())]
 
 
 def sun_times(lat: float, lon: float, day: date, tz=ROME) -> Tuple[datetime, datetime]:
@@ -198,9 +192,11 @@ class SolarEdgeV2:
 
     # -------------------------------------------------------------------- GET
     def _get(self, path: str, params: Dict[str, Any]) -> Any:
-        self._spend(path)
         url = BASE + path
+        # il token prima del credito: un credential morto non deve bruciare il
+        # ledger ne' far sembrare un problema di quota quello che e' di auth
         headers = {"Authorization": "Bearer " + self.access_token(), "Accept": "application/json"}
+        self._spend(path)
         r = requests.get(url, headers=headers, params=params, timeout=self.timeout)
         if r.status_code == 401:        # token scaduto a meta': un solo ritentativo
             headers["Authorization"] = "Bearer " + self.access_token(force=True)
@@ -262,9 +258,10 @@ class SolarEdgeV2:
         except Exception:
             return None
 
-    def energy_values(self, start: date, stop: date) -> Dict[str, float]:
+    def energy_values(self, start: date, stop: date,
+                      resolution: str = "QUARTER_HOUR") -> Dict[str, float]:
         data = self._get("/sites/%s/energy" % self.site_id,
-                         {**self._window(start, stop), "resolution": "QUARTER_HOUR", "unit": "WH"})
+                         {**self._window(start, stop), "resolution": resolution, "unit": "WH"})
         out: Dict[str, float] = {}
         for item in data.get("values") or []:
             stamp = self._local_stamp(item.get("timestamp") or "")
@@ -273,9 +270,10 @@ class SolarEdgeV2:
                 out[stamp] = float(value)
         return out
 
-    def meter_values(self, start: date, stop: date) -> Dict[str, Dict[str, Dict[str, float]]]:
+    def meter_values(self, start: date, stop: date,
+                     resolution: str = "QUARTER_HOUR") -> Dict[str, Dict[str, Dict[str, float]]]:
         data = self._get("/sites/%s/meters/telemetry" % self.site_id,
-                         {**self._window(start, stop), "resolution": "QUARTER_HOUR"})
+                         {**self._window(start, stop), "resolution": resolution})
         out: Dict[str, Dict[str, Dict[str, float]]] = {}
         for serial, metrics in (data.get("meters") or {}).items():
             per_metric: Dict[str, Dict[str, float]] = {}
@@ -292,26 +290,27 @@ class SolarEdgeV2:
                 out[serial] = per_metric
         return out
 
-    def energy_details_payload(self, day: Optional[date] = None,
-                               with_production: bool = True,
-                               include_previous: bool = False) -> Dict[str, Any]:
-        """`energyDetails.meters[].values`, costruito da questo collector.
+    def recent_payload(self, with_production: bool = True,
+                       days: int = MAX_RANGE_DAYS) -> Dict[str, Any]:
+        """Gli ultimi `days` giorni a 15 minuti: la finestra che il fornitore concede.
 
-        I contatori si leggono sempre (una chiamata); la produzione solo se
-        `with_production`, perche' di notte non cambia. `include_previous`
-        aggiunge il giorno prima: l'ultimo quarto d'ora di una giornata viene
-        letto mentre e' ancora in corso e il fornitore lo chiude dopo.
+        Ogni giro rilegge la stessa finestra, quindi un'ora o una giornata persa
+        mentre le chiamate erano giu' torna da sola, e il giorno prima e' dentro
+        la finestra: nessuna rilettura dedicata.
         """
-        day = day or datetime.now(ROME).date()
-        payload = self._payload_for(day, day + timedelta(days=1), with_production)
-        if include_previous:
-            prev = self._payload_for(day - timedelta(days=1), day, False)
-            merged = {m["type"]: m for m in payload["energyDetails"]["meters"]}
-            for meter in prev["energyDetails"]["meters"]:
-                if meter["values"]:
-                    slot = merged.setdefault(meter["type"], {"type": meter["type"], "values": []})
-                    slot["values"] = _series_union(slot["values"], meter["values"])
-        return payload
+        today = datetime.now(ROME).date()
+        return self._payload_for(today - timedelta(days=days - 1), today + timedelta(days=1),
+                                 with_production)
+
+    def month_payload(self, year: int, month: int) -> Dict[str, Any]:
+        """Un mese in due chiamate, a granularita' giornaliera: la history.
+
+        `DAY` e' l'unica risoluzione che accetta un mese intero (HOUR si ferma a
+        24 ore, QUARTER_HOUR a 7 giorni).
+        """
+        start = date(year, month, 1)
+        stop = date(year + 1, 1, 1) if month == 12 else date(year, month + 1, 1)
+        return self._payload_for(start, stop, True, resolution="DAY")
 
     def range_payload(self, start: date, stop: date) -> Dict[str, Any]:
         """`energyDetails.meters[].values` per un intervallo [start, stop), al massimo una settimana.
@@ -323,9 +322,10 @@ class SolarEdgeV2:
             raise SolarEdgeV2Error("la V2 accetta al massimo %d giorni per chiamata" % MAX_RANGE_DAYS)
         return self._payload_for(start, stop, True)
 
-    def _payload_for(self, start: date, stop: date, with_production: bool) -> Dict[str, Any]:
-        meters = self.meter_values(start, stop)
-        prod = self.energy_values(start, stop) if with_production else {}
+    def _payload_for(self, start: date, stop: date, with_production: bool,
+                     resolution: str = "QUARTER_HOUR") -> Dict[str, Any]:
+        meters = self.meter_values(start, stop, resolution)
+        prod = self.energy_values(start, stop, resolution) if with_production else {}
 
         def _first(metric: str) -> Dict[str, float]:
             for metrics in meters.values():
@@ -345,7 +345,7 @@ class SolarEdgeV2:
         def _series(values: Dict[str, float]) -> List[Dict[str, Any]]:
             return [{"date": s, "value": v} for s, v in sorted(values.items())]
 
-        return {"energyDetails": {"unit": "Wh", "timeUnit": "QUARTER_OF_AN_HOUR", "meters": [
+        return {"energyDetails": {"unit": "Wh", "timeUnit": TIME_UNITS[resolution], "meters": [
             {"type": "Production", "values": _series(prod)},
             {"type": "FeedIn", "values": _series(exported)},
             {"type": "Purchased", "values": _series(imported)},
@@ -354,26 +354,6 @@ class SolarEdgeV2:
         ]}}
 
     # --------------------------------------------------------------- cadenza
-    def previous_day_due(self, now: Optional[datetime] = None) -> bool:
-        """Il giorno prima si rilegge una volta, a giorno inoltrato.
-
-        L'ultimo quarto d'ora di una giornata viene letto dalla chiamata delle
-        23:45-23:59, quando il fornitore non l'ha ancora chiuso: il valore
-        scritto resta una frazione dello slot e la giornata non si rilegge mai
-        piu'. Una chiamata al giorno dopo le 06:00 lo porta a quello definitivo.
-        """
-        now = (now or datetime.now(ROME)).astimezone(ROME)
-        state = _read_json(STATE_FILE, {}) or {}
-        if not state.get("meters_at") or now.hour < SETTLE_HOUR:
-            return False
-        return state.get("prev_day_done") != now.date().isoformat()
-
-    def mark_previous_done(self, now: Optional[datetime] = None) -> None:
-        now = (now or datetime.now(ROME)).astimezone(ROME)
-        state = _read_json(STATE_FILE, {}) or {}
-        state["prev_day_done"] = now.date().isoformat()
-        _write_json(STATE_FILE, state)
-
     def meters_due(self, now: Optional[datetime] = None) -> bool:
         """I contatori si leggono una volta all'ora (il loop gira a 15 minuti).
 
