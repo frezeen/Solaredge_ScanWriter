@@ -366,8 +366,12 @@ from(bucket:"GME") |> range(start: start, stop: stop) |> filter(fn:(r)=>r._measu
         # Il foglio ARERA arriva con mesi di ritardo: si scrivono anche i mesi
         # fino al corrente, con l'ultima aliquota nota, cosi' il menu puo'
         # scegliere novembre e il pannello non resta senza punto.
+        pubblicati = set(disp_mesi)
         if disp_mesi:
             ultimo = max(disp_mesi)
+            mesi_indietro = (date.today().year - int(ultimo[:4])) * 12 + (date.today().month - int(ultimo[5:]))
+            if mesi_indietro >= 2:
+                log.warning('CDISPD: ultimo mese pubblicato %s (%d mesi fa)', ultimo, mesi_indietro)
             anno_u, mese_u = (int(x) for x in ultimo.split('-'))
             oggi = date.today()
             while (anno_u, mese_u) < (oggi.year, oggi.month):
@@ -379,7 +383,8 @@ from(bucket:"GME") |> range(start: start, stop: stop) |> filter(fn:(r)=>r._measu
         for mese, valore in sorted(disp_mesi.items()):
             anno, num = mese.split('-')
             ts = datetime(int(anno), int(num), 1, tzinfo=ROME).timestamp()
-            campi = ['disp=%s' % valore]
+            campi = ['disp=%s' % valore,
+                     'disp_da="%s"' % (mese if mese in pubblicati else ultimo)]
             if accise:
                 campi.append('accise=%s' % float(accise))
             if accise_data:
