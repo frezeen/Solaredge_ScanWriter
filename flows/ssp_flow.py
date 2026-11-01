@@ -206,10 +206,13 @@ def compute_month(client: InfluxDBClient, year: int, month: int,
             Point('ssp_monthly')
             .tag('zone', zone)
             .tag('year', str(year))
-            .field('prelievo_kwh', round(sum(e_pre.values()), 3))
-            .field('immessa_kwh', round(sum(e_imm.values()), 3))
-            .field('oe_eur', round(oe, 4))
-            .field('cei_eur', round(cei, 4))
+            # float() esplicito: round(0, 3) è un int, e la prima scrittura del
+            # mese è tutta zeri — il campo resterebbe integer per quello shard e
+            # ogni scrittura con decimali verrebbe rifiutata (422 field conflict).
+            .field('prelievo_kwh', float(round(sum(e_pre.values()), 3)))
+            .field('immessa_kwh', float(round(sum(e_imm.values()), 3)))
+            .field('oe_eur', float(round(oe, 4)))
+            .field('cei_eur', float(round(cei, 4)))
             .field('ufficiale_cs_eur', _ufficiale(year, 'cs'))
             .field('ufficiale_ecc_eur', _ufficiale(year, 'ecc'))
             .field('ufficiale_oe_eur', _ufficiale(year, 'oe'))

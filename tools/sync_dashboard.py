@@ -71,7 +71,23 @@ def main():
         print('dashboard: Grafana non raggiungibile:', e)
         return 2
     if r.status_code != 200:
-        print('dashboard: Grafana ha risposto', r.status_code)
+        title = ((disk.get('spec') or {}).get('title') or '').strip()
+        print("dashboard: Grafana non ha la risorsa %s (HTTP %d)." % (uid, r.status_code))
+        if title:
+            try:
+                s = requests.get(f"{url}/api/search", params={"type": "dash-db", "query": title},
+                                 auth=auth, timeout=10)
+                hits = [h for h in s.json()
+                        if (h.get("title") or "").strip() == title] if s.status_code == 200 else []
+            except Exception as e:
+                hits = []
+                print("dashboard: ricerca per titolo fallita:", e)
+            if hits:
+                print("dashboard: qui il titolo c'e, ma con uid %s e non %s"
+                      % (hits[0].get("uid"), uid))
+                print("dashboard: il file e' lo snapshot di un'altra installazione, non lo riscrivo.")
+            else:
+                print("dashboard: nessuna dashboard con questo titolo su questo Grafana.")
         return 2
 
     live = normalise(r.json())

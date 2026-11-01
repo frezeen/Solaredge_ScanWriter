@@ -7,6 +7,7 @@ from __future__ import annotations
 from typing import List, Union, Any
 import os
 import json
+import threading
 from pathlib import Path
 from app_logging import get_logger
 from config.config_manager import get_config_manager
@@ -30,6 +31,7 @@ class InfluxWriter:
     _instance = None  # Singleton instance
     _client = None  # Shared client
     _write_api = None  # Shared write API
+    _lock = threading.RLock()  # apertura, scrittura e chiusura non si incrociano
 
     def __new__(cls):
         """Singleton pattern per riutilizzare connessione."""
@@ -51,7 +53,20 @@ class InfluxWriter:
 
 
     def _init_client(self):
-        """Inizializza client InfluxDB ottimizzato"""
+        """Riusa client e write API se sono vivi, altrimenti li apre.
+
+        Sono del singleton, condivisi fra i flussi: chiuderli da un flusso mentre un
+        altro scrive lascia in mano al primo un writer morto ("'NoneType' object
+        has no attribute 'on_next'"), quindi apertura, scrittura e chiusura
+        passano tutte da _lock.
+        """
+        with self._lock:
+            if self._client is not None and self._write_api is not None:
+                return
+            self._open_client()
+
+    def _open_client(self):
+        """Apre client e write API; va chiamata con _lock preso."""
         try:
             # Verifica configurazione richiesta
             if not all([self._influx_config.url, self._influx_config.token, 
@@ -160,6 +175,13 @@ class InfluxWriter:
             return self._influx_config.bucket
 
     def write_points(self, points: List[Union[Point, Any]], measurement_type: str = None):
+        """Scrive i punti con _lock preso: nessuno può chiudere il client nel mezzo."""
+        with self._lock:
+            if self._write_api is None:
+                self._init_client()
+            return self._write_points(points, measurement_type)
+
+    def _write_points(self, points: List[Union[Point, Any]], measurement_type: str = None):
         """Scrive Point objects su InfluxDB con bucket appropriato
         
         Args:
@@ -248,11 +270,18 @@ class InfluxWriter:
             raise RuntimeError(f"InfluxWriter: errore scrittura - {e}")
 
     def close(self):
-        """Chiude client InfluxDB"""
-        if hasattr(self, '_write_api') and self._write_api:
-            self._write_api.close()
-        if hasattr(self, '_client') and self._client:
-            self._client.close()
+        """Chiude client e write API condivisi e azzera i riferimenti.
+
+        Azzerarli è la metà che conta: chi resta in mano a un writer chiuso
+        scrive su un oggetto morto.
+        """
+        with self._lock:
+            if self._write_api:
+                self._write_api.close()
+                self._write_api = None
+            if self._client:
+                self._client.close()
+                self._client = None
         self._log.debug("InfluxWriter chiuso")
 
     def __enter__(self):

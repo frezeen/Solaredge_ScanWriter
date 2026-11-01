@@ -12,7 +12,10 @@ from datetime import date
 import openpyxl
 import requests
 
+from app_logging import get_logger
 from collector.collector_gme import CollectorGME
+
+log = get_logger('collector.bolletta')
 
 
 class CollectorBolletta:
@@ -179,6 +182,31 @@ start = date.sub(d: 2mo, from: stop)
 from(bucket:"GME") |> range(start: start, stop: stop) |> filter(fn:(r)=>r._measurement=="gme_monthly_avg" and r._field=="pun_kwh_avg") |> group() |> last()"""
         return self._flux_value(q)
 
+    # Valori nazionali correnti, si sovrascrivono da .env (BOLLETTA_<CAMPO>)
+    CONFIG_DEFAULTS = {
+        'disp': 0.0151,
+        'accise': 0.02263,
+        'iva': 0.10,
+        'tv': 9.0,
+        'potenza_kw': 3.0,
+    }
+
+    def ensure_config(self):
+        """Scrive il punto `config` se manca.
+
+        I pannelli 207/208/192 leggono da li' disp, accise, iva, tv e potenza:
+        nessun flusso lo scriveva, quindi su un'installazione nuova la sezione
+        bolletta restava vuota con un 400 "float + invalid" addosso.
+        """
+        if self._last('config'):
+            return False
+        values = {k: float(os.getenv('BOLLETTA_' + k.upper(), v))
+                  for k, v in self.CONFIG_DEFAULTS.items()}
+        self._write('config ' + ','.join('%s=%s' % (k, v) for k, v in values.items()))
+        log.info('Punto config creato con i valori di default; '
+                 'si sovrascrive da .env con BOLLETTA_*')
+        return True
+
     def _dashboard_uid(self, auth, url):
         """L'uid della dashboard cambia da un'installazione all'altra: si cerca per
         titolo invece di dare per buono quello di chi ha esportato il file."""
@@ -206,15 +234,19 @@ from(bucket:"GME") |> range(start: start, stop: stop) |> filter(fn:(r)=>r._measu
         req = urllib.request.Request(url + '/api/dashboards/uid/' + uid,
                                      headers={'Authorization': auth})
         d = json.load(urllib.request.urlopen(req, timeout=30))['dashboard']
+        found = False
         changed = False
         for p in d.get('panels', []):
             if p.get('id') == 202:
+                found = True
                 steps = [{'color': 'dark-green', 'value': 0},
                          {'color': 'dark-red', 'value': round(float(prev_pun), 6)}]
                 cur = p['fieldConfig']['defaults']['thresholds'].get('steps', [])
                 if not cur or abs(float(cur[-1].get('value', -1)) - float(prev_pun)) > 1e-9:
                     p['fieldConfig']['defaults']['thresholds']['steps'] = steps
                     changed = True
+        if not found:
+            log.warning('Dashboard: nessun pannello con id 202, soglia PUN non aggiornata')
         if changed:
             req = urllib.request.Request(url + '/api/dashboards/db',
                                          data=json.dumps({'dashboard': d, 'overwrite': True}).encode(),
@@ -228,6 +260,7 @@ from(bucket:"GME") |> range(start: start, stop: stop) |> filter(fn:(r)=>r._measu
     # ---------- run ----------
     def collect(self):
         result = {}
+        self.ensure_config()
         bonus = self.fetch_bonus()
         last = self._last('bonus')
         unchanged = last and all(abs(float(last.get(k, -1)) - bonus[k]) < 1e-9
