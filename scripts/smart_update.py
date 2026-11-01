@@ -795,13 +795,17 @@ except Exception as e:
 
         if shutil.which('grafana-cli'):
             try:
-                listed = subprocess.run(['grafana-cli', 'plugins', 'ls'],
+                # grafana-cli senza homepath muore con 'Could not find config defaults'
+                cli = ['grafana-cli', '--homepath', '/usr/share/grafana',
+                       '--pluginsDir', '/var/lib/grafana/plugins']
+                listed = subprocess.run(cli + ['plugins', 'ls'], cwd='/usr/share/grafana',
                                         capture_output=True, text=True, timeout=60).stdout.lower()
                 installed = []
                 for plugin_id in wanted:
                     if plugin_id in listed:
                         continue
-                    res = subprocess.run(['grafana-cli', 'plugins', 'install', plugin_id],
+                    res = subprocess.run(cli + ['plugins', 'install', plugin_id],
+                                         cwd='/usr/share/grafana',
                                          capture_output=True, text=True, timeout=300)
                     if res.returncode == 0:
                         installed.append(plugin_id)
