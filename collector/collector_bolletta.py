@@ -363,6 +363,18 @@ from(bucket:"GME") |> range(start: start, stop: stop) |> filter(fn:(r)=>r._measu
                 log.warning('ADM: aliquota non letta, tengo %s (%s)', accise, accise_data)
             else:
                 log.error('ADM: aliquota accise sconosciuta e nessun valore precedente')
+        # Il foglio ARERA arriva con mesi di ritardo: si scrivono anche i mesi
+        # fino al corrente, con l'ultima aliquota nota, cosi' il menu puo'
+        # scegliere novembre e il pannello non resta senza punto.
+        if disp_mesi:
+            ultimo = max(disp_mesi)
+            anno_u, mese_u = (int(x) for x in ultimo.split('-'))
+            oggi = date.today()
+            while (anno_u, mese_u) < (oggi.year, oggi.month):
+                mese_u += 1
+                if mese_u > 12:
+                    mese_u, anno_u = 1, anno_u + 1
+                disp_mesi['%d-%02d' % (anno_u, mese_u)] = disp_mesi[ultimo]
         scritti = 0
         for mese, valore in sorted(disp_mesi.items()):
             anno, num = mese.split('-')
