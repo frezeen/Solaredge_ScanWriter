@@ -182,6 +182,97 @@ start = date.sub(d: 2mo, from: stop)
 from(bucket:"GME") |> range(start: start, stop: stop) |> filter(fn:(r)=>r._measurement=="gme_monthly_avg" and r._field=="pun_kwh_avg") |> group() |> last()"""
         return self._flux_value(q)
 
+    # ARERA pubblica per i domestici in libero un foglio per mese: dispacciamento
+    # (CDISPD), sigma1/2/3, UC3, UC6.
+    ARERA_DOMESTICO = ('https://www.arera.it/fileadmin/area_operatori/prezzi_e_tariffe/'
+                       'Corrispettivi_libero_elettrico_domestico_%d.xlsx')
+    MESI = ('gennaio', 'febbraio', 'marzo', 'aprile', 'maggio', 'giugno', 'luglio',
+            'agosto', 'settembre', 'ottobre', 'novembre', 'dicembre')
+    ADM_PAGINA = 'https://www.adm.gov.it/portale/aliquote-accisa-nazionali'
+
+    @staticmethod
+    def _scarica(url, timeout=60):
+        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+        return urllib.request.urlopen(req, timeout=timeout).read()
+
+    def fetch_disp(self):
+        """CDISPD del mese corrente: cambia ogni mese e vale per tutti i venditori.
+
+        Sta nel foglio ARERA dei corrispettivi per i domestici in libero, un foglio
+        per mese (0,018468 ad agosto 2026, 0,015068 a settembre).
+        """
+        oggi = date.today()
+        for anno in (oggi.year, oggi.year - 1):
+            try:
+                data = self._scarica(self.ARERA_DOMESTICO % anno)
+                if data[:2] != b'PK':
+                    continue
+                wb = openpyxl.load_workbook(io.BytesIO(data), data_only=True, read_only=True)
+                foglio = '%s %d' % (self.MESI[oggi.month - 1], anno)
+                if foglio not in wb.sheetnames:
+                    # il mese corrente non e' ancora pubblicato: si prende l'ultimo
+                    ordine = {m: i for i, m in enumerate(self.MESI)}
+                    fogli = [f for f in wb.sheetnames if f.lower().endswith(str(anno))]
+                    fogli.sort(key=lambda f: ordine.get(f.split()[0].lower(), -1))
+                    if not fogli:
+                        continue
+                    foglio = fogli[-1]
+                    log.info('CDISPD: mese corrente non ancora nel foglio ARERA, uso %s', foglio)
+                for row in wb[foglio].iter_rows(values_only=True):
+                    cells = [str(c).strip() if c is not None else '' for c in row]
+                    if len(cells) > 2 and cells[1].startswith('Quota energia'):
+                        mese = self.MESI.index(foglio.split()[0].lower()) + 1
+                        return round(float(cells[2]), 6), '%s-%02d' % (anno, mese)
+            except Exception as e:
+                log.warning('ARERA corrispettivi %d non leggibili: %s', anno, e)
+        return None, None
+
+    def fetch_accise(self):
+        """Accisa domestica (EUR/kWh) e data dell'aggiornamento, dal PDF ADM.
+
+        La tabella delle aliquote non dice nulla della fascia esente: qui si prende
+        solo l'aliquota, quella della riga "per ogni kWh" accanto al D.M. 30/12/2011
+        (l'altra riga "per ogni kWh" e' 0,0005, le navi in porto).
+        """
+        try:
+            html = self._scarica(self.ADM_PAGINA).decode('utf-8', 'ignore')
+        except Exception as e:
+            log.warning('ADM non raggiungibile: %s', e)
+            return None, None
+        links = re.findall(r'href="([^"]*Aliquote[^"]*\.pdf[^"]*)"', html, re.I)
+        if not links:
+            log.warning('ADM: nessun link alle aliquote nella pagina')
+            return None, None
+        link = links[0].replace('&amp;', '&')
+        url = link if link.startswith('http') else 'https://www.adm.gov.it' + link
+        data_agg = re.search(r'aggiornamento\+al\+([0-9]+)\+([a-z]+)\+([0-9]{4})', url)
+        data_str = ('%s %s %s' % data_agg.groups()) if data_agg else ''
+        try:
+            pdf = self._scarica(url)
+            from pypdf import PdfReader
+            lettore = PdfReader(io.BytesIO(pdf))
+            for pagina in lettore.pages:
+                testo = pagina.extract_text() or ''
+                if 'ACCISE SULL' not in testo.upper() or 'ENERGIA ELETTRICA' not in testo.upper():
+                    continue
+                righe = [r.strip() for r in testo.splitlines() if r.strip()]
+                candidate = []
+                for i, riga in enumerate(righe):
+                    m = re.match(r'€\s*0,0*(\d+)\s*per ogni kWh', riga)
+                    if not m:
+                        continue
+                    valore = float('0.' + m.group(1).rjust(4, '0'))
+                    vicino = ' '.join(righe[i + 1:i + 3])
+                    if 'D.M. 30/12/2011' in vicino:
+                        return valore, data_str
+                    candidate.append(valore)
+                if candidate:
+                    # ripiego: la riga domestica e' l'unica "per ogni kWh" sopra 0,01
+                    return max(candidate), data_str
+        except Exception as e:
+            log.warning('ADM: PDF aliquote non leggibile: %s', e)
+        return None, None
+
     def _dashboard_uid(self, auth, url):
         """L'uid della dashboard cambia da un'installazione all'altra: si cerca per
         titolo invece di dare per buono quello di chi ha esportato il file."""
@@ -261,6 +352,22 @@ from(bucket:"GME") |> range(start: start, stop: stop) |> filter(fn:(r)=>r._measu
             result['go'] = {'value': float(last.get('value', 0.0)),
                             'month': last.get('month', 'stimato'),
                             'changed': False, 'stimato': str(e)[:120]}
+
+        disp, disp_mese = self.fetch_disp()
+        if disp:
+            result['disp'] = disp
+        accise, accise_data = self.fetch_accise()
+        if disp or accise:
+            campi = []
+            if disp:
+                campi.append('disp=%s' % disp)
+            if accise:
+                campi.append('accise=%s' % accise)
+            if accise_data:
+                campi.append('accise_data="%s"' % accise_data.replace('"', ''))
+            if campi:
+                self._write('tasse ' + ','.join(campi))
+                log.info('Tasse aggiornate: disp=%s accise=%s (%s)', disp, accise, accise_data)
 
         rete = self.fetch_rete()
         last = self._last('rete')
