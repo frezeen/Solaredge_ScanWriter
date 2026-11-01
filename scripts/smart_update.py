@@ -698,6 +698,91 @@ except Exception as e:
 
         return True
 
+    @staticmethod
+    def dashboard_create_body(dashboard_json: dict, keep_uid: bool) -> dict:
+        """Corpo per creare la dashboard su un altro Grafana.
+
+        `metadata.name` e' l'uid dell'installazione che ha esportato il file: la
+        stessa dashboard altrove ne ha un altro, quindi si toglie e lascia che sia
+        Grafana ad assegnarlo.
+        """
+        body = dict(dashboard_json)
+        md = {k: v for k, v in (body.get('metadata') or {}).items()
+              if k not in ('resourceVersion', 'uid')}
+        if not keep_uid:
+            md.pop('name', None)
+        body['metadata'] = md
+        return body
+
+    def ensure_grafana_plugins(self) -> None:
+        """Installa i plugin della dashboard e il datasource Sun and Moon se mancano.
+
+        install.sh lo fa all'installazione; senza questo passo un'installazione che
+        aggiorna si ritrova la dashboard che chiede un plugin e un datasource che
+        su quel box non esistono.
+        """
+        import os
+        import shutil
+        import subprocess
+        import time
+
+        import requests
+
+        grafana_url = os.getenv('GRAFANA_URL', 'http://localhost:3000')
+        user = os.getenv('GRAFANA_USER', 'admin')
+        pwd = os.getenv('GRAFANA_PASSWORD', 'admin')
+        wanted = ('fetzerch-sunandmoon-datasource', 'grafana-clock-panel')
+
+        if shutil.which('grafana-cli'):
+            try:
+                listed = subprocess.run(['grafana-cli', 'plugins', 'ls'],
+                                        capture_output=True, text=True, timeout=60).stdout.lower()
+                installed = []
+                for plugin_id in wanted:
+                    if plugin_id in listed:
+                        continue
+                    res = subprocess.run(['grafana-cli', 'plugins', 'install', plugin_id],
+                                         capture_output=True, text=True, timeout=300)
+                    if res.returncode == 0:
+                        installed.append(plugin_id)
+                        self.log(f"✓ Plugin installato: {plugin_id}", "SUCCESS")
+                    else:
+                        self.log(f"Plugin {plugin_id} non installato: "
+                                 f"{(res.stderr or res.stdout).strip()[:120]}", "WARNING")
+                if installed:
+                    # un plugin compare solo dopo il riavvio di Grafana
+                    subprocess.run(['systemctl', 'restart', 'grafana-server'],
+                                   capture_output=True, text=True, timeout=120)
+                    for _ in range(30):
+                        try:
+                            if requests.get(f"{grafana_url}/api/health", timeout=3).status_code == 200:
+                                break
+                        except Exception:
+                            pass
+                        time.sleep(2)
+                    self.log("Grafana riavviato per attivare: " + ", ".join(installed), "INFO")
+            except Exception as e:
+                self.log(f"Gestione plugin Grafana fallita: {e}", "WARNING")
+        else:
+            self.log("grafana-cli non disponibile: salto i plugin", "WARNING")
+
+        try:
+            ds = requests.get(f"{grafana_url}/api/datasources", auth=(user, pwd), timeout=10)
+            if ds.status_code == 200 and not any(d.get('name') == 'Sun and Moon' for d in ds.json()):
+                created = requests.post(f"{grafana_url}/api/datasources", auth=(user, pwd), timeout=10,
+                                        json={"name": "Sun and Moon",
+                                              "type": "fetzerch-sunandmoon-datasource",
+                                              "access": "proxy",
+                                              "jsonData": {"latitude": 40.8199,
+                                                           "longitude": 14.3413}})
+                if created.status_code in (200, 201):
+                    self.log("✓ Datasource Sun and Moon creato", "SUCCESS")
+                else:
+                    self.log(f"Datasource Sun and Moon non creato: HTTP {created.status_code}",
+                             "WARNING")
+        except Exception as e:
+            self.log(f"Verifica del datasource Sun and Moon fallita: {e}", "WARNING")
+
     def import_grafana_dashboard(self) -> bool:
         """Importa dashboard Grafana con UIDs corretti (come install.sh)"""
         try:
@@ -705,6 +790,8 @@ except Exception as e:
             import os
             from pathlib import Path
             import requests
+
+            self.ensure_grafana_plugins()
 
             dashboard_file = self.project_root / "grafana" / "dashboard-solaredge.json"
 
@@ -789,6 +876,7 @@ except Exception as e:
                         # L'uid nel file e' quello dell'installazione che l'ha
                         # esportato: altrove la stessa dashboard ha un uid diverso,
                         # quindi si cerca per titolo nel Grafana di destinazione.
+                        found_local = False
                         if title:
                             try:
                                 sr = requests.get(
@@ -800,6 +888,7 @@ except Exception as e:
                                         if (hit.get('title') or '').strip() == title.strip():
                                             md['name'] = hit.get('uid')
                                             dashboard_json['metadata'] = md
+                                            found_local = True
                                             self.log(f"Dashboard trovata per titolo: uid {md['name']}", "INFO")
                                             break
                             except Exception as e:
@@ -833,9 +922,7 @@ except Exception as e:
                             self.log(f"Response: {put_resp.text[:500]}", "ERROR")
 
                             if put_resp.status_code == 404 and title:
-                                body = dict(dashboard_json)
-                                body['metadata'] = {k: v for k, v in (body.get('metadata') or {}).items()
-                                                    if k not in ('resourceVersion', 'uid')}
+                                body = self.dashboard_create_body(dashboard_json, found_local)
                                 cr = requests.post(
                                     f"{grafana_url}/apis/dashboard.grafana.app/v2/namespaces/{ns}/dashboards",
                                     auth=(grafana_user, grafana_pass), json=body, timeout=10)

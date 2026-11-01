@@ -179,6 +179,19 @@ start = date.sub(d: 2mo, from: stop)
 from(bucket:"GME") |> range(start: start, stop: stop) |> filter(fn:(r)=>r._measurement=="gme_monthly_avg" and r._field=="pun_kwh_avg") |> group() |> last()"""
         return self._flux_value(q)
 
+    def _dashboard_uid(self, auth, url):
+        """L'uid della dashboard cambia da un'installazione all'altra: si cerca per
+        titolo invece di dare per buono quello di chi ha esportato il file."""
+        try:
+            req = urllib.request.Request(url + '/api/search?type=dash-db&limit=100',
+                                         headers={'Authorization': auth})
+            for hit in json.load(urllib.request.urlopen(req, timeout=15)):
+                if (hit.get('title') or '').strip() == 'Solaredge 3.0':
+                    return hit.get('uid')
+        except Exception:
+            pass
+        return None
+
     def update_pun_threshold(self, prev_pun):
         import base64 as b64
         url = os.getenv('GRAFANA_URL', 'http://localhost:3000').rstrip('/')
@@ -187,7 +200,9 @@ from(bucket:"GME") |> range(start: start, stop: stop) |> filter(fn:(r)=>r._measu
         if not pwd or prev_pun is None:
             return
         auth = 'Basic ' + b64.b64encode((user + ':' + pwd).encode()).decode()
-        uid = 'afb91a6f-d8f7-43ae-8a98-67eab1bb4baa'
+        uid = self._dashboard_uid(auth, url)
+        if not uid:
+            return
         req = urllib.request.Request(url + '/api/dashboards/uid/' + uid,
                                      headers={'Authorization': auth})
         d = json.load(urllib.request.urlopen(req, timeout=30))['dashboard']
