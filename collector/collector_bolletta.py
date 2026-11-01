@@ -222,12 +222,23 @@ from(bucket:"GME") |> range(start: start, stop: stop) |> filter(fn:(r)=>r._measu
                         % (date.today().year, bonus['b12'], bonus['b34'], bonus['b4plus']))
         result['bonus'] = {'values': bonus, 'changed': not unchanged}
 
-        go_value, go_month = self.fetch_go()
-        last = self._last('go')
-        go_changed = not (last and abs(float(last.get('value', -1)) - go_value) < 1e-9)
-        if go_changed:
-            self._write('go,month=%s,fonte=GME value=%s' % (go_month, go_value))
-        result['go'] = {'value': go_value, 'month': go_month, 'changed': go_changed}
+        try:
+            go_value, go_month = self.fetch_go()
+            last = self._last('go')
+            go_changed = not (last and abs(float(last.get('value', -1)) - go_value) < 1e-9)
+            if go_changed:
+                self._write('go,month=%s,fonte=GME value=%s' % (go_month, go_value))
+            result['go'] = {'value': go_value, 'month': go_month, 'changed': go_changed}
+        except Exception as e:
+            # A inizio mese il GME non ha ancora i volumi dell'asta GO: si tiene
+            # l'ultimo valore pubblicato, come per il PUN, invece di perdere rete,
+            # oneri e soglia del mese che vengono dopo.
+            last = self._last('go')
+            if not last:
+                raise
+            result['go'] = {'value': float(last.get('value', 0.0)),
+                            'month': last.get('month', 'stimato'),
+                            'changed': False, 'stimato': str(e)[:120]}
 
         rete = self.fetch_rete()
         last = self._last('rete')

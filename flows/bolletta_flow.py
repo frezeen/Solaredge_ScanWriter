@@ -13,7 +13,10 @@ def run_bolletta_flow(log: Logger, cache: CacheManager, config: Dict[str, Any]) 
         res = CollectorBolletta().collect()
         b, g, r = res['bonus'], res['go'], res['rete']
         log.info('   Bonus ARERA: %s (cambiato=%s)' % (b['values'], b['changed']))
-        log.info('   Indice GO: %s EUR/kWh %s (cambiato=%s)' % (g['value'], g['month'], g['changed']))
+        log.info('   Indice GO: %s EUR/kWh %s (cambiato=%s)%s'
+                 % (g['value'], g['month'], g['changed'],
+                    ' - non ancora pubblicato, tengo il precedente (%s)' % g['stimato']
+                    if g.get('stimato') else ''))
         log.info('   Rete/oneri: net_var=%s net_fix=%s potenza=%s (cambiato=%s)'
                  % (r['net_var'], r['net_fix'], r['potenza_tariffa'], r['changed']))
         try:

@@ -61,6 +61,8 @@ class GUILogHandler(logging.Handler):
                     self.flow_stack.pop()
                     return  # Non mostrare STOP
                 elif action == 'COMPLETION':
+                    if self._is_routine_realtime(flow_type, record):
+                        return
                     # Messaggi di completamento: rimuovi marker e mostra nel flow corretto
                     clean_message = message.split(']', 1)[1] if ']' in message else message
                     self.state_manager.add_log_entry(
@@ -74,6 +76,9 @@ class GUILogHandler(logging.Handler):
             # Determina flow corrente dallo stack
             current_flow = self.flow_stack[-1] if self.flow_stack else 'general'
 
+            if self._is_routine_realtime(current_flow, record):
+                return
+
             self.state_manager.add_log_entry(
                 level=record.levelname,
                 message=message,
@@ -83,6 +88,13 @@ class GUILogHandler(logging.Handler):
         except Exception as e:
             # Evita loop infiniti - non loggare errori del log handler
             pass
+
+    @staticmethod
+    def _is_routine_realtime(flow_type: str, record: logging.LogRecord) -> bool:
+        """Il realtime scrive una decina di righe ogni 5 s e da solo riempirebbe il
+        buffer della GUI in pochi minuti: qui passa solo cio' che non e' routine,
+        il resto resta nel file e in journald."""
+        return flow_type == 'realtime' and record.levelno < logging.WARNING
 
 
 __all__ = ['GUILogHandler']
