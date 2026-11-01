@@ -689,8 +689,10 @@ except Exception as e:
             self.log("Consider running rollback", "WARNING")
             return False
 
-        # 10. Importa dashboard Grafana (sempre)
-        self.import_grafana_dashboard()
+        # 10. Importa dashboard Grafana in un processo nuovo: il pull appena fatto
+        #     puo' aver sostituito questo stesso file, e il processo corrente
+        #     girerebbe col codice vecchio (uid foresti sui pannelli v2)
+        self.import_grafana_dashboard_fresh()
 
         # 11. Riavvia servizio
         if service_was_running and service_name:
@@ -1037,6 +1039,26 @@ except Exception as e:
 
         if self.update_metrics['errors_encountered']:
             self.log(f"Errors encountered: {len(self.update_metrics['errors_encountered'])}", "WARNING")
+
+    def import_grafana_dashboard_fresh(self) -> bool:
+        """Importa la dashboard in un processo nuovo, col codice appena scaricato.
+
+        Il pull ha potuto sostituire questo stesso file: il processo corrente
+        tiene in memoria il codice vecchio, che riscriveva solo la forma
+        ``{"type": "influxdb"}`` e lasciava sugli altri pannelli gli uid
+        dell'installazione che ha esportato la dashboard.
+        """
+        try:
+            result = subprocess.run(
+                [sys.executable, str(Path(__file__).resolve()), '--dashboard-only'],
+                timeout=self.config.command_timeout, cwd=str(self.project_root))
+        except (subprocess.SubprocessError, OSError) as e:
+            self.log(f"Dashboard import in un processo nuovo fallito: {e}", "WARNING")
+            return False
+        if result.returncode != 0:
+            self.log(f"Dashboard import in un processo nuovo: exit {result.returncode}", "WARNING")
+            return False
+        return True
 
     def run_update(self, force: bool = False) -> bool:
         """Esegue l'aggiornamento completo con metriche"""

@@ -645,89 +645,14 @@ DATEFORMATS
             # Disable exit on error for this section
             set +e
 
-            # Get data source UIDs
-            DATASOURCES_LIST=$(curl -s http://localhost:3000/api/datasources -u "$GRAFANA_USER:$GRAFANA_PASS" 2>/dev/null)
-            INFLUX_UID=$(echo "$DATASOURCES_LIST" | jq -r '.[] | select(.name=="Solaredge") | .uid' 2>/dev/null)
-            SUNMOON_UID=$(echo "$DATASOURCES_LIST" | jq -r '.[] | select(.name=="Sun and Moon") | .uid' 2>/dev/null)
-
-            if [[ -n "$INFLUX_UID" && "$INFLUX_UID" != "null" ]]; then
-                log "Found Solaredge data source UID: $INFLUX_UID"
-
-                # Create temporary dashboard file with updated UIDs
-                TEMP_DASHBOARD="/tmp/dashboard-solaredge-temp.json"
-                cp "$DASHBOARD_FILE" "$TEMP_DASHBOARD"
-
-                # Replace data source UIDs in the dashboard JSON using jq for safer manipulation
-                if command -v jq &> /dev/null; then
-                    # Use jq to properly update UIDs
-                    jq --arg uid "$INFLUX_UID" '
-                        walk(
-                            if type == "object" and .type == "influxdb" then
-                                .uid = $uid
-                            else
-                                .
-                            end
-                        )
-                    ' "$TEMP_DASHBOARD" > "${TEMP_DASHBOARD}.tmp" && mv "${TEMP_DASHBOARD}.tmp" "$TEMP_DASHBOARD"
-
-                    if [[ -n "$SUNMOON_UID" && "$SUNMOON_UID" != "null" ]]; then
-                        log "Found Sun and Moon data source UID: $SUNMOON_UID"
-                        jq --arg uid "$SUNMOON_UID" '
-                            walk(
-                                if type == "object" and .type == "fetzerch-sunandmoon-datasource" then
-                                    .uid = $uid
-                                else
-                                    .
-                                end
-                            )
-                        ' "$TEMP_DASHBOARD" > "${TEMP_DASHBOARD}.tmp" && mv "${TEMP_DASHBOARD}.tmp" "$TEMP_DASHBOARD"
-                    fi
-                else
-                    # Fallback to sed if jq not available (should not happen as we install jq earlier)
-                    sed -i.bak "s/\"uid\": \"[^\"]*\",.*\"type\": \"influxdb\"/\"uid\": \"$INFLUX_UID\", \"type\": \"influxdb\"/g" "$TEMP_DASHBOARD" 2>/dev/null
-
-                    if [[ -n "$SUNMOON_UID" && "$SUNMOON_UID" != "null" ]]; then
-                        log "Found Sun and Moon data source UID: $SUNMOON_UID"
-                        sed -i.bak "s/\"uid\": \"[^\"]*\",.*\"type\": \"fetzerch-sunandmoon-datasource\"/\"uid\": \"$SUNMOON_UID\", \"type\": \"fetzerch-sunandmoon-datasource\"/g" "$TEMP_DASHBOARD" 2>/dev/null
-                    fi
-                    rm -f "${TEMP_DASHBOARD}.bak"
-                fi
-
-                # Import dashboard via API using file directly
-                # Create wrapper JSON for import
-                IMPORT_PAYLOAD="/tmp/dashboard-import-payload.json"
-                jq -n --slurpfile dashboard "$TEMP_DASHBOARD" '{
-                    dashboard: $dashboard[0],
-                    overwrite: true,
-                    message: "Imported by installation script"
-                }' > "$IMPORT_PAYLOAD" 2>/dev/null || {
-                    warn "Failed to create import payload"
-                    rm -f "$TEMP_DASHBOARD" "$IMPORT_PAYLOAD"
-                    continue
-                }
-
-                IMPORT_RESPONSE=$(curl -s -X POST http://localhost:3000/api/dashboards/db \
-                    -u "$GRAFANA_USER:$GRAFANA_PASS" \
-                    -H "Content-Type: application/json" \
-                    -d @"$IMPORT_PAYLOAD" 2>/dev/null)
-
-                rm -f "$IMPORT_PAYLOAD"
-
-                if echo "$IMPORT_RESPONSE" | grep -q '"status":"success"'; then
-                    DASHBOARD_URL=$(echo "$IMPORT_RESPONSE" | jq -r '.url' 2>/dev/null)
-                    log "✅ Grafana dashboard imported successfully"
-
-                    if [[ -n "$DASHBOARD_URL" && "$DASHBOARD_URL" != "null" ]]; then
-                        log "Dashboard URL: http://$(hostname -I | awk '{print $1}'):3000$DASHBOARD_URL"
-                    fi
-                else
-                    warn "Could not import Grafana dashboard automatically. You can import it manually from grafana/dashboard-solaredge.json"
-                fi
-
-                rm -f "$TEMP_DASHBOARD"
-            else
-                warn "Could not retrieve data source UIDs. Dashboard import skipped."
-            fi
+            # Stessa logica dell'update: gli uid dei datasource stanno in
+            # {"datasource": {"name": ...}} con il plugin in "group", fuori dalla
+            # portata di un filtro su {"type": "influxdb"}, e la dashboard v2 va
+            # scritta con l'API v2 o i pannelli si perdono.
+            GRAFANA_URL="$GRAFANA_URL" GRAFANA_USER="$GRAFANA_USER" \
+                GRAFANA_PASSWORD="$GRAFANA_PASS" \
+                python3 "$APP_DIR/scripts/smart_update.py" --dashboard-only \
+                || warn "Could not import Grafana dashboard automatically. You can import it manually from grafana/dashboard-solaredge.json"
         else
             warn "Dashboard file not found at $APP_DIR/grafana/dashboard-solaredge.json"
         fi
