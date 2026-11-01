@@ -7,7 +7,8 @@ import os
 import re
 import urllib.request
 import zipfile
-from datetime import date
+from datetime import date, datetime
+from zoneinfo import ZoneInfo
 
 import openpyxl
 import requests
@@ -16,6 +17,7 @@ from app_logging import get_logger
 from collector.collector_gme import CollectorGME
 
 log = get_logger('collector.bolletta')
+ROME = ZoneInfo('Europe/Rome')
 
 
 class CollectorBolletta:
@@ -195,37 +197,33 @@ from(bucket:"GME") |> range(start: start, stop: stop) |> filter(fn:(r)=>r._measu
         req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
         return urllib.request.urlopen(req, timeout=timeout).read()
 
-    def fetch_disp(self):
-        """CDISPD del mese corrente: cambia ogni mese e vale per tutti i venditori.
+    def fetch_disp_mesi(self):
+        """CDISPD di ogni mese pubblicato nel foglio ARERA dei domestici in libero.
 
-        Sta nel foglio ARERA dei corrispettivi per i domestici in libero, un foglio
-        per mese (0,018468 ad agosto 2026, 0,015068 a settembre).
+        Torna {'YYYY-MM': valore}. Il mese corrente compare in ritardo: finche' non
+        c'e', i pannelli usano l'ultimo disponibile.
         """
         oggi = date.today()
+        mesi = {}
         for anno in (oggi.year, oggi.year - 1):
             try:
                 data = self._scarica(self.ARERA_DOMESTICO % anno)
                 if data[:2] != b'PK':
                     continue
                 wb = openpyxl.load_workbook(io.BytesIO(data), data_only=True, read_only=True)
-                foglio = '%s %d' % (self.MESI[oggi.month - 1], anno)
-                if foglio not in wb.sheetnames:
-                    # il mese corrente non e' ancora pubblicato: si prende l'ultimo
-                    ordine = {m: i for i, m in enumerate(self.MESI)}
-                    fogli = [f for f in wb.sheetnames if f.lower().endswith(str(anno))]
-                    fogli.sort(key=lambda f: ordine.get(f.split()[0].lower(), -1))
-                    if not fogli:
+                for foglio in wb.sheetnames:
+                    nome = foglio.split()[0].lower()
+                    if nome not in self.MESI:
                         continue
-                    foglio = fogli[-1]
-                    log.info('CDISPD: mese corrente non ancora nel foglio ARERA, uso %s', foglio)
-                for row in wb[foglio].iter_rows(values_only=True):
-                    cells = [str(c).strip() if c is not None else '' for c in row]
-                    if len(cells) > 2 and cells[1].startswith('Quota energia'):
-                        mese = self.MESI.index(foglio.split()[0].lower()) + 1
-                        return round(float(cells[2]), 6), '%s-%02d' % (anno, mese)
+                    for row in wb[foglio].iter_rows(values_only=True):
+                        cells = [str(c).strip() if c is not None else '' for c in row]
+                        if len(cells) > 2 and cells[1].startswith('Quota energia'):
+                            mese = '%s-%02d' % (anno, self.MESI.index(nome) + 1)
+                            mesi[mese] = round(float(cells[2]), 6)
+                            break
             except Exception as e:
                 log.warning('ARERA corrispettivi %d non leggibili: %s', anno, e)
-        return None, None
+        return mesi
 
     def fetch_accise(self):
         """Accisa domestica (EUR/kWh) e data dell'aggiornamento, dal PDF ADM.
@@ -353,21 +351,25 @@ from(bucket:"GME") |> range(start: start, stop: stop) |> filter(fn:(r)=>r._measu
                             'month': last.get('month', 'stimato'),
                             'changed': False, 'stimato': str(e)[:120]}
 
-        disp, disp_mese = self.fetch_disp()
-        if disp:
-            result['disp'] = disp
+        disp_mesi = self.fetch_disp_mesi()
         accise, accise_data = self.fetch_accise()
-        if disp or accise:
-            campi = []
-            if disp:
-                campi.append('disp=%s' % disp)
-            if accise:
-                campi.append('accise=%s' % accise)
+        inizio_anno = datetime(date.today().year, 1, 1)
+        for mese, valore in sorted(disp_mesi.items()):
+            anno, num = mese.split('-')
+            ts = datetime(int(anno), int(num), 1, tzinfo=ROME).timestamp()
+            self._write('tasse,mese=%s disp=%s %d' % (mese, valore, int(ts)))
+        if disp_mesi:
+            result['disp'] = disp_mesi[max(disp_mesi)]
+        if accise:
+            ts = datetime(date.today().year, date.today().month, 1, tzinfo=ROME).timestamp()
+            campi = ['accise=%s' % accise]
             if accise_data:
                 campi.append('accise_data="%s"' % accise_data.replace('"', ''))
-            if campi:
-                self._write('tasse ' + ','.join(campi))
-                log.info('Tasse aggiornate: disp=%s accise=%s (%s)', disp, accise, accise_data)
+            self._write('tasse ' + ','.join(campi) + ' %d' % int(ts))
+        if disp_mesi or accise:
+            log.info('Tasse: %d mesi di disp (ultimo %s=%s), accise %s (%s)',
+                     len(disp_mesi), max(disp_mesi) if disp_mesi else '-',
+                     disp_mesi.get(max(disp_mesi)) if disp_mesi else '-', accise, accise_data)
 
         rete = self.fetch_rete()
         last = self._last('rete')
