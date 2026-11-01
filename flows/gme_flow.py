@@ -27,9 +27,12 @@ def run_gme_flow(
 
     # Se non specificate date, usa ieri (D+1 availability)
     if not start_date:
+        # I prezzi del giorno D sono definitivi dal mezzogiorno di D-1, quindi si
+        # raccoglie anche oggi: senza, il mese in corso resta senza PUN fino al
+        # primo del mese successivo e i pannelli mostrano la media del mese prima.
         yesterday = datetime.now() - timedelta(days=1)
         start_date = yesterday.strftime('%Y-%m-%d')
-        end_date = start_date
+        end_date = datetime.now().strftime('%Y-%m-%d')
 
     # Raccolta dati
     scheduler_config = SchedulerConfig.from_config(config)
