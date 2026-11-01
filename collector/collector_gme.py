@@ -194,6 +194,7 @@ class CollectorGME:
                                 all_prices.extend(result['prices'])
 
             if all_prices:
+                all_prices = self._hourly(all_prices)
                 all_prices.sort(key=lambda x: (x['date'], x['hour']))
                 return {
                     'date': date_str,
@@ -300,6 +301,29 @@ class CollectorGME:
             logger.error(f"Errore parsing JSON GME: {e}")
             return {}
 
+
+    @staticmethod
+    def _hourly(prices: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Una riga per giorno, ora e zona.
+
+        Dal 2025-10 il MGP pubblica **quattro periodi da un quarto d'ora** dentro
+        la stessa ora, con lo stesso `Hour` e senza un campo che li distingua: la
+        colonna e' `Period`, che il parser non legge. Senza questa media finiscono
+        quattro punti sullo stesso istante e Influx tiene l'ultimo scritto — cioe'
+        l'ultimo quarto d'ora spacciato per l'ora. L'ora vale la loro media.
+        """
+        grouped: Dict[tuple, List[float]] = {}
+        for p in prices:
+            key = (p.get('date'), p.get('hour'), p.get('zone'))
+            grouped.setdefault(key, []).append(float(p.get('pun_mwh') or 0.0))
+        out: List[Dict[str, Any]] = []
+        for (day, hour, zone), values in grouped.items():
+            if not values:
+                continue
+            mean = sum(values) / len(values)
+            out.append({'zone': zone, 'hour': hour, 'pun_mwh': round(mean, 6),
+                        'pun_kwh': round(mean / 1000.0, 9), 'date': day})
+        return out
 
     def collect_month(self, year: int, month: int) -> Dict[str, Any]:
         """
