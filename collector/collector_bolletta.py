@@ -182,29 +182,82 @@ start = date.sub(d: 2mo, from: stop)
 from(bucket:"GME") |> range(start: start, stop: stop) |> filter(fn:(r)=>r._measurement=="gme_monthly_avg" and r._field=="pun_kwh_avg") |> group() |> last()"""
         return self._flux_value(q)
 
-    # Valori nazionali correnti, si sovrascrivono da .env (BOLLETTA_<CAMPO>)
-    CONFIG_DEFAULTS = {
-        'disp': 0.0151,
-        'accise': 0.02263,
-        'iva': 0.10,
-        'tv': 9.0,
-        'potenza_kw': 3.0,
-    }
+    # Di legge, non trimestrali: cambiano quando cambia la legge
+    LEGAL_RATES = {'accise': 0.02263, 'iva': 0.10, 'tv': 9.0}
+    SMT_URL = 'https://www.arera.it/fileadmin/area_operatori/prezzi_e_tariffe/E%d-smt.xlsx'
+
+    def _arera_smt_disp(self):
+        """PD del trimestre corrente, dal file smt di ARERA (quello con PE/PD/PCV).
+
+        Il dispacciamento e' un valore trimestrale e si muove: 0,01515 nel
+        ott-dic 2024 e 0,01773 nel ott-dic 2026. In codice non ci va.
+        """
+        quarter = (date.today().month - 1) // 3 + 1
+        nome = {1: 'gen-mar', 2: 'apr-giu', 3: 'lug-set', 4: 'ott-dic'}[quarter]
+        for anno in (date.today().year, date.today().year - 1):
+            try:
+                req = urllib.request.Request(self.SMT_URL % anno,
+                                             headers={'User-Agent': 'Mozilla/5.0'})
+                data = urllib.request.urlopen(req, timeout=60).read()
+                if data[:2] != b'PK':
+                    continue
+                wb = openpyxl.load_workbook(io.BytesIO(data), data_only=True, read_only=True)
+                foglio = '%s %d' % (nome, anno)
+                if foglio not in wb.sheetnames:
+                    continue
+                header, in_block = None, False
+                for row in wb[foglio].iter_rows(values_only=True):
+                    cells = [str(c).strip() if c is not None else '' for c in row]
+                    if any(c.lower().startswith('abitazioni di residenza') for c in cells):
+                        in_block = True
+                        continue
+                    if in_block and header is None and 'PD' in cells:
+                        header = cells
+                        continue
+                    if header and len(cells) > 1 and cells[1].startswith('Quota energia'):
+                        return round(float(cells[header.index('PD')]), 6)
+            except Exception as e:
+                log.warning('ARERA smt %d non leggibile: %s', anno, e)
+        return None
 
     def ensure_config(self):
-        """Scrive il punto `config` se manca.
+        """Tiene il punto `config` allineato alle fonti, scrivendolo solo se cambia.
 
-        I pannelli 207/208/192 leggono da li' disp, accise, iva, tv e potenza:
-        nessun flusso lo scriveva, quindi su un'installazione nuova la sezione
-        bolletta restava vuota con un 400 "float + invalid" addosso.
+        I pannelli 207/208/192 leggono da li' disp, accise, iva, tv e potenza: il
+        dispacciamento e' ARERA (PD, trimestrale), accise, IVA e canone TV sono di
+        legge, la potenza e' il contratto dell'utente.
         """
-        if self._last('config'):
-            return False
+        last = self._last('config') or {}
         values = {k: float(os.getenv('BOLLETTA_' + k.upper(), v))
-                  for k, v in self.CONFIG_DEFAULTS.items()}
-        self._write('config ' + ','.join('%s=%s' % (k, v) for k, v in values.items()))
-        log.info('Punto config creato con i valori di default; '
-                 'si sovrascrive da .env con BOLLETTA_*')
+                  for k, v in self.LEGAL_RATES.items()}
+        values['potenza_kw'] = float(os.getenv('BOLLETTA_POTENZA_KW', 3.0))
+        disp = os.getenv('BOLLETTA_DISP') or self._arera_smt_disp() or last.get('disp')
+        try:
+            values['disp'] = float(disp)
+        except (TypeError, ValueError):
+            log.warning('Config: dispacciamento non disponibile, config invariato')
+            return False
+        if all(last.get(k) not in (None, '') and abs(float(last[k]) - v) < 1e-9
+               for k, v in values.items()):
+            return False
+        # Il punto nuovo porta anche i campi che non gestiamo (go, net_var, fee...):
+        # scriverne solo cinque lascerebbe un pivot con due righe, e findRecord
+        # prenderebbe la prima. Stessi tag del punto esistente, per restare nella
+        # stessa serie.
+        merged = {k: v for k, v in last.items()
+                  if k not in ('_time', '_start', '_stop', '_measurement', '_field',
+                               'fonte', 'valid_from') and v not in (None, '')}
+        merged.update(values)
+        fields = []
+        for key, value in merged.items():
+            try:
+                fields.append('%s=%s' % (key, float(value)))
+            except (TypeError, ValueError):
+                fields.append('%s="%s"' % (key, str(value).replace('"', '')))
+        tags = ''.join(',%s=%s' % (t, last[t]) for t in ('fonte', 'valid_from')
+                       if last.get(t))
+        self._write('config%s %s' % (tags, ','.join(fields)))
+        log.info('Punto config aggiornato (disp %s)', values['disp'])
         return True
 
     def _dashboard_uid(self, auth, url):
