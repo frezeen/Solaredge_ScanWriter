@@ -29,11 +29,13 @@ WEEK_ENDPOINT = "site_energy_details_week"     # il sigillo settimanale, separat
 class HistoryManager:
     """Rilegge dal fornitore le settimane e i mesi che mancano e li riscrive in InfluxDB."""
 
-    def __init__(self, log, cache, config, year=None):
+    def __init__(self, log, cache, config, year=None, sources=None):
         self.log = log
         self.cache = cache
         self.config = config
         self.year = int(year) if year else None
+        # --source api | gme: senza, si fa tutto come sempre
+        self.sources = tuple(sources) if sources else ('api', 'gme')
 
     def _installation_date(self) -> date:
         """Il giorno in cui l'impianto e' partito, da /sites/{id}."""
@@ -56,9 +58,12 @@ class HistoryManager:
             start = self._installation_date()
             end = date.today() + timedelta(days=1)
 
-        self.log.info(color.bold(f"📜 Storico dal {start} al {end - timedelta(days=1)}"))
-        self._api(start, end)
-        self._gme(start, end)
+        self.log.info(color.bold(f"📜 Storico dal {start} al {end - timedelta(days=1)}"
+                                 f" · sorgenti: {', '.join(self.sources)}"))
+        if 'api' in self.sources:
+            self._api(start, end)
+        if 'gme' in self.sources:
+            self._gme(start, end)
         self.log.info(color.warning("   Bolletta: nessuna sorgente storica da rileggere, i suoi dati sono correnti"))
         return 0
 
@@ -106,10 +111,11 @@ class HistoryManager:
             time.sleep(4)
 
 
-def run_history_flow(log, cache, config, year=None) -> int:
+def run_history_flow(log, cache, config, year=None, sources=None) -> int:
     """Wrapper per eseguire HistoryManager come flow standard
 
     Args:
         year: limita a un anno (default: dal giorno dell'impianto)
+        sources: ['api'], ['gme'] o None per tutte e due
     """
-    return HistoryManager(log, cache, config, year=year).run()
+    return HistoryManager(log, cache, config, year=year, sources=sources).run()

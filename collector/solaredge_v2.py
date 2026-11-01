@@ -28,7 +28,7 @@ META_FILE = STATE_DIR / "site_meta.json"
 STATE_FILE = STATE_DIR / "api_state.json"
 LEDGER_FILE = STATE_DIR / "credit_ledger.json"
 
-DAILY_CAP = 64          # 2.000 crediti al mese / 31 giorni: la cadenza vera sta nei gate
+DAILY_CAP = 0           # 0 = nessun tetto giornaliero; il ledger conta e basta
 METERS_GATE_MIN = 55    # il loop gira a 15': cosi' i contatori si leggono ogni ora
 META_TTL_DAYS = 30
 CLOSE_AFTER_SUNSET_MIN = 20
@@ -176,7 +176,7 @@ class SolarEdgeV2:
         if led.get("month") != month:
             led["month"] = month
             led["month_calls"] = 0
-        if led["day_calls"] >= DAILY_CAP:
+        if DAILY_CAP and led["day_calls"] >= DAILY_CAP:
             raise SolarEdgeV2Error("tetto giornaliero di %d chiamate raggiunto: fermo" % DAILY_CAP)
         self._throttle(led)
         led["day_calls"] += 1

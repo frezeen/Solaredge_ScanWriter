@@ -82,7 +82,7 @@ MODES: Dict[str, Dict[str, Any]] = {
         'handler': run_scan_flow
     },
     'history': {
-        'help': 'Scarica storico completo da SolarEdge (suddivisione mensile)',
+        'help': 'Scarica lo storico da SolarEdge (una settimana per volta) e GME (un mese)',
         'log_env': 'LOG_FILE_HISTORY',
         'default_log': 'history.log',
         'handler': run_history_flow
@@ -195,6 +195,9 @@ def main() -> int:
         else:
             grp.add_argument(f'--{mode}', action='store_true', help=conf['help'])
 
+    ap.add_argument('--source', choices=('api', 'gme'), default=None,
+                    help="con --history: rilegge solo questa sorgente (default: tutte)")
+
     args = ap.parse_args()
 
     # Caricamento configurazione
@@ -215,8 +218,13 @@ def main() -> int:
     try:
         # Esecuzione flow con parametri opzionali
         kwargs = {}
-        if active_mode == 'history' and args.history and args.history is not True:
-            kwargs['year'] = args.history
+        if active_mode == 'history':
+            if args.history and args.history is not True:
+                kwargs['year'] = args.history
+            if args.source:
+                kwargs['sources'] = [args.source]
+        elif args.source:
+            ap.error('--source vale solo con --history')
 
         return execute_flow(active_mode, log, cache, config, **kwargs)
 
