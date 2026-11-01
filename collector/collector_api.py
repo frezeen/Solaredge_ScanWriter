@@ -110,7 +110,9 @@ class CollectorAPI:
                 if meter.get("type") in by_type:
                     by_type[meter["type"]] = _merge_series(values, by_type[meter["type"]])
                 else:
-                    by_type[meter["type"]] = values      # canale assente in questo giro
+                    # canale assente in questo giro: si riporta quello vecchio,
+                    # ripulito dagli slot senza valore delle versioni vecchie
+                    by_type[meter["type"]] = _merge_series([], values)
             self.cache.save_to_cache("api_ufficiali", endpoint_name, day, {"energyDetails": {
                 "unit": payload["energyDetails"].get("unit", "Wh"),
                 "timeUnit": payload["energyDetails"].get("timeUnit"),
