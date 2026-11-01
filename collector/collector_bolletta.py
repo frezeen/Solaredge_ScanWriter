@@ -353,23 +353,32 @@ from(bucket:"GME") |> range(start: start, stop: stop) |> filter(fn:(r)=>r._measu
 
         disp_mesi = self.fetch_disp_mesi()
         accise, accise_data = self.fetch_accise()
-        inizio_anno = datetime(date.today().year, 1, 1)
+        if accise is None:
+            # ADM giu' o PDF cambiato: si tiene l'ultima aliquota scritta, mai
+            # un punto senza accise (i pannelli leggono quel campo).
+            prev = self._last('tasse') or {}
+            accise = prev.get('accise')
+            accise_data = accise_data or prev.get('accise_data')
+            if accise:
+                log.warning('ADM: aliquota non letta, tengo %s (%s)', accise, accise_data)
+            else:
+                log.error('ADM: aliquota accise sconosciuta e nessun valore precedente')
+        scritti = 0
         for mese, valore in sorted(disp_mesi.items()):
             anno, num = mese.split('-')
             ts = datetime(int(anno), int(num), 1, tzinfo=ROME).timestamp()
-            self._write('tasse,mese=%s disp=%s %d' % (mese, valore, int(ts)))
+            campi = ['disp=%s' % valore]
+            if accise:
+                campi.append('accise=%s' % float(accise))
+            if accise_data:
+                campi.append('accise_data="%s"' % str(accise_data).replace('"', ''))
+            self._write('tasse,mese=%s %s %d' % (mese, ','.join(campi), int(ts)))
+            scritti += 1
         if disp_mesi:
             result['disp'] = disp_mesi[max(disp_mesi)]
-        if accise:
-            ts = datetime(date.today().year, date.today().month, 1, tzinfo=ROME).timestamp()
-            campi = ['accise=%s' % accise]
-            if accise_data:
-                campi.append('accise_data="%s"' % accise_data.replace('"', ''))
-            self._write('tasse ' + ','.join(campi) + ' %d' % int(ts))
-        if disp_mesi or accise:
-            log.info('Tasse: %d mesi di disp (ultimo %s=%s), accise %s (%s)',
-                     len(disp_mesi), max(disp_mesi) if disp_mesi else '-',
-                     disp_mesi.get(max(disp_mesi)) if disp_mesi else '-', accise, accise_data)
+        if scritti:
+            log.info('Tasse: %d mesi scritti, ultimo %s disp=%s accise=%s (%s)',
+                     scritti, max(disp_mesi), disp_mesi[max(disp_mesi)], accise, accise_data)
 
         rete = self.fetch_rete()
         last = self._last('rete')

@@ -31,10 +31,7 @@
           "hide": true,
           "iconColor": "rgba(0, 211, 255, 1)",
           "name": "Annotations & Alerts",
-          "builtIn": true,
-          "legacyOptions": {
-            "type": "dashboard"
-          }
+          "builtIn": true
         }
       }
     ],
@@ -46,6 +43,7 @@
         "spec": {
           "id": 10,
           "title": "",
+          "description": "",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -80,7 +78,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "gauge",
-            "version": "13.2.4",
+            "version": "13.3.0",
             "spec": {
               "options": {
                 "barShape": "flat",
@@ -184,6 +182,7 @@
         "spec": {
           "id": 101,
           "title": "Costo Prelievo",
+          "description": "",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -218,7 +217,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "stat",
-            "version": "13.2.4",
+            "version": "13.3.0",
             "spec": {
               "options": {
                 "colorMode": "background",
@@ -269,6 +268,7 @@
         "spec": {
           "id": 12,
           "title": "",
+          "description": "",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -379,7 +379,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "gauge",
-            "version": "13.2.4",
+            "version": "13.3.0",
             "spec": {
               "options": {
                 "barShape": "flat",
@@ -459,6 +459,7 @@
         "spec": {
           "id": 121,
           "title": "",
+          "description": "",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -493,7 +494,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "stat",
-            "version": "13.2.4",
+            "version": "13.3.0",
             "spec": {
               "options": {
                 "colorMode": "background",
@@ -551,6 +552,7 @@
         "spec": {
           "id": 122,
           "title": "",
+          "description": "",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -582,7 +584,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "stat",
-            "version": "13.2.4",
+            "version": "13.3.0",
             "spec": {
               "options": {
                 "colorMode": "background",
@@ -633,6 +635,7 @@
         "spec": {
           "id": 123,
           "title": "",
+          "description": "",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -664,7 +667,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "stat",
-            "version": "13.2.4",
+            "version": "13.3.0",
             "spec": {
               "options": {
                 "colorMode": "background",
@@ -716,6 +719,7 @@
         "spec": {
           "id": 124,
           "title": "",
+          "description": "",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -747,7 +751,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "stat",
-            "version": "13.2.4",
+            "version": "13.3.0",
             "spec": {
               "options": {
                 "colorMode": "background",
@@ -798,6 +802,7 @@
         "spec": {
           "id": 125,
           "title": "",
+          "description": "",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -829,7 +834,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "stat",
-            "version": "13.2.4",
+            "version": "13.3.0",
             "spec": {
               "options": {
                 "colorMode": "background",
@@ -880,6 +885,7 @@
         "spec": {
           "id": 14,
           "title": "",
+          "description": "",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -914,7 +920,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "gauge",
-            "version": "13.2.4",
+            "version": "13.3.0",
             "spec": {
               "options": {
                 "barShape": "flat",
@@ -982,6 +988,7 @@
         "spec": {
           "id": 144,
           "title": "",
+          "description": "",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -1013,7 +1020,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "stat",
-            "version": "13.2.4",
+            "version": "13.3.0",
             "spec": {
               "options": {
                 "colorMode": "background",
@@ -1066,6 +1073,7 @@
         "spec": {
           "id": 154,
           "title": "Potenza Picco Pannelli (Range Selezionato)",
+          "description": "",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -1147,7 +1155,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "bargauge",
-            "version": "13.2.4",
+            "version": "13.3.0",
             "spec": {
               "options": {
                 "displayMode": "gradient",
@@ -1172,6 +1180,7 @@
                 "showUnfilled": true,
                 "sizing": "auto",
                 "text": {},
+                "textMode": "auto",
                 "valueMode": "color"
               },
               "fieldConfig": {
@@ -1214,6 +1223,7 @@
         "spec": {
           "id": 162,
           "title": "Produzione - Consumo - Autoconsumo - Prelievo - Immissione (Anno Precedente)",
+          "description": "",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -1271,7 +1281,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "barchart",
-            "version": "13.2.4",
+            "version": "13.3.0",
             "spec": {
               "options": {
                 "barRadius": 0,
@@ -1431,6 +1441,7 @@
         "spec": {
           "id": 171,
           "title": "",
+          "description": "",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -1546,7 +1557,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "table",
-            "version": "13.2.4",
+            "version": "13.3.0",
             "spec": {
               "options": {
                 "cellHeight": "sm",
@@ -1557,7 +1568,8 @@
                     "desc": false,
                     "displayName": "Status"
                   }
-                ]
+                ],
+                "zebraStriping": false
               },
               "fieldConfig": {
                 "defaults": {
@@ -1940,6 +1952,7 @@
         "spec": {
           "id": 172,
           "title": "",
+          "description": "",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -1971,7 +1984,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "stat",
-            "version": "13.2.4",
+            "version": "13.3.0",
             "spec": {
               "options": {
                 "colorMode": "background",
@@ -2024,6 +2037,7 @@
         "spec": {
           "id": 173,
           "title": "",
+          "description": "",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -2062,7 +2076,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "stat",
-            "version": "13.2.4",
+            "version": "13.3.0",
             "spec": {
               "options": {
                 "colorMode": "background",
@@ -2120,6 +2134,7 @@
         "spec": {
           "id": 174,
           "title": "",
+          "description": "",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -2155,7 +2170,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "stat",
-            "version": "13.2.4",
+            "version": "13.3.0",
             "spec": {
               "options": {
                 "colorMode": "background",
@@ -2206,6 +2221,7 @@
         "spec": {
           "id": 175,
           "title": "",
+          "description": "",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -2241,7 +2257,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "stat",
-            "version": "13.2.4",
+            "version": "13.3.0",
             "spec": {
               "options": {
                 "colorMode": "background",
@@ -2293,6 +2309,7 @@
         "spec": {
           "id": 176,
           "title": "",
+          "description": "",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -2328,7 +2345,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "stat",
-            "version": "13.2.4",
+            "version": "13.3.0",
             "spec": {
               "options": {
                 "colorMode": "background",
@@ -2379,6 +2396,7 @@
         "spec": {
           "id": 177,
           "title": "",
+          "description": "",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -2414,7 +2432,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "stat",
-            "version": "13.2.4",
+            "version": "13.3.0",
             "spec": {
               "options": {
                 "colorMode": "background",
@@ -2467,6 +2485,7 @@
         "spec": {
           "id": 178,
           "title": "",
+          "description": "",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -2502,7 +2521,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "stat",
-            "version": "13.2.4",
+            "version": "13.3.0",
             "spec": {
               "options": {
                 "colorMode": "background",
@@ -2553,6 +2572,7 @@
         "spec": {
           "id": 179,
           "title": "",
+          "description": "",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -2588,7 +2608,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "stat",
-            "version": "13.2.4",
+            "version": "13.3.0",
             "spec": {
               "options": {
                 "colorMode": "background",
@@ -2641,6 +2661,7 @@
         "spec": {
           "id": 180,
           "title": "Risparmi Autoconsumo",
+          "description": "",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -2675,7 +2696,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "stat",
-            "version": "13.2.4",
+            "version": "13.3.0",
             "spec": {
               "options": {
                 "colorMode": "background",
@@ -2726,6 +2747,7 @@
         "spec": {
           "id": 181,
           "title": "Produzione - Consumo - Autoconsumo - Prelievo - Immissione (Ieri)",
+          "description": "",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -2838,7 +2860,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "timeseries",
-            "version": "13.2.4",
+            "version": "13.3.0",
             "spec": {
               "options": {
                 "legend": {
@@ -3029,6 +3051,7 @@
         "spec": {
           "id": 183,
           "title": "Produzione - Consumo - Autoconsumo - Prelievo - Immissione (Oggi)",
+          "description": "",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -3140,7 +3163,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "timeseries",
-            "version": "13.2.4",
+            "version": "13.3.0",
             "spec": {
               "options": {
                 "legend": {
@@ -3343,6 +3366,7 @@
         "spec": {
           "id": 184,
           "title": "",
+          "description": "",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -3400,7 +3424,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "gauge",
-            "version": "13.2.4",
+            "version": "13.3.0",
             "spec": {
               "options": {
                 "barShape": "flat",
@@ -3468,6 +3492,7 @@
         "spec": {
           "id": 185,
           "title": "",
+          "description": "",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -3506,7 +3531,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "stat",
-            "version": "13.2.4",
+            "version": "13.3.0",
             "spec": {
               "options": {
                 "colorMode": "background",
@@ -3564,6 +3589,7 @@
         "spec": {
           "id": 186,
           "title": "",
+          "description": "",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -3599,7 +3625,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "stat",
-            "version": "13.2.4",
+            "version": "13.3.0",
             "spec": {
               "options": {
                 "colorMode": "background",
@@ -3650,6 +3676,7 @@
         "spec": {
           "id": 187,
           "title": "",
+          "description": "",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -3685,7 +3712,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "stat",
-            "version": "13.2.4",
+            "version": "13.3.0",
             "spec": {
               "options": {
                 "colorMode": "background",
@@ -3737,6 +3764,7 @@
         "spec": {
           "id": 188,
           "title": "",
+          "description": "",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -3772,7 +3800,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "stat",
-            "version": "13.2.4",
+            "version": "13.3.0",
             "spec": {
               "options": {
                 "colorMode": "background",
@@ -3823,6 +3851,7 @@
         "spec": {
           "id": 189,
           "title": "",
+          "description": "",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -3858,7 +3887,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "stat",
-            "version": "13.2.4",
+            "version": "13.3.0",
             "spec": {
               "options": {
                 "colorMode": "background",
@@ -3909,6 +3938,7 @@
         "spec": {
           "id": 190,
           "title": "",
+          "description": "",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -3944,7 +3974,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "stat",
-            "version": "13.2.4",
+            "version": "13.3.0",
             "spec": {
               "options": {
                 "colorMode": "background",
@@ -3997,6 +4027,7 @@
         "spec": {
           "id": 191,
           "title": "",
+          "description": "",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -4032,7 +4063,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "stat",
-            "version": "13.2.4",
+            "version": "13.3.0",
             "spec": {
               "options": {
                 "colorMode": "background",
@@ -4173,7 +4204,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "stat",
-            "version": "13.2.4",
+            "version": "13.3.0",
             "spec": {
               "options": {
                 "colorMode": "background",
@@ -4272,6 +4303,7 @@
         "spec": {
           "id": 193,
           "title": "Produzione Annuale Storica",
+          "description": "",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -4327,7 +4359,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "barchart",
-            "version": "13.2.4",
+            "version": "13.3.0",
             "spec": {
               "options": {
                 "barRadius": 0,
@@ -4410,6 +4442,7 @@
         "spec": {
           "id": 194,
           "title": "Efficienza",
+          "description": "",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -4445,7 +4478,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "stat",
-            "version": "13.2.4",
+            "version": "13.3.0",
             "spec": {
               "options": {
                 "colorMode": "background",
@@ -4546,6 +4579,7 @@
         "spec": {
           "id": 195,
           "title": "Meteo",
+          "description": "",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -4577,7 +4611,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "stat",
-            "version": "13.2.4",
+            "version": "13.3.0",
             "spec": {
               "options": {
                 "colorMode": "background",
@@ -4661,6 +4695,7 @@
         "spec": {
           "id": 20,
           "title": "Stato Inverter",
+          "description": "",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -4696,7 +4731,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "stat",
-            "version": "13.2.4",
+            "version": "13.3.0",
             "spec": {
               "options": {
                 "colorMode": "background",
@@ -4839,6 +4874,7 @@
         "spec": {
           "id": 201,
           "title": "PUN medio 30 giorni",
+          "description": "",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -4870,7 +4906,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "stat",
-            "version": "13.2.4",
+            "version": "13.3.0",
             "spec": {
               "options": {
                 "colorMode": "background",
@@ -4961,7 +4997,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "stat",
-            "version": "13.2.4",
+            "version": "13.3.0",
             "spec": {
               "options": {
                 "colorMode": "background",
@@ -5015,6 +5051,7 @@
         "spec": {
           "id": 203,
           "title": "PUN medio mese precedente",
+          "description": "",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -5046,7 +5083,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "stat",
-            "version": "13.2.4",
+            "version": "13.3.0",
             "spec": {
               "options": {
                 "colorMode": "background",
@@ -5105,6 +5142,7 @@
         "spec": {
           "id": 205,
           "title": "Andamento PUN - ultimi 30 giorni",
+          "description": "",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -5139,7 +5177,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "timeseries",
-            "version": "13.2.4",
+            "version": "13.3.0",
             "spec": {
               "options": {
                 "legend": {
@@ -5231,6 +5269,7 @@
         "spec": {
           "id": 206,
           "title": "PUN medio mensile storico",
+          "description": "",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -5266,7 +5305,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "timeseries",
-            "version": "13.2.4",
+            "version": "13.3.0",
             "spec": {
               "options": {
                 "legend": {
@@ -5375,7 +5414,7 @@
                         "name": "ff27vpmruzxtsc"
                       },
                       "spec": {
-                        "query": "import \"array\"\nimport \"math\"\nimport \"timezone\"\nimport \"date\"\n\noption location = timezone.location(name: \"Europe/Rome\")\n\nmese = \"${bolletta_mese}\"\ninizio = date.truncate(t: time(v: mese + \"-01T00:00:00Z\"), unit: 1mo)\nfine = date.add(d: 1mo, to: inizio)\n\nkwh = (from(bucket:\"Solaredge\")\n  |> range(start: inizio, stop: fine)\n  |> filter(fn:(r)=> r._measurement==\"api\" and r._field==\"Meter\" and r.endpoint==\"site_energy_details\" and r.metric==\"Purchased\" and exists r._value)\n  |> group() |> sum() |> findRecord(fn:(key)=>true, idx:0))._value / 1000.0\n\npun = (from(bucket:\"GME\")\n  |> range(start: date.add(d: -2mo, to: inizio), stop: fine)\n  |> filter(fn:(r)=> r._measurement==\"gme_monthly_avg\" and r._field==\"pun_kwh_avg\")\n  |> group() |> last() |> findRecord(fn:(key)=>true, idx:0))._value\n\ndisp = (from(bucket:\"Bolletta\")\n  |> range(start: -3y)\n  |> filter(fn:(r)=> r._measurement==\"tasse\" and r.mese==mese and r._field==\"disp\")\n  |> last() |> findRecord(fn:(key)=>true, idx:0))._value\n\naccise_rate = (from(bucket:\"Bolletta\")\n  |> range(start: -2y)\n  |> filter(fn:(r)=> r._measurement==\"tasse\" and r._field==\"accise\")\n  |> last() |> findRecord(fn:(key)=>true, idx:0))._value\n\nbonus_cfg = from(bucket:\"Bolletta\")\n  |> range(start: -10y)\n  |> filter(fn:(r)=>r._measurement==\"bonus\")\n  |> last()\n  |> pivot(rowKey:[\"_time\"], columnKey:[\"_field\"], valueColumn:\"_value\")\nb = bonus_cfg |> findRecord(fn:(key)=>true, idx:0)\n\ngo_cfg = from(bucket:\"Bolletta\")\n  |> range(start: -10y)\n  |> filter(fn:(r)=>r._measurement==\"go\")\n  |> last()\n  |> pivot(rowKey:[\"_time\"], columnKey:[\"_field\"], valueColumn:\"_value\")\ng = go_cfg |> findRecord(fn:(key)=>true, idx:0)\n\nrete_cfg = from(bucket:\"Bolletta\")\n  |> range(start: -10y)\n  |> filter(fn:(r)=>r._measurement==\"rete\")\n  |> last()\n  |> pivot(rowKey:[\"_time\"], columnKey:[\"_field\"], valueColumn:\"_value\")\nr = rete_cfg |> findRecord(fn:(key)=>true, idx:0)\n\nmodo = \"${modo}\"\nfee = float(v: ${fee})\ncommerciale = float(v: ${commerciale})\nfisso = float(v: ${fisso})\ngo_rate = g.value\nperdite_inc = \"${perdite_inc}\"\ngo_inc = \"${go_inc}\"\ndisp_inc = \"${disp_inc}\"\n\nfixed_price = fisso * (if perdite_inc == \"si\" then 1.0 else 1.10) + (if disp_inc == \"si\" then 0.0 else disp) + (if go_inc == \"si\" then 0.0 else go_rate)\nenergy_price = if modo == \"fisso\" then fixed_price else (pun + fee)*1.10 + disp + (if go_inc == \"si\" then 0.0 else go_rate)\nenergy_cost = kwh*energy_price\nnet_cost = kwh*r.net_var\npower = float(v: ${potenza}) * r.potenza\nbonus = if \"${bonus}\" == \"si\" then (if \"${nucleo}\" == \"1-2\" then b.b12 else if \"${nucleo}\" == \"3-4\" then b.b34 else b.b4plus) else 0.0\npre_tax = energy_cost + net_cost + commerciale + r.net_fix + power - bonus\npotenza_kw = float(v: ${potenza})\nsoglia = if potenza_kw <= 1.5 then 150.0 else 220.0\neccesso = if kwh > soglia then kwh - soglia else 0.0\nfascia = if 150.0 - eccesso > 0.0 then 150.0 - eccesso else 0.0\naccise = (kwh - fascia) * accise_rate\niva = float(v: ${iva})*(pre_tax + accise)\ntotal = pre_tax + accise + iva\ntotal_pay = total + float(v: ${tv})\n\nf2 = (x) => string(v: math.round(x: x*100.0)/100.0)\nf4 = (x) => string(v: math.round(x: x*10000.0)/10000.0)\narray.from(rows: [\n  {\"Voce\":\"Mese\", \"Valore\": mese},\n  {\"Voce\":\"Consumo\", \"Valore\": f2(x: kwh)+\" kWh\"},\n  {\"Voce\":\"PUN GME\", \"Valore\": if modo == \"fisso\" then \"n/d (offerta a prezzo fisso)\" else f4(x: pun)+\" €/kWh\"},\n  {\"Voce\":\"Perdite di rete (10%)\", \"Valore\": if modo == \"fisso\" then (if perdite_inc == \"si\" then \"incluse nel prezzo\" else f4(x: fisso*0.10)+\" €/kWh\") else f4(x: (pun + fee)*0.10)+\" €/kWh\"},\n  {\"Voce\":\"Dispacciamento\", \"Valore\": f4(x: disp)+\" €/kWh\"},\n  {\"Voce\":\"Indice GO\", \"Valore\": if go_inc == \"si\" then \"incluso nell'offerta\" else f4(x: go_rate)+\" €/kWh\"},\n  {\"Voce\":\"Fee / Spread\", \"Valore\": if modo == \"fisso\" then \"non applicata\" else f4(x: fee)+\" €/kWh\"},\n  {\"Voce\":\"Prezzo energia applicato\", \"Valore\": f4(x: energy_price)+\" €/kWh\"},\n  {\"Voce\":\"Costo energia\", \"Valore\": f2(x: energy_cost)+\" €\"},\n  {\"Voce\":\"Rete e oneri\", \"Valore\": f2(x: net_cost)+\" €\"},\n  {\"Voce\":\"Quota fissa vendita\", \"Valore\": f2(x: commerciale)+\" €\"},\n  {\"Voce\":\"Quota fissa rete\", \"Valore\": f2(x: r.net_fix)+\" €\"},\n  {\"Voce\":\"Quota potenza\", \"Valore\": f2(x: power)+\" €\"},\n  {\"Voce\":\"Bonus sociale\", \"Valore\": \"-\"+f2(x: bonus)+\" €\"},\n  {\"Voce\":\"Accise (su \"+f2(x: kwh - fascia)+\" kWh)\", \"Valore\": f2(x: accise)+\" €\"},\n  {\"Voce\":\"IVA\", \"Valore\": f2(x: iva)+\" €\"},\n  {\"Voce\":\"TOTALE BOLLETTA\", \"Valore\": f2(x: total)+\" €\"},\n  {\"Voce\":\"Canone TV\", \"Valore\": f2(x: float(v: ${tv}))+\" €\"},\n  {\"Voce\":\"TOTALE DA PAGARE\", \"Valore\": f2(x: total_pay)+\" €\"}\n])\n"
+                        "query": "import \"array\"\nimport \"math\"\nimport \"timezone\"\nimport \"date\"\n\noption location = timezone.location(name: \"Europe/Rome\")\n\nmese = \"${bolletta_mese}\"\ninizio = date.truncate(t: time(v: mese + \"-01T00:00:00Z\"), unit: 1mo)\nfine = date.add(d: 1mo, to: inizio)\n\nkwh = (from(bucket:\"Solaredge\")\n  |> range(start: inizio, stop: fine)\n  |> filter(fn:(r)=> r._measurement==\"api\" and r._field==\"Meter\" and r.endpoint==\"site_energy_details\" and r.metric==\"Purchased\" and exists r._value)\n  |> group() |> sum() |> findRecord(fn:(key)=>true, idx:0))._value / 1000.0\n\npun = (from(bucket:\"GME\")\n  |> range(start: date.add(d: -2mo, to: inizio), stop: fine)\n  |> filter(fn:(r)=> r._measurement==\"gme_monthly_avg\" and r._field==\"pun_kwh_avg\")\n  |> group() |> last() |> findRecord(fn:(key)=>true, idx:0))._value\n\ntasse_m = (from(bucket:\"Bolletta\")\n  |> range(start: -3y, stop: fine)\n  |> filter(fn:(r)=> r._measurement==\"tasse\" and r.mese <= mese)\n  |> last()\n  |> pivot(rowKey:[\"mese\"], columnKey:[\"_field\"], valueColumn:\"_value\")\n  |> findRecord(fn:(key)=>true, idx:0))\ndisp = tasse_m.disp\naccise_rate = tasse_m.accise\n\nbonus_cfg = from(bucket:\"Bolletta\")\n  |> range(start: -10y)\n  |> filter(fn:(r)=>r._measurement==\"bonus\")\n  |> last()\n  |> pivot(rowKey:[\"_time\"], columnKey:[\"_field\"], valueColumn:\"_value\")\nb = bonus_cfg |> findRecord(fn:(key)=>true, idx:0)\n\ngo_cfg = from(bucket:\"Bolletta\")\n  |> range(start: -10y)\n  |> filter(fn:(r)=>r._measurement==\"go\")\n  |> last()\n  |> pivot(rowKey:[\"_time\"], columnKey:[\"_field\"], valueColumn:\"_value\")\ng = go_cfg |> findRecord(fn:(key)=>true, idx:0)\n\nrete_cfg = from(bucket:\"Bolletta\")\n  |> range(start: -10y)\n  |> filter(fn:(r)=>r._measurement==\"rete\")\n  |> last()\n  |> pivot(rowKey:[\"_time\"], columnKey:[\"_field\"], valueColumn:\"_value\")\nr = rete_cfg |> findRecord(fn:(key)=>true, idx:0)\n\nmodo = \"${modo}\"\nfee = float(v: ${fee})\ncommerciale = float(v: ${commerciale})\nfisso = float(v: ${fisso})\ngo_rate = g.value\nperdite_inc = \"${perdite_inc}\"\ngo_inc = \"${go_inc}\"\ndisp_inc = \"${disp_inc}\"\n\nfixed_price = fisso * (if perdite_inc == \"si\" then 1.0 else 1.10) + (if disp_inc == \"si\" then 0.0 else disp) + (if go_inc == \"si\" then 0.0 else go_rate)\nenergy_price = if modo == \"fisso\" then fixed_price else (pun + fee)*1.10 + disp + (if go_inc == \"si\" then 0.0 else go_rate)\nenergy_cost = kwh*energy_price\nnet_cost = kwh*r.net_var\npower = float(v: ${potenza}) * r.potenza\nbonus = if \"${bonus}\" == \"si\" then (if \"${nucleo}\" == \"1-2\" then b.b12 else if \"${nucleo}\" == \"3-4\" then b.b34 else b.b4plus) else 0.0\npre_tax = energy_cost + net_cost + commerciale + r.net_fix + power - bonus\npotenza_kw = float(v: ${potenza})\nsoglia = if potenza_kw <= 1.5 then 150.0 else 220.0\neccesso = if kwh > soglia then kwh - soglia else 0.0\nfascia = if 150.0 - eccesso > 0.0 then 150.0 - eccesso else 0.0\naccise = (kwh - fascia) * accise_rate\niva = float(v: ${iva})*(pre_tax + accise)\ntotal = pre_tax + accise + iva\ntotal_pay = total + float(v: ${tv})\n\nf2 = (x) => string(v: math.round(x: x*100.0)/100.0)\nf4 = (x) => string(v: math.round(x: x*10000.0)/10000.0)\narray.from(rows: [\n  {\"Voce\":\"Mese\", \"Valore\": mese},\n  {\"Voce\":\"Consumo\", \"Valore\": f2(x: kwh)+\" kWh\"},\n  {\"Voce\":\"PUN GME\", \"Valore\": if modo == \"fisso\" then \"n/d (offerta a prezzo fisso)\" else f4(x: pun)+\" €/kWh\"},\n  {\"Voce\":\"Perdite di rete (10%)\", \"Valore\": if modo == \"fisso\" then (if perdite_inc == \"si\" then \"incluse nel prezzo\" else f4(x: fisso*0.10)+\" €/kWh\") else f4(x: (pun + fee)*0.10)+\" €/kWh\"},\n  {\"Voce\":\"Dispacciamento\", \"Valore\": f4(x: disp)+\" €/kWh\"},\n  {\"Voce\":\"Indice GO\", \"Valore\": if go_inc == \"si\" then \"incluso nell'offerta\" else f4(x: go_rate)+\" €/kWh\"},\n  {\"Voce\":\"Fee / Spread\", \"Valore\": if modo == \"fisso\" then \"non applicata\" else f4(x: fee)+\" €/kWh\"},\n  {\"Voce\":\"Prezzo energia applicato\", \"Valore\": f4(x: energy_price)+\" €/kWh\"},\n  {\"Voce\":\"Costo energia\", \"Valore\": f2(x: energy_cost)+\" €\"},\n  {\"Voce\":\"Rete e oneri\", \"Valore\": f2(x: net_cost)+\" €\"},\n  {\"Voce\":\"Quota fissa vendita\", \"Valore\": f2(x: commerciale)+\" €\"},\n  {\"Voce\":\"Quota fissa rete\", \"Valore\": f2(x: r.net_fix)+\" €\"},\n  {\"Voce\":\"Quota potenza\", \"Valore\": f2(x: power)+\" €\"},\n  {\"Voce\":\"Bonus sociale\", \"Valore\": \"-\"+f2(x: bonus)+\" €\"},\n  {\"Voce\":\"Accise (su \"+f2(x: kwh - fascia)+\" kWh)\", \"Valore\": f2(x: accise)+\" €\"},\n  {\"Voce\":\"IVA\", \"Valore\": f2(x: iva)+\" €\"},\n  {\"Voce\":\"TOTALE BOLLETTA\", \"Valore\": f2(x: total)+\" €\"},\n  {\"Voce\":\"Canone TV\", \"Valore\": f2(x: float(v: ${tv}))+\" €\"},\n  {\"Voce\":\"TOTALE DA PAGARE\", \"Valore\": f2(x: total_pay)+\" €\"}\n])\n"
                       }
                     },
                     "refId": "A",
@@ -5390,13 +5429,14 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "table",
-            "version": "13.2.4",
+            "version": "13.3.0",
             "spec": {
               "options": {
                 "cellHeight": "sm",
                 "enablePagination": false,
                 "showHeader": false,
-                "sortBy": []
+                "sortBy": [],
+                "zebraStriping": false
               },
               "fieldConfig": {
                 "defaults": {
@@ -5473,13 +5513,14 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "table",
-            "version": "13.2.4",
+            "version": "13.3.0",
             "spec": {
               "options": {
                 "cellHeight": "sm",
                 "enablePagination": false,
                 "showHeader": false,
-                "sortBy": []
+                "sortBy": [],
+                "zebraStriping": false
               },
               "fieldConfig": {
                 "defaults": {
@@ -5557,13 +5598,14 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "table",
-            "version": "13.2.4",
+            "version": "13.3.0",
             "spec": {
               "options": {
                 "cellHeight": "sm",
                 "enablePagination": false,
                 "showHeader": false,
-                "sortBy": []
+                "sortBy": [],
+                "zebraStriping": false
               },
               "fieldConfig": {
                 "defaults": {
@@ -5654,11 +5696,26 @@
         "spec": {
           "id": 26,
           "title": "",
+          "description": "",
           "links": [],
           "data": {
             "kind": "QueryGroup",
             "spec": {
-              "queries": [],
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "",
+                      "version": "v0",
+                      "spec": {}
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
               "transformations": [],
               "queryOptions": {}
             }
@@ -5730,6 +5787,7 @@
         "spec": {
           "id": 44,
           "title": "Produzione",
+          "description": "",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -5800,7 +5858,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "stat",
-            "version": "13.2.4",
+            "version": "13.3.0",
             "spec": {
               "options": {
                 "colorMode": "background",
@@ -5849,6 +5907,7 @@
         "spec": {
           "id": 48,
           "title": "",
+          "description": "",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -5906,7 +5965,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "gauge",
-            "version": "13.2.4",
+            "version": "13.3.0",
             "spec": {
               "options": {
                 "barShape": "flat",
@@ -5970,6 +6029,7 @@
         "spec": {
           "id": 58,
           "title": "Riepilogo Energia - Vita Impianto",
+          "description": "",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -6026,7 +6086,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "stat",
-            "version": "13.2.4",
+            "version": "13.3.0",
             "spec": {
               "options": {
                 "colorMode": "background",
@@ -6205,6 +6265,7 @@
         "spec": {
           "id": 6,
           "title": "Produzione - Consumo - Autoconsumo - Prelievo - Immissione (Periodo Selezionato)",
+          "description": "",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -6308,7 +6369,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "barchart",
-            "version": "13.2.4",
+            "version": "13.3.0",
             "spec": {
               "options": {
                 "barRadius": 0,
@@ -6462,6 +6523,7 @@
         "spec": {
           "id": 60,
           "title": "Percentuale Autoconsumo",
+          "description": "",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -6497,7 +6559,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "stat",
-            "version": "13.2.4",
+            "version": "13.3.0",
             "spec": {
               "options": {
                 "colorMode": "background",
@@ -6549,6 +6611,7 @@
         "spec": {
           "id": 61,
           "title": "Picco di Immissione",
+          "description": "",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -6584,7 +6647,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "stat",
-            "version": "13.2.4",
+            "version": "13.3.0",
             "spec": {
               "options": {
                 "colorMode": "background",
@@ -6631,6 +6694,7 @@
         "spec": {
           "id": 62,
           "title": "Picco di Produzione",
+          "description": "",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -6667,7 +6731,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "stat",
-            "version": "13.2.4",
+            "version": "13.3.0",
             "spec": {
               "options": {
                 "colorMode": "background",
@@ -6713,6 +6777,7 @@
         "spec": {
           "id": 63,
           "title": "",
+          "description": "",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -6770,7 +6835,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "gauge",
-            "version": "13.2.4",
+            "version": "13.3.0",
             "spec": {
               "options": {
                 "barShape": "flat",
@@ -6835,6 +6900,7 @@
         "spec": {
           "id": 66,
           "title": "Consumo",
+          "description": "",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -6869,7 +6935,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "stat",
-            "version": "13.2.4",
+            "version": "13.3.0",
             "spec": {
               "options": {
                 "colorMode": "background",
@@ -6917,6 +6983,7 @@
         "spec": {
           "id": 67,
           "title": "Immissione",
+          "description": "",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -6951,7 +7018,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "stat",
-            "version": "13.2.4",
+            "version": "13.3.0",
             "spec": {
               "options": {
                 "colorMode": "background",
@@ -6999,6 +7066,7 @@
         "spec": {
           "id": 68,
           "title": "Prelievo",
+          "description": "",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -7033,7 +7101,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "stat",
-            "version": "13.2.4",
+            "version": "13.3.0",
             "spec": {
               "options": {
                 "colorMode": "background",
@@ -7083,6 +7151,7 @@
         "spec": {
           "id": 69,
           "title": "Autoconsumo",
+          "description": "",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -7117,7 +7186,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "stat",
-            "version": "13.2.4",
+            "version": "13.3.0",
             "spec": {
               "options": {
                 "colorMode": "background",
@@ -7167,6 +7236,7 @@
         "spec": {
           "id": 70,
           "title": "Picco di Consumo",
+          "description": "",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -7201,7 +7271,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "stat",
-            "version": "13.2.4",
+            "version": "13.3.0",
             "spec": {
               "options": {
                 "colorMode": "background",
@@ -7247,6 +7317,7 @@
         "spec": {
           "id": 72,
           "title": "Produzione - Consumo - Autoconsumo - Prelievo - Immissione (Anno Corrente)",
+          "description": "",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -7303,7 +7374,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "barchart",
-            "version": "13.2.4",
+            "version": "13.3.0",
             "spec": {
               "options": {
                 "barRadius": 0,
@@ -7463,6 +7534,7 @@
         "spec": {
           "id": 86,
           "title": "Percentuale Prelievo",
+          "description": "",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -7497,7 +7569,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "stat",
-            "version": "13.2.4",
+            "version": "13.3.0",
             "spec": {
               "options": {
                 "colorMode": "background",
@@ -7549,6 +7621,7 @@
         "spec": {
           "id": 99,
           "title": "Potenza Pannelli (Range Selezionato)",
+          "description": "",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -7675,7 +7748,7 @@
           "vizConfig": {
             "kind": "VizConfig",
             "group": "timeseries",
-            "version": "13.2.4",
+            "version": "13.3.0",
             "spec": {
               "options": {
                 "legend": {
@@ -7804,11 +7877,26 @@
         "spec": {
           "id": 216,
           "title": "",
+          "description": "",
           "links": [],
           "data": {
             "kind": "QueryGroup",
             "spec": {
-              "queries": [],
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "",
+                      "version": "v0",
+                      "spec": {}
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
               "transformations": [],
               "queryOptions": {}
             }
@@ -7819,12 +7907,70 @@
             "version": "5.2.0",
             "spec": {
               "options": {
+                "alertCustomMessage": "",
+                "alwaysVisibleFilter": false,
+                "autoScroll": false,
+                "browserTabNamePattern": "",
+                "collapsedByDefault": false,
+                "customValue": false,
                 "displayMode": "minimize",
+                "emptyValue": false,
+                "favorites": {
+                  "enabled": false,
+                  "storage": "browser"
+                },
+                "filter": false,
+                "groupSelection": false,
+                "header": true,
+                "isMinimizeForTable": false,
+                "isMinimizeViewShowCustomIcon": false,
+                "isPinTabsEnabled": false,
+                "isUseLocalTime": false,
+                "minimizeOutputFormat": "text",
+                "minimizeViewCustomIcon": "",
+                "minimizeViewNativeIcon": "gf-movepane-right",
                 "padding": 0,
-                "variable": "bolletta_mese"
+                "persistent": false,
+                "requestLatency": "low",
+                "saveSelectedGroup": false,
+                "saveSelectedGroupKey": "",
+                "selectedValues": {
+                  "showSelected": false
+                },
+                "showGroupTotal": false,
+                "showLabel": false,
+                "showName": false,
+                "showResetButton": false,
+                "showTotal": false,
+                "statusSort": false,
+                "tableViewPosition": "normal",
+                "tabsInOrder": true,
+                "toolbarMode": "tabs",
+                "variable": "bolletta_mese",
+                "wordBreak": "normal"
               },
               "fieldConfig": {
-                "defaults": {},
+                "defaults": {
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "value": 0,
+                        "color": "green"
+                      },
+                      {
+                        "value": 80,
+                        "color": "red"
+                      }
+                    ]
+                  },
+                  "custom": {
+                    "thresholdsStyle": {
+                      "mode": "color",
+                      "thresholds": []
+                    }
+                  }
+                },
                 "overrides": []
               }
             }
@@ -8582,12 +8728,12 @@
             "kind": "GridLayoutItem",
             "spec": {
               "x": 0,
-              "y": 126,
+              "y": 124,
               "width": 8,
-              "height": 22,
+              "height": 1,
               "element": {
                 "kind": "ElementReference",
-                "name": "panel-207"
+                "name": "panel-menu-bolletta"
               }
             }
           },
@@ -8595,7 +8741,7 @@
             "kind": "GridLayoutItem",
             "spec": {
               "x": 8,
-              "y": 126,
+              "y": 124,
               "width": 8,
               "height": 10,
               "element": {
@@ -8608,7 +8754,7 @@
             "kind": "GridLayoutItem",
             "spec": {
               "x": 16,
-              "y": 126,
+              "y": 124,
               "width": 8,
               "height": 22,
               "element": {
@@ -8620,8 +8766,21 @@
           {
             "kind": "GridLayoutItem",
             "spec": {
+              "x": 0,
+              "y": 125,
+              "width": 8,
+              "height": 22,
+              "element": {
+                "kind": "ElementReference",
+                "name": "panel-207"
+              }
+            }
+          },
+          {
+            "kind": "GridLayoutItem",
+            "spec": {
               "x": 8,
-              "y": 136,
+              "y": 134,
               "width": 8,
               "height": 6,
               "element": {
@@ -8634,25 +8793,12 @@
             "kind": "GridLayoutItem",
             "spec": {
               "x": 8,
-              "y": 142,
+              "y": 140,
               "width": 8,
               "height": 5,
               "element": {
                 "kind": "ElementReference",
                 "name": "panel-192"
-              }
-            }
-          },
-          {
-            "kind": "GridLayoutItem",
-            "spec": {
-              "x": 0,
-              "y": 124,
-              "width": 24,
-              "height": 2,
-              "element": {
-                "kind": "ElementReference",
-                "name": "panel-menu-bolletta"
               }
             }
           }
