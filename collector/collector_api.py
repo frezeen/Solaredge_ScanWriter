@@ -21,9 +21,14 @@ V2_ENDPOINTS = ('site_details', 'site_energy_details')
 
 
 def _merge_series(old: List[Dict[str, Any]], new: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """Fonde due serie per data; sulla stessa data vince la nuova."""
-    merged = {item["date"]: item["value"] for item in old}
-    merged.update({item["date"]: item["value"] for item in new})
+    """Fonde due serie per data; sulla stessa data vince la nuova.
+
+    I file delle versioni vecchie hanno slot con la sola `date` (il quarto d'ora
+    ancora aperto): non portano un valore, e non devono ne' rompere la fusione ne'
+    sovrascrivere uno slot buono.
+    """
+    merged = {it["date"]: it["value"] for it in old if it.get("value") is not None}
+    merged.update({it["date"]: it["value"] for it in new if it.get("value") is not None})
     return [{"date": d, "value": v} for d, v in sorted(merged.items())]
 
 

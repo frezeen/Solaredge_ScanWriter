@@ -181,26 +181,6 @@ class InfluxWriter:
                 self._init_client()
             return self._write_points(points, measurement_type)
 
-    @property
-    def bucket(self) -> str:
-        return self._influx_config.bucket
-
-    def query(self, flux: str):
-        """Legge da Influx con lo stesso client: serve a decidere cosa riparare."""
-        with self._lock:
-            if self._client is None:
-                self._init_client()
-            return self._client.query_api().query(flux, org=self._influx_config.org)
-
-    def delete_range(self, start, stop, predicate: str) -> None:
-        """Cancella per measurement + tag in un intervallo: Influx non cancella per field."""
-        with self._lock:
-            if self._client is None:
-                self._init_client()
-            self._client.delete_api().delete(start, stop, predicate,
-                                             bucket=self._influx_config.bucket,
-                                             org=self._influx_config.org)
-
     def _write_points(self, points: List[Union[Point, Any]], measurement_type: str = None):
         """Scrive Point objects su InfluxDB con bucket appropriato
         

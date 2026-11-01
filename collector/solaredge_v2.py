@@ -302,16 +302,6 @@ class SolarEdgeV2:
         return self._payload_for(today - timedelta(days=days - 1), today + timedelta(days=1),
                                  with_production)
 
-    def month_payload(self, year: int, month: int) -> Dict[str, Any]:
-        """Un mese in due chiamate, a granularita' giornaliera: la history.
-
-        `DAY` e' l'unica risoluzione che accetta un mese intero (HOUR si ferma a
-        24 ore, QUARTER_HOUR a 7 giorni).
-        """
-        start = date(year, month, 1)
-        stop = date(year + 1, 1, 1) if month == 12 else date(year, month + 1, 1)
-        return self._payload_for(start, stop, True, resolution="DAY")
-
     def range_payload(self, start: date, stop: date) -> Dict[str, Any]:
         """`energyDetails.meters[].values` per un intervallo [start, stop), al massimo una settimana.
 
