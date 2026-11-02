@@ -202,7 +202,7 @@ def compute_month(client: InfluxDBClient, year: int, month: int,
             cei = cei_hourly.get(zone, 0.0)
         else:
             cei = sum(e_imm.get(b, 0.0) * K_LOSS * pzo_band.get((zone, b), 0.0) for b in e_imm)
-        points.append(
+        point = (
             Point('ssp_monthly')
             .tag('zone', zone)
             .tag('year', str(year))
@@ -213,16 +213,20 @@ def compute_month(client: InfluxDBClient, year: int, month: int,
             .field('immessa_kwh', float(round(sum(e_imm.values()), 3)))
             .field('oe_eur', float(round(oe, 4)))
             .field('cei_eur', float(round(cei, 4)))
-            .field('ufficiale_cs_eur', _ufficiale(year, 'cs'))
-            .field('ufficiale_ecc_eur', _ufficiale(year, 'ecc'))
-            .field('ufficiale_oe_eur', _ufficiale(year, 'oe'))
-            .field('ufficiale_cei_eur', _ufficiale(year, 'cei'))
-            .field('ufficiale_immessa_kwh', _ufficiale(year, 'immessa'))
-            .field('ufficiale_prelievo_kwh', _ufficiale(year, 'prelevata'))
-            .field('ufficiale_ecc_prec_eur', _ufficiale(year - 1, 'ecc'))
             .field('giorni_incompleti', giorni_incompleti)
-            .time(ts, WritePrecision.S)
         )
+        # I valori dichiarati dal GSE si scrivono solo se il file li ha: un campo
+        # a 0 per un anno non liquidato e' un'affermazione falsa, non un'assenza,
+        # e un pannello che li somma direbbe "0 € di rimborsi" come se fosse vero.
+        for field, key in (('ufficiale_cs_eur', 'cs'), ('ufficiale_ecc_eur', 'ecc'),
+                           ('ufficiale_oe_eur', 'oe'), ('ufficiale_cei_eur', 'cei'),
+                           ('ufficiale_immessa_kwh', 'immessa'),
+                           ('ufficiale_prelievo_kwh', 'prelevata')):
+            if key in (UFFICIALE.get(year) or {}):
+                point = point.field(field, float(UFFICIALE[year][key]))
+        if 'ecc' in (UFFICIALE.get(year - 1) or {}):
+            point = point.field('ufficiale_ecc_prec_eur', float(UFFICIALE[year - 1]['ecc']))
+        points.append(point.time(ts, WritePrecision.S))
     return points
 
 

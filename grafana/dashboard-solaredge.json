@@ -968,7 +968,7 @@
                       },
                       {
                         "value": 0,
-                        "color": "#33B5E5"
+                        "color": "dark-green"
                       }
                     ]
                   },
@@ -4117,7 +4117,7 @@
         "spec": {
           "id": 192,
           "title": "Riepilogo Costo Materia Energia (SSP) - Vita Impianto",
-          "description": "Spesa = consumo (senza FV) e prelievo (con FV) × prezzo pieno, mese per mese: PUN storico + perdite 10% + dispacciamento + GO + fee + rete/oneri + accise + IVA, la stessa formula del pannello bolletta. I componenti regolati sono quelli correnti, quindi gli anni vecchi sono una stima. Rimborsi = CS + eccedenza ufficiali (anni liquidati).",
+          "description": "Spesa = consumo (senza FV) e prelievo (con FV) × prezzo pieno, mese per mese: PUN storico + perdite 10% + dispacciamento + GO + fee + rete/oneri + accise + IVA, la stessa formula del pannello bolletta. I componenti regolati sono quelli correnti, quindi gli anni vecchi sono una stima. Rimborsi = CS + eccedenza **calcolati dal modello** (pannello 210 per il dettaglio), non i valori dichiarati dal GSE: senza misure non c'e' un rimborso da mostrare, e la casella resta vuota invece di dire 0.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -4170,7 +4170,7 @@
                         "name": "ff27vpmruzxtsc"
                       },
                       "spec": {
-                        "query": "from(bucket: \"Bolletta\")\n  |> range(start: 2021-01-01T00:00:00Z)\n  |> filter(fn: (r) => r._measurement == \"ssp_monthly\" and r.zone == \"CSUD\")\n  |> filter(fn: (r) => r._field == \"ufficiale_cs_eur\" or r._field == \"ufficiale_ecc_eur\")\n  |> group(columns: [\"year\", \"_field\"])\n  |> last()\n  |> group()\n  |> sum()\n  |> map(fn: (r) => ({\"Rimborsi Immissione Netti\": r._value}))\n"
+                        "query": "import \"join\"\n\n// Rimborso SSP del modello, non i valori dichiarati dal GSE: CS + eccedenza,\n// con CS = min(OE, CEI) + CUsf × Es. Si somma per anno (il CUsf e' annuale) e\n// poi su tutti gli anni. Stessa formula del pannello 210.\nbase = from(bucket: \"Bolletta\")\n  |> range(start: 2020-01-01T00:00:00Z, stop: now())\n  |> filter(fn: (r) => r._measurement == \"ssp_monthly\" and r.zone == \"CSUD\")\n  |> filter(fn: (r) => r._field == \"prelievo_kwh\" or r._field == \"immessa_kwh\" or r._field == \"oe_eur\" or r._field == \"cei_eur\")\n  |> pivot(rowKey: [\"_time\"], columnKey: [\"_field\"], valueColumn: \"_value\")\n  |> keep(columns: [\"year\", \"prelievo_kwh\", \"immessa_kwh\", \"oe_eur\", \"cei_eur\"])\n  |> group(columns: [\"year\"])\n  |> reduce(\n      identity: {prelievo_kwh: 0.0, immessa_kwh: 0.0, oe_eur: 0.0, cei_eur: 0.0},\n      fn: (r, accumulator) => ({\n        prelievo_kwh: accumulator.prelievo_kwh + r.prelievo_kwh,\n        immessa_kwh: accumulator.immessa_kwh + r.immessa_kwh,\n        oe_eur: accumulator.oe_eur + r.oe_eur,\n        cei_eur: accumulator.cei_eur + r.cei_eur,\n      }),\n    )\n\ncusf = from(bucket: \"Bolletta\")\n  |> range(start: 2020-01-01T00:00:00Z, stop: now())\n  |> filter(fn: (r) => r._measurement == \"ssp_cusf\")\n  |> group(columns: [\"year\"])\n  |> last()\n  |> keep(columns: [\"year\", \"_value\"])\n\njoin.inner(\n  left: base,\n  right: cusf,\n  on: (l, r) => l.year == r.year,\n  as: (l, r) => ({\n    year: l.year,\n    _value: (if l.oe_eur < l.cei_eur then l.oe_eur else l.cei_eur)\n      + r._value / 100.0 * (if l.prelievo_kwh < l.immessa_kwh then l.prelievo_kwh else l.immessa_kwh)\n      + (if l.cei_eur > l.oe_eur then l.cei_eur - l.oe_eur else 0.0),\n  }),\n)\n  |> group()\n  |> sum()\n  |> map(fn: (r) => ({\"Rimborsi Immissione (stima)\": r._value}))"
                       }
                     },
                     "refId": "Rimborsi Immissione",
