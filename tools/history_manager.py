@@ -110,6 +110,15 @@ class HistoryManager:
                 year, month = year + 1, 1
             time.sleep(4)
 
+        # l'aggregato SSP e' derivato da api + GME: dopo un backfill va ricalcolato
+        # su tutto lo storico, non solo sugli ultimi mesi come fa il flusso GME
+        try:
+            from flows import ssp_flow
+            righe = ssp_flow.update_range(start, date.today())
+            self.log.info(color.dim(f"   ssp  {start} .. {date.today()}: {righe} righe mensili"))
+        except Exception as e:
+            self.log.warning(color.warning(f"   ssp: ricalcolo saltato ({e})"))
+
 
 def run_history_flow(log, cache, config, year=None, sources=None) -> int:
     """Wrapper per eseguire HistoryManager come flow standard
