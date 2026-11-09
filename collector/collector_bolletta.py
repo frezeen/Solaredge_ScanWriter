@@ -6,6 +6,7 @@ import json
 import os
 import re
 import urllib.request
+import urllib.error
 import zipfile
 from datetime import date, datetime
 from zoneinfo import ZoneInfo
@@ -222,7 +223,12 @@ from(bucket:"GME") |> range(start: start, stop: stop) |> filter(fn:(r)=>r._measu
                             mesi[mese] = round(float(cells[2]), 6)
                             break
             except Exception as e:
-                log.warning('ARERA corrispettivi %d non leggibili: %s', anno, e)
+                # ARERA tiene online solo il foglio dell'anno corrente: la 404
+                # dell'anno precedente e' lo stato normale, non un guasto.
+                if isinstance(e, urllib.error.HTTPError) and e.code == 404:
+                    log.info('ARERA corrispettivi %d non online (404), ignorato', anno)
+                else:
+                    log.warning('ARERA corrispettivi %d non leggibili: %s', anno, e)
         return mesi
 
     def fetch_accise(self):

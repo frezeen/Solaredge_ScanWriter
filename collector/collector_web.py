@@ -10,7 +10,7 @@ import urllib.parse
 import urllib.request, urllib.error
 from pathlib import Path
 import requests
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from collections import defaultdict
 from app_logging import get_logger
 from cache.cache_manager import CacheManager
@@ -680,14 +680,12 @@ class CollectorWeb(CollectorWebInterface):
                 end_dt = datetime.strptime(target_date, "%Y-%m-%d")
             except ValueError:
                 self._log.error(f"Formato data invalido: {target_date}")
-                end_dt = datetime.now()
+                end_dt = datetime.now(timezone.utc)
         else:
-            try:
-                from zoneinfo import ZoneInfo
-                tz = os.environ.get('TIMEZONE', os.environ.get('TZ', 'Europe/Rome'))
-                end_dt = datetime.now(ZoneInfo(tz))
-            except Exception:
-                end_dt = datetime.now()
+            # Il portale valida end-date sul proprio orologio UTC: fra la
+            # mezzanotte locale e quella UTC la data locale e' ancora nel suo
+            # futuro e risponde 400 Invalid date. La data si prende in UTC.
+            end_dt = datetime.now(timezone.utc)
 
         end_str = end_dt.strftime("%Y-%m-%d")
 
