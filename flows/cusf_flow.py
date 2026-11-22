@@ -104,7 +104,7 @@ def ensure(log=None, years: Optional[List[int]] = None) -> Dict[int, float]:
                 out[year] = stored[0]
                 continue
             # Pubblicato a marzo dell'anno successivo: prima non ha senso chiedere
-            due = year < now.year or now.month >= 3
+            due = (now.year, now.month) >= (year + 1, 3)
             fetched = fetch_year(year) if due else None
             if fetched:
                 value, _ = fetched
@@ -117,7 +117,11 @@ def ensure(log=None, years: Optional[List[int]] = None) -> Dict[int, float]:
                 _write(client, year, value, 'stimato')
                 out[year] = value
                 if log:
-                    log.warning(f'CUsf {year}: non pubblicato, uso {value} c€/kWh (stimato)')
+                    if due:
+                        log.warning(f'CUsf {year}: non pubblicato, uso {value} c€/kWh (stimato)')
+                    else:
+                        log.info(f'CUsf {year}: atteso a marzo {year + 1}, '
+                                 f'uso {value} c€/kWh (stimato)')
     return out
 
 

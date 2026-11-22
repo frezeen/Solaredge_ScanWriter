@@ -58,6 +58,10 @@ def configure_logging(level: str | None = None, log_file: str | None = None, scr
     # Configura il logger di base (console)
     _logging.basicConfig(level=lvl, format=fmt)
 
+    # pymodbus scrive un ERROR per ogni tentativo di connessione (una raffica
+    # dentro un tick, senza il motivo utile): la condizione la riporta il flow.
+    _logging.getLogger('pymodbus').setLevel(_logging.CRITICAL)
+
     # Aggiungi il file handler se specificato
     if log_file:
         if script_name:

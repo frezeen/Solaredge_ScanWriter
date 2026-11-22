@@ -85,6 +85,9 @@ class RealtimeCollector:
                     self._realtime_config.host,
                     self._realtime_config.port
                 )
+        except ConnectionError:
+            # Gia' detto dal flow, che lo registra quando lo stato cambia.
+            raise
         except Exception as e:
             self._log.error(f"Errore raccolta dati raw: {e}")
             raise RuntimeError(f"Errore durante raccolta dati raw: {e}") from e
@@ -99,8 +102,16 @@ class RealtimeCollector:
                 unit=self._realtime_config.unit
             )
 
+            # La libreria ritenta e poi torna un dizionario vuoto senza
+            # sollevare: senza questi due controlli una lettura fallita arriva
+            # al parser come una lettura riuscita senza un solo punto.
+            if not inverter.connect():
+                raise ConnectionError(f"Modbus {host}:{port}: connessione rifiutata")
+
             # Leggi tutti i dati disponibili
             values = inverter.read_all()
+            if not values:
+                raise ConnectionError(f"Modbus {host}:{port}: nessun registro letto")
             meters = inverter.meters()
             batteries = inverter.batteries()
 

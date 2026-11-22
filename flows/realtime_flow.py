@@ -7,6 +7,11 @@ from filtro.regole_filtraggio import filter_structured_points
 from storage.writer_influx import InfluxWriter
 from utils.color_logger import color
 
+# Un inverter che non risponde non e' un allarme da ripetere ogni 5 s: la
+# condizione si registra quando cambia, non a ogni tick.
+_MODBUS_DOWN = {'active': False}
+
+
 def run_realtime_flow(log: Logger, cache: CacheManager, config: Dict[str, Any]) -> int:
     """Pipeline realtime: collector → parser → filtro → writer (coerente con altri flussi)"""
     log.info("[FLOW:REALTIME:START]")
@@ -15,7 +20,19 @@ def run_realtime_flow(log: Logger, cache: CacheManager, config: Dict[str, Any]) 
     try:
         # Step 1: Collector - raccolta dati raw (dizionario)
         collector = RealtimeCollector()
-        raw_data = collector.collect_raw_data()
+        try:
+            raw_data = collector.collect_raw_data()
+        except ConnectionError as e:
+            if not _MODBUS_DOWN['active']:
+                _MODBUS_DOWN['active'] = True
+                log.warning(f"Modbus non raggiungibile: {e}; riprovo a ogni tick")
+            else:
+                log.debug(f"Modbus non raggiungibile: {e}")
+            log.info("[FLOW:REALTIME:STOP]")
+            return 1
+        if _MODBUS_DOWN['active']:
+            _MODBUS_DOWN['active'] = False
+            log.info("✅ Modbus di nuovo raggiungibile")
 
         if not raw_data:
             log.error("Collector non ha restituito dati raw")
