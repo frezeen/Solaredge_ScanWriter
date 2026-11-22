@@ -9218,7 +9218,7 @@
               "name": "ff27vpmruzxtsc"
             },
             "spec": {
-              "__legacyStringValue": "from(bucket: \"Bolletta\")\n  |> range(start: -400d)\n  |> filter(fn: (r) => r._measurement == \"tasse\" and r._field == \"disp\")\n  |> keep(columns: [\"mese\"])\n  |> group()\n  |> distinct(column: \"mese\")\n"
+              "__legacyStringValue": "from(bucket: \"Bolletta\")\n  |> range(start: 2020-01-01T00:00:00Z)\n  |> filter(fn: (r) => r._measurement == \"tasse\" and r._field == \"disp\")\n  |> keep(columns: [\"mese\"])\n  |> group()\n  |> distinct(column: \"mese\")\n"
             }
           },
           "regex": "",
