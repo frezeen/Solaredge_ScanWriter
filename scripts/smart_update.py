@@ -847,6 +847,35 @@ except Exception as e:
         except Exception as e:
             self.log(f"Verifica del datasource Sun and Moon fallita: {e}", "WARNING")
 
+    @staticmethod
+    def keep_live_variables(incoming: dict, live: dict) -> list:
+        """I valori delle variabili che l'utente ha salvato restano.
+
+        Le variabili sono la configurazione dell'impianto (prezzo fisso, spread,
+        IVA, canone TV, potenza): il file ne porta solo il default d'esempio,
+        Grafana quello che l'utente ha salvato con Save. Rimettere il default
+        sopra il valore vivo sarebbe una modifica silenziosa al contratto.
+        """
+        live_specs = {}
+        for var in (live.get('spec') or {}).get('variables') or []:
+            spec = var.get('spec') or {}
+            if spec.get('name'):
+                live_specs[spec['name']] = spec
+        kept = []
+        for var in (incoming.get('spec') or {}).get('variables') or []:
+            spec = var.get('spec') or {}
+            live_spec = live_specs.get(spec.get('name'))
+            if not live_spec:
+                continue
+            current = live_spec.get('current') or {}
+            if not current.get('text'):
+                continue
+            spec['current'] = current
+            if live_spec.get('options'):
+                spec['options'] = live_spec['options']
+            kept.append(spec['name'])
+        return kept
+
     def import_grafana_dashboard(self) -> bool:
         """Importa dashboard Grafana con UIDs corretti (come install.sh)"""
         try:
@@ -940,7 +969,12 @@ except Exception as e:
                             try:
                                 get_resp = requests.get(api_url, auth=(grafana_user, grafana_pass), timeout=10)
                                 if get_resp.status_code == 200:
-                                    cur_md = get_resp.json().get('metadata', {}) or {}
+                                    cur_json = get_resp.json()
+                                    cur_md = cur_json.get('metadata', {}) or {}
+                                    kept = self.keep_live_variables(dashboard_json, cur_json)
+                                    if kept:
+                                        self.log(f"✅ Valori delle variabili conservati: {', '.join(kept)}",
+                                                 "SUCCESS")
                                     # Grafana confronta l'uid del corpo con quello
                                     # della risorsa: quello del file e' di un'altra
                                     # installazione, va preso dal box che riceve.
