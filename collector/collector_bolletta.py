@@ -212,6 +212,7 @@ from(bucket:"GME") |> range(start: start, stop: stop) |> filter(fn:(r)=>r._measu
         online copre piu'. Formato: mese,cdispd,fonte
         """
         mesi = {}
+        self._stima = set()
         try:
             with open(self.CDISPD_STORICO, encoding='utf-8') as f:
                 for riga in f:
@@ -220,7 +221,10 @@ from(bucket:"GME") |> range(start: start, stop: stop) |> filter(fn:(r)=>r._measu
                         continue
                     parti = riga.split(',')
                     if len(parti) >= 2:
-                        mesi[parti[0].strip()] = round(float(parti[1]), 6)
+                        mese = parti[0].strip()
+                        mesi[mese] = round(float(parti[1]), 6)
+                        if len(parti) > 2 and parti[2].strip() != 'arera':
+                            self._stima.add(mese)
         except FileNotFoundError:
             pass
         except Exception as e:
@@ -453,8 +457,10 @@ from(bucket:"GME") |> range(start: start, stop: stop) |> filter(fn:(r)=>r._measu
         for mese, valore in sorted(disp_mesi.items()):
             anno, num = mese.split('-')
             ts = datetime(int(anno), int(num), 1, tzinfo=ROME).timestamp()
-            campi = ['disp=%s' % valore,
-                     'disp_da="%s"' % (mese if mese in pubblicati else ultimo)]
+            # un valore che non viene da ARERA lo dice nel campo che il pannello stampa
+            da = 'stima' if mese in getattr(self, '_stima', set()) else (
+                mese if mese in pubblicati else ultimo)
+            campi = ['disp=%s' % valore, 'disp_da="%s"' % da]
             if accise:
                 campi.append('accise=%s' % float(accise))
             if accise_data:
