@@ -1,0 +1,15 @@
+# CdispD mensile, euro/kWh, perdite di rete comprese: dispacciamento TIDE + mercato
+# capacita'. Valore universale per i domestici in mercato libero, uguale per tutti.
+# Seme per i mesi che nessuna fonte online copre piu'; il foglio ARERA dell'anno in
+# corso, quando ha il mese, vince su questo file. Formato: mese,cdispd,fonte
+mese,cdispd,fonte
+2026-01,0.025305,arera
+2026-02,0.023366,arera
+2026-03,0.016509,arera
+2026-04,0.015531,arera
+2026-05,0.015531,arera
+2026-06,0.019902,arera
+2026-07,0.038464,arera
+2026-08,0.018468,arera
+2026-09,0.015068,arera
+2026-10,0.014642,arera

@@ -192,11 +192,58 @@ from(bucket:"GME") |> range(start: start, stop: stop) |> filter(fn:(r)=>r._measu
     MESI = ('gennaio', 'febbraio', 'marzo', 'aprile', 'maggio', 'giugno', 'luglio',
             'agosto', 'settembre', 'ottobre', 'novembre', 'dicembre')
     ADM_PAGINA = 'https://www.adm.gov.it/portale/aliquote-accisa-nazionali'
+    # Il CdispD del mese in corso: il Portale Offerte lo pubblica in anticipo,
+    # il foglio ARERA arriva un mese dopo.
+    PORTALE_PARAM = ('https://www.ilportaleofferte.it/portaleOfferte/resources/opendata/'
+                     'csv/parametriML/%s/PO_Parametri_Mercato_Libero_E_%s.csv')
+    # Seme storico in repo: mesi che nessuna fonte online copre piu'.
+    CDISPD_STORICO = 'config/cdispd_storico.csv'
 
     @staticmethod
     def _scarica(url, timeout=60):
         req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
         return urllib.request.urlopen(req, timeout=timeout).read()
+
+    def _storico(self):
+        """Mesi del CdispD dal seme in repo ({'YYYY-MM': valore}).
+
+        Sono valori universali (stesso CdispD per tutti i domestici in quel mese),
+        quindi il file viaggia con il software e riempie i mesi che nessuna fonte
+        online copre piu'. Formato: mese,cdispd,fonte
+        """
+        mesi = {}
+        try:
+            with open(self.CDISPD_STORICO, encoding='utf-8') as f:
+                for riga in f:
+                    riga = riga.strip()
+                    if not riga or riga.startswith('#') or riga.startswith('mese,'):
+                        continue
+                    parti = riga.split(',')
+                    if len(parti) >= 2:
+                        mesi[parti[0].strip()] = round(float(parti[1]), 6)
+        except FileNotFoundError:
+            pass
+        except Exception as e:
+            log.warning('CDISPD storico non leggibile: %s', e)
+        return mesi
+
+    def _cdispd_portale(self, oggi=None):
+        """CdispD del mese in corso dal file parametri giornaliero del Portale Offerte."""
+        oggi = oggi or date.today()
+        for giorni in range(0, 4):
+            giorno = date.fromordinal(oggi.toordinal() - giorni)
+            url = self.PORTALE_PARAM % (giorno.strftime('%Y_%m'), giorno.strftime('%Y%m%d'))
+            try:
+                testo = self._scarica(url, timeout=30).decode('utf-8', 'ignore')
+            except Exception:
+                continue
+            for riga in testo.splitlines():
+                if riga.startswith('cdispd,'):
+                    try:
+                        return round(float(riga.split(',')[1]), 6)
+                    except (IndexError, ValueError):
+                        return None
+        return None
 
     def fetch_disp_mesi(self):
         """CDISPD di ogni mese pubblicato nel foglio ARERA dei domestici in libero.
@@ -205,7 +252,7 @@ from(bucket:"GME") |> range(start: start, stop: stop) |> filter(fn:(r)=>r._measu
         c'e', i pannelli usano l'ultimo disponibile.
         """
         oggi = date.today()
-        mesi = {}
+        mesi = self._storico()
         for anno in (oggi.year, oggi.year - 1):
             # L'anno prima serve solo finche' il foglio nuovo non ha mesi: e' il
             # caso di gennaio-febbraio, quando dicembre esiste solo li'. Da marzo
@@ -234,6 +281,18 @@ from(bucket:"GME") |> range(start: start, stop: stop) |> filter(fn:(r)=>r._measu
                     log.info('ARERA corrispettivi %d non online (404), ignorato', anno)
                 else:
                     log.warning('ARERA corrispettivi %d non leggibili: %s', anno, e)
+        # Il mese in corso non e' ancora nel foglio: lo dice il Portale Offerte.
+        corrente = oggi.strftime('%Y-%m')
+        portale = self._cdispd_portale(oggi)
+        if portale:
+            if corrente in mesi:
+                if abs(mesi[corrente] - portale) > 5e-4:
+                    log.warning('CDISPD %s: portale %s, foglio ARERA %s',
+                                corrente, portale, mesi[corrente])
+            else:
+                mesi[corrente] = portale
+                log.info('CDISPD %s dal Portale Offerte: %s (il foglio ARERA non ce l\'ha ancora)',
+                         corrente, portale)
         return mesi
 
     def fetch_accise(self):
