@@ -26,7 +26,8 @@ class StateManager:
 
         # Log tracking: il buffer ha una cap manuale, cosi' un errore non viene
         # mai espulso dall'auto-eviction; errori e avvisi hanno un archivio
-        # persistente che nessuna pulizia tocca.
+        # persistente, che sopravvive a retention e riavvio finche' non si preme
+        # Pulisci log, che svuota archivio e file.
         self.max_log_buffer = max_log_buffer
         self.log_buffer = deque()
         self.error_max = 2000
@@ -191,13 +192,19 @@ class StateManager:
         )
 
     def clear_logs(self) -> Dict[str, int]:
-        """Pulisce i log informativi; errori e avvisi restano."""
-        kept = [e for e in self.log_buffer if self._is_important(e)]
-        removed = len(self.log_buffer) - len(kept)
+        """Svuota la pagina Logs e l'archivio: quello che si vede sparisce.
+
+        L'archivio va svuotato con il buffer, o i suoi errori rientrerebbero nel
+        buffer al prossimo avvio e la pagina sembrerebbe non pulita.
+        """
+        removed = len(self.log_buffer)
+        archived = len(self.error_archive)
         self.log_buffer.clear()
-        self.log_buffer.extend(kept)
-        self.logger.info(f"Log puliti ({removed} righe); errori e avvisi conservati")
-        return {'removed': removed, 'kept': len(self.error_archive)}
+        self.error_archive = []
+        self._save_error_archive()
+        # debug: a INFO questa riga rientrerebbe subito nel buffer appena svuotato
+        self.logger.debug(f"Log svuotati ({removed} righe, {archived} archiviate)")
+        return {'removed': removed, 'archived': archived}
 
     def update_stats(self, flow_type: str, success: bool):
         """

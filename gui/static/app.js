@@ -747,7 +747,7 @@ async function viewLogs() {
   v.innerHTML = `<div class="pagehead">
       <div><h1>Logs</h1><p>un solo log · <span id="logcount">${LOGCACHE.length}</span> righe visibili · <span id="logfile">${esc((LOGMETA.file || {}).path || '')} · ${fmtBytes((LOGMETA.file || {}).bytes)}</span></p></div>
       <div style="margin-left:auto;display:flex;gap:.5rem">
-        <button class="btn" id="clearLogs" title="gli errori e gli avvisi non vengono rimossi">Pulisci log</button>
+        <button class="btn" id="clearLogs" title="svuota lista, archivio errori e file su disco">Pulisci log</button>
       </div>
     </div>
     <div class="filters" id="logflows">

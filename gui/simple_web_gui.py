@@ -509,18 +509,21 @@ class SimpleWebGUI:
             return self.error_handler.handle_api_error(e, "stopping loop", "Error stopping loop")
 
     async def handle_clear_logs(self, request: web.Request) -> web.Response:
-        """Pulisce i log e le run salvate"""
+        """Svuota log in memoria, archivio errori e file su disco."""
         try:
             self.logger.info("[GUI] Richiesta clear logs ricevuta")
-
-            # Delega a StateManager
-            self.state_manager.clear_logs()
-
             result = self.state_manager.clear_logs()
-            self.logger.info("[GUI] ✅ Log puliti; errori e avvisi conservati")
+
+            # il FileHandler scrive in append: troncare il file non lo disturba
+            path = Path(self._log_file_info()['path'])
+            try:
+                path.write_text('', encoding='utf-8')
+            except OSError as e:
+                self.logger.warning(f"Log su disco non azzerato: {e}")
 
             return self.error_handler.create_success_response(
-                f"Log puliti ({result['removed']} righe); errori e avvisi conservati")
+                f"Log svuotati: {result['removed']} righe in memoria, "
+                f"{result['archived']} errori archiviati, file azzerato")
         except Exception as e:
             return self.error_handler.handle_api_error(e, "clearing logs", "Error clearing logs")
 
