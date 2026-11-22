@@ -207,6 +207,11 @@ from(bucket:"GME") |> range(start: start, stop: stop) |> filter(fn:(r)=>r._measu
         oggi = date.today()
         mesi = {}
         for anno in (oggi.year, oggi.year - 1):
+            # L'anno prima serve solo finche' il foglio nuovo non ha mesi: e' il
+            # caso di gennaio-febbraio, quando dicembre esiste solo li'. Da marzo
+            # ARERA l'ha cancellato e la richiesta sarebbe solo un 404 al giorno.
+            if anno < oggi.year and mesi:
+                continue
             try:
                 data = self._scarica(self.ARERA_DOMESTICO % anno)
                 if data[:2] != b'PK':
